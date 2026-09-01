@@ -1,4 +1,6 @@
-# UxNote fork
+<p align="center"><img src="assets/uxnote-fork-logo.svg" alt="uxnote-fork" width="360"></p>
+
+# uxnote-fork
 
 A fork of [UxNote](https://github.com/ninefortyonestudio/uxnote), the single-script annotation bar for mockups and websites. Drop one `<script>` tag on a page and reviewers highlight text, pin elements, and leave numbered comments in the browser.
 
