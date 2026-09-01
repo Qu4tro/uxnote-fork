@@ -1,9 +1,17 @@
 dist/
-docs-local/
+site/
 node_modules/
-package-lock.json
 yarn.lock
 pnpm-lock.yaml
+test-results/
+playwright-report/
+
+docs/
+docs-local/
+CLAUDE.md
+AGENTS.md
+.claude/
+.pi/
 
 .DS_Store
 **/.DS_Store

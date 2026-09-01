@@ -1,64 +1,54 @@
-# UxNote
+# UxNote fork
 
-[English](README.md) | [Français](README.fr.md)
+A fork of [UxNote](https://github.com/ninefortyonestudio/uxnote), the single-script annotation bar for mockups and websites. Drop one `<script>` tag on a page and reviewers highlight text, pin elements, and leave numbered comments in the browser.
 
-<p align="center">
-  <a href="https://uxnote.ninefortyone.studio">
-    <img alt="Docs and custom install on the landing page" src="assets/badges/landing-page.svg" height="40">
-  </a>
-  <a href="https://www.buymeacoffee.com/ninefortyonestudio">
-    <img alt="Buy me a coffee" src="assets/badges/bmc-button%20yallow.svg" height="40">
-  </a>
-</p>
+![UxNote on a demo page: a text highlight, an element pin, and the annotation panel](assets/readme/annotating.png)
 
-Uxnote is an annotation bar for mockups and websites. Drop a single script to get text highlights, element pins, numbered cards, color theming, a dimmed focus mode, import/export, and email handoff. No plugin and no backend required.
+## What it forks
 
-## Who it is for
-- Agencies and freelancers: clients comment directly on the page, then export a clean review file.
-- Product and UX teams: review in the browser where interfaces live, without touching existing code.
+[ninefortyonestudio/uxnote](https://github.com/ninefortyonestudio/uxnote) v1.0.0, MIT. Upstream keeps annotations in `localStorage` and hands them off as a JSON file or an email. This fork keeps the widget, its landing page, and its build.
 
-## Core features
-- Text highlights and element pins with numbered badges.
-- Unified or per-type highlight colors, plus a toggleable dim overlay.
-- Import and export to a single JSON file (title + date), with re-import support.
-- Email handoff for sharing feedback with developers.
+## What it adds
 
-## How it works
-1. Inject the script on each page (or via a global tag manager).
-2. Share the URL with your client.
-3. Clients annotate text or elements; everything appears in the Uxnote panel.
-4. Export JSON or send by email to collect and process feedback.
+- **Server sync.** Set a server URL and an API key, and annotations persist on that server per site. Leave the server unset and the widget stores them in `localStorage`, as upstream does.
+- **Region screenshots.** Each annotation can carry a crop of the page around the annotated element or text.
+- **Settings.** `jsonExport`, `jsonImport`, and `server` are script-tag attributes, and cards in the landing-page builder.
+- **Dark mode.** The toolbar, panel, and dialogs follow the page's color scheme.
+- **Comment-first notes.** A note is one comment, written on a card beside the toolbar so the annotated area stays visible. The panel starts closed.
+- **Single-page apps.** A route change without a page load re-renders the annotations of the new page.
+- **CI/CD.** Every pull request gets a live preview of the landing page and the demo. A version tag publishes a release with the minified script.
 
-## Install (copy/paste)
-Place the script right before `</body>` so the DOM is ready. If you must place it in `<head>`, add `defer`.
+## Try it
 
-```html
-<script src="https://github.com/ninefortyonestudio/uxnote/releases/download/v1.0.0/uxnote.min-v1.0.0.js"></script>
+- Landing page: https://qu4tro.github.io/uxnote-fork/
+- Demo page: https://qu4tro.github.io/uxnote-fork/demo/
+
+Locally:
+
+```sh
+npm install
+npm start
 ```
 
-## Script tag options
-The landing page builder exposes these options:
-- `colorForHighlight` or `colorForTextHighlight` + `colorForElementHighlight`
-- `isBackdropVisible`
-- `isToolOnTopAtLaunch`
-- `isToolVisibleAtFirstLaunch`
-- `data-mailto` (recipient for email export)
+Then open http://localhost:4173/demo/.
 
-You can also block areas from annotations with `data-uxnote-ignore`, and re-enable a child with `data-uxnote-allow`.
+## Install
 
-## Storage and data
-Annotations are stored in `localStorage` for the current origin and per URL. No data is sent to a server unless you export a JSON file or send annotations by email.
+```html
+<script src="https://qu4tro.github.io/uxnote-fork/dist/uxnote.min-v1.0.0.js"></script>
+```
 
-## Compatibility notes
-- Works on staging, previews, or localhost as long as the script loads and `localStorage` is allowed.
-- For SPAs, route changes might require a reload or re-init to render annotations for the new URL.
-- If CSP is strict, allow the Uxnote script origin and inline styles (or add a nonce/hash).
-- Same-origin iframes work if you inject Uxnote inside the iframe document.
+The landing page builder generates the tag with the options you pick.
+
+## Develop
+
+```sh
+npm test         # Playwright smoke test against demo/
+npm run build    # minified script in dist/
+```
+
+CI runs the syntax check, the build, and the smoke test on every pull request and on `main`. A preview of the site is deployed for every pull request, and its URL is posted as a comment. Pushes to `main` deploy the landing page. A `v*` tag, matching the version in `package.json`, publishes a GitHub release with the built script.
 
 ## License
-Uxnote is released under the MIT License. See `LICENSE`.
 
-## Project layout
-- `index.html` - landing page and documentation copy.
-- `assets/` - landing styles and language data.
-- `uxnote-tool/uxnote.js` - Uxnote tool script.
+MIT. The widget is © ninefortyonestudio; see `LICENSE`.
