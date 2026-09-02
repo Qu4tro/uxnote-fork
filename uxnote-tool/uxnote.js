@@ -4874,6 +4874,10 @@
     return healthPath ? `${server.url}${healthPath}` : annotationsUrl();
   }
 
+  function screenshotUrl(id) {
+    return `${server.url}/screenshots/${encodeURIComponent(id)}?site=${encodeURIComponent(siteKey)}`;
+  }
+
   // The key is in the page source, so it keeps a passer-by from writing to a
   // review server and nothing more. An empty key sends no header.
   function syncHeaders(headers) {
@@ -5365,20 +5369,57 @@
       showToast('Uxnote: could not capture that region');
       return;
     }
-    ann.screenshot = {
-      dataUrl: shot.canvas.toDataURL('image/png'),
-      w: shot.w,
-      h: shot.h,
-      capturedAt: Date.now()
-    };
+    let stored = null;
+    if (server) {
+      // The annotation itself lives on that server, so a refused upload is a
+      // transient failure and not a second mode. Nothing is attached.
+      const blob = await new Promise((done) => shot.canvas.toBlob(done, 'image/png'));
+      const uploaded = blob ? await uploadScreenshot(blob, ann.id) : null;
+      if (!uploaded) {
+        showToast('Uxnote: could not send the screenshot to the server');
+        return;
+      }
+      stored = { url: uploaded.url, w: shot.w, h: shot.h, capturedAt: Date.now() };
+    } else {
+      stored = { dataUrl: shot.canvas.toDataURL('image/png'), w: shot.w, h: shot.h, capturedAt: Date.now() };
+    }
+    ann.screenshot = stored;
     saveAnnotations();
     renderList();
     showToast('Uxnote: the screenshot is attached to the annotation');
   }
 
+  // The PNG travels as the body of the request, so a server needs no multipart
+  // parser. The answer names the address the server serves the file at.
+  async function uploadScreenshot(blob, id) {
+    try {
+      const res = await fetch(screenshotUrl(id), {
+        method: 'PUT',
+        headers: syncHeaders({ 'Content-Type': 'image/png' }),
+        body: blob
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const payload = await res.json();
+      return payload && payload.url ? payload : null;
+    } catch (err) {
+      console.warn('Uxnote screenshot:', err);
+      return null;
+    }
+  }
+
   function screenshotSrc(ann) {
     const shot = ann && ann.screenshot;
-    return (shot && shot.dataUrl) || null;
+    if (!shot) return null;
+    if (shot.dataUrl) return shot.dataUrl;
+    if (!shot.url) return null;
+    try {
+      // The address the server answers with is relative to the base URL, and
+      // the server can be a different origin from the page under review.
+      const base = server ? new URL(`${server.url}/`, window.location.href) : window.location.href;
+      return new URL(shot.url, base).href;
+    } catch (err) {
+      return shot.url;
+    }
   }
 
   function openScreenshotLightbox(src) {
