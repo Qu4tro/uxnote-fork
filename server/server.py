@@ -15,10 +15,13 @@ Routes, under --prefix (empty by default):
     PUT    /annotations/<id>?site=...   write one annotation
     DELETE /annotations/<id>?site=...   delete one annotation
     DELETE /annotations?site=...        delete the set
+    PUT    /screenshots/<id>?site=...   store the screenshot of one annotation
+    GET    /screenshots/<name>          read a stored screenshot
     GET    /<anything else>             a file under --root
 
 Storage is one file per site under --data (./uxnote-data by default), named
-after the site key and holding the set as the protocol sends it.
+after the site key and holding the set as the protocol sends it. Screenshots are
+PNG files under --data/screenshots, named after the site key and the annotation.
 
 This is a review tool. It has no TLS, it writes world-readable files, and the
 api key it compares travels in the source of every annotated page. Put it
@@ -36,6 +39,9 @@ from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 
 ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+SCREENSHOT_NAME_PATTERN = re.compile(r"^[A-Za-z0-9._-]{1,192}\.png$")
+PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
+MAX_SCREENSHOT_BYTES = 8 * 1024 * 1024
 
 CORS_HEADERS = {
     "Access-Control-Allow-Origin": "*",
@@ -86,9 +92,9 @@ class UxnoteHandler(BaseHTTPRequestHandler):
         values = parse_qs(query).get("site", [])
         return values[0] if values and values[0] else ""
 
-    def _annotation_id(self, path):
-        """The id of an /annotations/<id> path, or '' when the path is not one."""
-        head = f"{self.prefix}/annotations/"
+    def _route_id(self, path, resource):
+        """The id of a /<resource>/<id> path, or '' when the path is not one."""
+        head = f"{self.prefix}/{resource}/"
         if not path.startswith(head):
             return ""
         candidate = path[len(head):]
@@ -113,6 +119,14 @@ class UxnoteHandler(BaseHTTPRequestHandler):
         tmp = site_file.with_suffix(".json.tmp")
         tmp.write_text(json.dumps(payload, indent=2), "utf-8")
         tmp.replace(site_file)
+
+    def _screenshot_file(self, name):
+        return self.data / "screenshots" / name
+
+    def _screenshot_name(self, site, annotation_id):
+        # The name is the site and the annotation, so a second screenshot of the
+        # same annotation replaces the first instead of leaving an orphan.
+        return f"{site_slug(site)}-{annotation_id}.png"
 
     # ---------------------------------------------------------------- routes
     def do_OPTIONS(self):
@@ -140,6 +154,10 @@ class UxnoteHandler(BaseHTTPRequestHandler):
                     return self._error(500, "the stored annotation set is unreadable")
             return self._json(200, payload)
 
+        head = f"{self.prefix}/screenshots/"
+        if path.startswith(head):
+            return self._serve_screenshot(path[len(head):])
+
         return self._serve_static(path)
 
     def do_PUT(self):
@@ -147,12 +165,15 @@ class UxnoteHandler(BaseHTTPRequestHandler):
         path = unquote(parsed.path)
         if not self._authorized():
             return self._error(401, "the api key does not match")
-        annotation_id = self._annotation_id(path)
-        if not annotation_id:
+        screenshot_id = self._route_id(path, "screenshots")
+        annotation_id = self._route_id(path, "annotations")
+        if not screenshot_id and not annotation_id:
             return self._error(404, "no route answers that path")
         site = self._site(parsed.query)
         if not site:
             return self._error(400, "the site query parameter is required")
+        if screenshot_id:
+            return self._store_screenshot(site, screenshot_id)
 
         try:
             length = int(self.headers.get("Content-Length", 0))
@@ -195,7 +216,7 @@ class UxnoteHandler(BaseHTTPRequestHandler):
                 self._write_set(site, {"version": 1, "annotations": []})
             return self._json(200, {"ok": True})
 
-        annotation_id = self._annotation_id(path)
+        annotation_id = self._route_id(path, "annotations")
         if not annotation_id:
             return self._error(404, "no route answers that path")
         with self.lock:
@@ -213,6 +234,44 @@ class UxnoteHandler(BaseHTTPRequestHandler):
         # An id the server does not hold is a state the caller asked for and
         # the server is already in.
         return self._json(200, {"ok": True})
+
+    # -------------------------------------------------------------- screenshots
+    def _store_screenshot(self, site, annotation_id):
+        ctype = (self.headers.get("Content-Type") or "").split(";")[0].strip().lower()
+        if ctype != "image/png":
+            return self._error(415, "the body must be a PNG, as image/png")
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+        except ValueError:
+            return self._error(400, "the content length is not a number")
+        if length <= 0:
+            return self._error(400, "the body is empty")
+        if length > MAX_SCREENSHOT_BYTES:
+            return self._error(413, "the screenshot is larger than this server stores")
+        body = self.rfile.read(length)
+        if not body.startswith(PNG_MAGIC):
+            return self._error(400, "the body is not a PNG")
+
+        name = self._screenshot_name(site, annotation_id)
+        with self.lock:
+            screenshot_file = self._screenshot_file(name)
+            screenshot_file.parent.mkdir(parents=True, exist_ok=True)
+            tmp = screenshot_file.with_suffix(".png.tmp")
+            tmp.write_bytes(body)
+            tmp.replace(screenshot_file)
+        # The address is relative to the api base, because the server can be a
+        # different origin from the page under review.
+        return self._json(201, {"url": f"screenshots/{name}"})
+
+    # The widget shows a screenshot in an <img>, which sends no header, so this
+    # route asks for no api key: a screenshot is as readable as its page.
+    def _serve_screenshot(self, name):
+        if not SCREENSHOT_NAME_PATTERN.match(name):
+            return self._error(404, "no screenshot answers that name")
+        screenshot_file = self._screenshot_file(name)
+        if not screenshot_file.is_file():
+            return self._error(404, "no screenshot answers that name")
+        self._send(200, screenshot_file.read_bytes(), "image/png")
 
     # ----------------------------------------------------------------- files
     def _serve_static(self, path):

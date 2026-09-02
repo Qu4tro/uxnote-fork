@@ -56,14 +56,16 @@
 
     <p class="note" id="note">
       This page is here to be annotated. The widget below writes to the reference
-      server, so the annotations land in <code>uxnote-data/</code> and a second
-      browser sees them. Start the server with
+      server, so the annotations and their screenshots land in
+      <code>uxnote-data/</code> and a second browser sees them. Start the server
+      with
       <code>python3 server/server.py --port 8123 --root . --api-key review-key</code>.
     </p>
   </main>
 
   <footer>Tidewatch — a sample page, not a product.</footer>
 
+  <script src="/uxnote-tool/snapdom.min.js"></script>
   <script src="/uxnote-tool/uxnote.js"
     data-server-url="http://localhost:8123"
     data-server-api-key="review-key"></script>
