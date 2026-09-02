@@ -11,7 +11,7 @@ A fork of [UxNote](https://github.com/ninefortyonestudio/uxnote), the single-scr
 ## What it adds
 
 - **Server sync.** Set a server URL and an API key, and annotations persist on that server per site, with a copy in `localStorage` that carries them across a reload the server was down for. Leave the server unset and the widget stores them in `localStorage` only, as upstream does.
-- **Region screenshots.** Each annotation can carry a crop of the page around the annotated element or text.
+- **Region screenshots.** A note can be a picture of a region of the page, framed by the reviewer.
 - **Settings.** `jsonExport`, `jsonImport`, and `server` are script-tag attributes, and cards in the landing-page builder.
 - **Dark mode.** The toolbar, panel, and dialogs follow the page's color scheme.
 - **Comment-first notes.** A note is one comment, written on a card beside the toolbar so the annotated area stays visible. The panel starts closed.
@@ -100,22 +100,23 @@ annotations land in `uxnote-data/`.
 
 ## Region screenshots
 
-An annotation can carry a picture of the part of the page it is about. Load
+A note can be a picture of a region of the page. Load
 [snapdom](https://github.com/zumerlab/snapdom) before the widget, on the same
-page, and every annotation card offers a camera button:
+page, and the toolbar offers a camera beside the two other capture modes:
 
 ```html
 <script src="https://qu4tro.github.io/uxnote-fork/dist/snapdom.min.js"></script>
 <script src="https://qu4tro.github.io/uxnote-fork/dist/uxnote.min-v1.0.0.js"></script>
 ```
 
-The button opens an overlay, framed on the annotated text or element. Drag to
-reframe it. Press Enter to capture, or Escape to stop. The widget renders the
-page with snapdom, hides its own interface, and crops the region, so the picture
-carries no toolbar, no panel, and no marker.
+Press the camera and drag to frame a region. Press Enter to capture, or Escape
+to stop. Write a comment and the region becomes an annotation: a numbered marker
+and a frame on the page, a thumbnail on its card. The widget renders the page
+with snapdom and hides its own interface, so the picture carries no toolbar, no
+panel, and no marker.
 
 With a server the picture travels to it as a PNG, and the annotation keeps the
-address the server answers with. A refused upload attaches nothing and says so
+address the server answers with. A refused upload creates nothing and says so
 with a toast. With no server the picture rides on the annotation itself, and the
 JSON export carries it.
 
