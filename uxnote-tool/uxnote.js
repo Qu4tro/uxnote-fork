@@ -5,6 +5,10 @@
  * Version: v1.0.0
  * License: MIT (see LICENSE)
  * Built with Codex 5.2
+ *
+ * This fork stores the annotations on the server named by data-server-url,
+ * over the wire protocol of PROTOCOL.md. With no server named it stores them
+ * in localStorage, on the browser that wrote them.
  */
 (() => {
   if (window.Uxnote) {
@@ -75,6 +79,9 @@
   const importFilesStorageKey = `uxnote:import-files:${siteKey}`;
   const visibilityStorageKey = `uxnote:hidden:${siteKey}`;
   const pendingFocusKey = `uxnote:pending:${siteKey}`;
+  // A named server is the annotation store; no name at all means localStorage.
+  const serverUrl = ((script && script.dataset.serverUrl) || '').trim().replace(/\/+$/, '');
+  const server = serverUrl ? { url: serverUrl } : null;
   const dimConfigAttr =
     getScriptAttr('isBackdropVisible') ||
     getScriptAttr('isbackdropvisible') ||
@@ -164,13 +171,17 @@
     createShell();
     createDimmer();
     setAnnotatorVisibility(state.hidden);
-    loadAnnotations();
+    if (server) {
+      remotePull();
+    } else {
+      loadAnnotations();
+    }
     refreshKnownAnnotatorNames();
     restoreAnnotations();
     retryResolveMissingAnnotations();
     startMissingObserver();
     startLayoutObserver();
-    focusPendingAnnotation();
+    if (!server) focusPendingAnnotation();
     bindGlobalHandlers();
   }
 
@@ -2890,6 +2901,10 @@
   }
 
   function saveAnnotations() {
+    if (server) {
+      syncAnnotations();
+      return;
+    }
     try {
       localStorage.setItem(storageKey, JSON.stringify(state.annotations));
     } catch (err) {
@@ -4282,7 +4297,11 @@
     const confirmDelete = await confirmDialog('Delete all annotations?', 'Delete');
     if (!confirmDelete) return;
     state.annotations = [];
-    saveAnnotations();
+    if (server) {
+      remoteDeleteAll();
+    } else {
+      saveAnnotations();
+    }
     clearRenderedAnnotations();
     renderList();
     renumberMarkers();
@@ -4564,12 +4583,134 @@
     }
   }
 
+  // ------------------------------------------------------------------
+  // Server sync
+  // ------------------------------------------------------------------
+
+  // The set that the server last agreed to. Each change is diffed against it
+  // and travels as one request per annotation, so a note that another reviewer
+  // changed survives a change made here to a different note. PROTOCOL.md holds
+  // the contract.
+  let syncedSnapshot = new Map();
+  let syncQueue = Promise.resolve();
+  let syncWarned = false;
+
+  function annotationsUrl() {
+    return `${server.url}/annotations?site=${encodeURIComponent(siteKey)}`;
+  }
+
+  function annotationUrl(id) {
+    return `${server.url}/annotations/${encodeURIComponent(id)}?site=${encodeURIComponent(siteKey)}`;
+  }
+
+  function snapshotOf(annotations) {
+    return new Map(annotations.map((ann) => [ann.id, JSON.stringify(ann)]));
+  }
+
+  // One toast per run of failures: the second one says nothing the first did
+  // not. The next request that succeeds arms it again.
+  function warnSync(message, err) {
+    console.warn('Uxnote sync:', message, err);
+    if (syncWarned) return;
+    syncWarned = true;
+    showToast(message);
+  }
+
+  function enqueueSync(run) {
+    syncQueue = syncQueue.then(run, run);
+    return syncQueue;
+  }
+
+  async function remotePull() {
+    if (!server) return;
+    try {
+      const res = await fetch(annotationsUrl(), { headers: { Accept: 'application/json' } });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const payload = await res.json();
+      state.annotations = ((payload && payload.annotations) || []).filter(
+        (ann) => ann && (ann.type === 'text' || ann.type === 'element')
+      );
+      state.annotations.forEach((ann) => {
+        if (!ann.pageKey) {
+          ann.pageKey = normalizePageKey(ann.pageUrl || window.location.href);
+        }
+      });
+      syncedSnapshot = snapshotOf(state.annotations);
+      syncWarned = false;
+      refreshKnownAnnotatorNames();
+      clearRenderedAnnotations();
+      restoreAnnotations();
+      renumberMarkers();
+      renderList();
+      // The hop that a card on another page starts lands here, because the set
+      // it points into only exists once the pull has answered.
+      focusPendingAnnotation();
+    } catch (err) {
+      warnSync('Uxnote: could not read the annotations from the server', err);
+    }
+  }
+
+  function syncAnnotations() {
+    if (!server) return;
+    const next = snapshotOf(state.annotations);
+    next.forEach((body, id) => {
+      if (syncedSnapshot.get(id) !== body) enqueueSync(() => remoteUpsert(id, body));
+    });
+    syncedSnapshot.forEach((body, id) => {
+      if (!next.has(id)) enqueueSync(() => remoteDelete(id));
+    });
+  }
+
+  // A failed request leaves the snapshot stale, so the next change sends it
+  // again.
+  async function remoteUpsert(id, body) {
+    try {
+      const res = await fetch(annotationUrl(id), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      syncedSnapshot.set(id, body);
+      syncWarned = false;
+    } catch (err) {
+      warnSync('Uxnote: could not save this annotation on the server', err);
+    }
+  }
+
+  async function remoteDelete(id) {
+    try {
+      const res = await fetch(annotationUrl(id), { method: 'DELETE' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      syncedSnapshot.delete(id);
+      syncWarned = false;
+    } catch (err) {
+      warnSync('Uxnote: could not delete this annotation on the server', err);
+    }
+  }
+
+  // Delete all is one request, never one per annotation.
+  function remoteDeleteAll() {
+    if (!server) return;
+    enqueueSync(async () => {
+      try {
+        const res = await fetch(annotationsUrl(), { method: 'DELETE' });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        syncedSnapshot = new Map();
+        syncWarned = false;
+      } catch (err) {
+        warnSync('Uxnote: could not delete the annotations on the server', err);
+      }
+    });
+  }
+
   document.readyState === 'loading' ? document.addEventListener('DOMContentLoaded', init) : init();
 
   window.Uxnote = {
     refresh: refreshMarkers,
     setHidden: (hidden) => setAnnotatorVisibility(!!hidden),
     toggleVisibility: () => setAnnotatorVisibility(!state.hidden),
-    isHidden: () => !!state.hidden
+    isHidden: () => !!state.hidden,
+    sync: { pull: remotePull, push: syncAnnotations, url: () => (server ? server.url : null) }
   };
 })();
