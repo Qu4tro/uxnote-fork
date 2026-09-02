@@ -87,7 +87,7 @@ script tag, so anybody who can read the page can read the key. It stops a
 passer-by from writing to a review server. It is not access control. Put the
 server behind a network boundary if the notes matter.
 
-`PROTOCOL.md` holds the contract: four routes, an optional health probe, and one
+`PROTOCOL.md` holds the contract: six routes, an optional health probe, and one
 JSON shape. Any stack can implement it. `server/server.py` does, in the Python 3.9 standard library, and
 it serves the repository too, so the page under review runs on the same origin:
 
@@ -97,6 +97,30 @@ python3 server/server.py --port 8123 --root . --api-key review-key
 
 Then open http://localhost:8123/server/demo.html and annotate it. The
 annotations land in `uxnote-data/`.
+
+## Region screenshots
+
+An annotation can carry a picture of the part of the page it is about. Load
+[snapdom](https://github.com/zumerlab/snapdom) before the widget, on the same
+page, and every annotation card offers a camera button:
+
+```html
+<script src="https://qu4tro.github.io/uxnote-fork/dist/snapdom.min.js"></script>
+<script src="https://qu4tro.github.io/uxnote-fork/dist/uxnote.min-v1.0.0.js"></script>
+```
+
+The button opens an overlay, framed on the annotated text or element. Drag to
+reframe it. Press Enter to capture, or Escape to stop. The widget renders the
+page with snapdom, hides its own interface, and crops the region, so the picture
+carries no toolbar, no panel, and no marker.
+
+With a server the picture travels to it as a PNG, and the annotation keeps the
+address the server answers with. A refused upload attaches nothing and says so
+with a toast. With no server the picture rides on the annotation itself, and the
+JSON export carries it.
+
+`npm run build` writes `snapdom.min.js` into `dist/` beside the minified widget,
+so both URLs above resolve against one directory.
 
 ## Develop
 
@@ -109,4 +133,6 @@ CI runs the syntax check, the build, and the smoke test on every pull request an
 
 ## License
 
-MIT. The widget is © ninefortyonestudio; see `LICENSE`.
+MIT. The widget is © ninefortyonestudio; see `LICENSE`. `uxnote-tool/snapdom.min.js`
+is SnapDOM, MIT © Juan Martin Muda, vendored unmodified; see
+`uxnote-tool/LICENSE-snapdom.txt`.
