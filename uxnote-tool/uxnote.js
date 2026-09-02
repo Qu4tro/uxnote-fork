@@ -10,8 +10,8 @@
  * over the wire protocol of PROTOCOL.md. With no server named it stores them
  * in localStorage, on the browser that wrote them.
  *
- * An annotation can also carry a screenshot of the region of the page it is
- * about. Load snapdom (window.snapdom, MIT) before this script to offer it.
+ * An annotation can also be a screenshot of a region of the page. Load snapdom
+ * (window.snapdom, MIT) before this script to offer the capture button.
  */
 (() => {
   if (window.Uxnote) {
@@ -65,7 +65,8 @@
   const elementHighlightColor = normalizeHexColor(elementHighlightColorAttr || baseHighlightColor, baseHighlightColor);
   const colorPalette = {
     text: buildColorSet(textHighlightColor, { overlayAlpha: 0.7, softAlpha: 0.18, softerAlpha: 0.08 }),
-    element: buildColorSet(elementHighlightColor, { overlayAlpha: 0.35, softAlpha: 0.12, softerAlpha: 0.04 })
+    element: buildColorSet(elementHighlightColor, { overlayAlpha: 0.35, softAlpha: 0.12, softerAlpha: 0.04 }),
+    screenshot: buildColorSet(baseHighlightColor, { overlayAlpha: 0.35, softAlpha: 0.12, softerAlpha: 0.04 })
   };
   const initialPosition = (() => {
     if (startTopAttr !== null && startTopAttr !== undefined) {
@@ -1472,6 +1473,13 @@
         border-color: rgba(109, 86, 199, 0.6);
         box-shadow: 0 0 0 3px rgba(109, 86, 199, 0.16);
       }
+      .wn-annot-shot-frame {
+        position: absolute;
+        box-sizing: border-box;
+        border: 2px dashed var(--wn-shot-frame, #4e9cf6);
+        border-radius: 6px;
+        pointer-events: none;
+      }
       .wn-shot-overlay {
         position: fixed;
         inset: 0;
@@ -1604,6 +1612,9 @@
       { action: 'mode', mode: 'text', tip: 'Highlight text', icon: iconPen() },
       { action: 'mode', mode: 'element', tip: 'Annotate an element', icon: iconTarget() }
     ];
+    if (captureAvailable()) {
+      editButtons.push({ action: 'mode', mode: 'screenshot', tip: 'Capture a region', icon: iconCamera() });
+    }
     const exportButtons = [
       { action: 'import', tip: 'Import JSON', icon: iconUpload() },
       { action: 'export', tip: 'Export JSON', icon: iconDownload() }
@@ -2425,7 +2436,7 @@
     const fileId = generateImportFileId();
 
     const normalized = annotations
-      .filter((ann) => ann && (ann.type === 'text' || ann.type === 'element'))
+      .filter(isStoredAnnotation)
       .map((ann) =>
         normalizeImportedAnnotation(ann, {
           fallbackAuthor,
@@ -2877,7 +2888,10 @@
 
   function getAnnotationColors(annotation) {
     const palette = state.colors || colorPalette;
-    return annotation && annotation.type === 'text' ? palette.text : palette.element;
+    const type = annotation && annotation.type;
+    if (type === 'text') return palette.text;
+    if (type === 'screenshot') return palette.screenshot;
+    return palette.element;
   }
 
   function applyMarkerPalette(marker, palette) {
@@ -3034,12 +3048,16 @@
     }
   }
 
+  function isStoredAnnotation(ann) {
+    return !!ann && (ann.type === 'text' || ann.type === 'element' || ann.type === 'screenshot');
+  }
+
   // Local storage helpers
   function loadAnnotations() {
     try {
       const stored = localStorage.getItem(storageKey);
       const parsed = stored ? JSON.parse(stored) : [];
-      state.annotations = (parsed || []).filter((ann) => ann.type === 'text' || ann.type === 'element');
+      state.annotations = (parsed || []).filter(isStoredAnnotation);
       // Backward compatibility: add pageKey if missing
       state.annotations.forEach((ann) => {
         if (!ann.pageKey) {
@@ -3081,6 +3099,10 @@
     if (!action) return;
     if (action === 'mode') {
       const mode = btn.getAttribute('data-mode');
+      if (mode === 'screenshot') {
+        await captureRegionAnnotation();
+        return;
+      }
       setMode(mode);
       return;
     }
@@ -3432,6 +3454,9 @@
     const markerEntry = state.markers[id];
     if (markerEntry && markerEntry.el && markerEntry.el.parentNode) {
       markerEntry.el.parentNode.removeChild(markerEntry.el);
+    }
+    if (markerEntry && markerEntry.frame && markerEntry.frame.parentNode) {
+      markerEntry.frame.parentNode.removeChild(markerEntry.frame);
     }
     delete state.markers[id];
     removeElementHighlight(id);
@@ -3870,6 +3895,10 @@
 
   function renderResolvedAnnotation(annotation, resolved) {
     if (!resolved) return;
+    if (resolved.type === 'screenshot') {
+      addMarkerForAnnotation(annotation, null);
+      return;
+    }
     if (resolved.type === 'text' && resolved.range) {
       const span = applyTextHighlight(resolved.range, annotation.id);
       addMarkerForAnnotation(annotation, span);
@@ -3897,7 +3926,11 @@
   }
 
   function resolveTarget(annotation) {
-    if (!annotation || !annotation.target) return null;
+    if (!annotation) return null;
+    if (annotation.type === 'screenshot') {
+      return annotation.rect ? { type: 'screenshot' } : null;
+    }
+    if (!annotation.target) return null;
     if (annotation.type === 'text') {
       return resolveTextTarget(annotation);
     }
@@ -4089,6 +4122,7 @@
     applyMarkerPalette(marker, palette);
     marker.addEventListener('click', () => focusAnnotation(annotation.id));
     const rect = getViewportRect(annotation, targetNode);
+    const frame = syncShotFrame(annotation, rect);
     const host = getMarkerHost(rect && rect.anchor ? rect.anchor : targetNode);
     if (marker.parentNode !== host) {
       host.appendChild(marker);
@@ -4096,12 +4130,36 @@
     marker.style.zIndex = isGlobalMarkerHost(host) ? '' : '9999';
     if (!rect) {
       marker.style.display = 'none';
-      state.markers[annotation.id] = { el: marker, rect: null };
+      state.markers[annotation.id] = { el: marker, rect: null, frame };
       return;
     }
     marker.style.display = '';
     positionMarker(marker, rect, annotation);
-    state.markers[annotation.id] = { el: marker, rect };
+    state.markers[annotation.id] = { el: marker, rect, frame };
+  }
+
+  // A region has no node to anchor on, so the frame is what shows on the page
+  // where the picture was taken. It lives in the marker layer, which the
+  // visibility toggle and the capture hider both take out.
+  function syncShotFrame(annotation, rect) {
+    const entry = state.markers[annotation.id];
+    let frame = entry ? entry.frame : null;
+    if (annotation.type !== 'screenshot' || !rect) {
+      if (frame && frame.parentNode) frame.parentNode.removeChild(frame);
+      return null;
+    }
+    if (!frame) {
+      frame = document.createElement('div');
+      frame.className = 'wn-annot-shot-frame wn-annotator';
+    }
+    const host = state.markerLayer || document.body;
+    if (frame.parentNode !== host) host.appendChild(frame);
+    frame.style.setProperty('--wn-shot-frame', getAnnotationColors(annotation).base);
+    frame.style.left = `${rect.x}px`;
+    frame.style.top = `${rect.y}px`;
+    frame.style.width = `${rect.w}px`;
+    frame.style.height = `${rect.h}px`;
+    return frame;
   }
 
   function getViewportRect(annotation, targetNode) {
@@ -4122,6 +4180,11 @@
       const r = getVisibleRect(el);
       if (!r) return null;
       return { x: r.x, y: r.y, w: r.width, h: r.height, anchor: el };
+    }
+    if (annotation.type === 'screenshot') {
+      const r = annotation.rect;
+      if (!r) return null;
+      return { x: r.x - window.scrollX, y: r.y - window.scrollY, w: r.w, h: r.h, anchor: null };
     }
     return null;
   }
@@ -4161,12 +4224,8 @@
     Object.entries(state.markers).forEach(([id, entry]) => {
       const ann = state.annotations.find((a) => a.id === id);
       if (!ann) return;
-      if (ann.status === 'missing') {
-        entry.el.style.display = 'none';
-        entry.rect = null;
-        return;
-      }
-      const rect = getViewportRect(ann);
+      const rect = ann.status === 'missing' ? null : getViewportRect(ann);
+      entry.frame = syncShotFrame(ann, rect);
       if (!rect) {
         entry.el.style.display = 'none';
         entry.rect = null;
@@ -4261,6 +4320,13 @@
         el.scrollIntoView({ behavior: 'smooth', block: 'center' });
         flash(el, getAnnotationColors(ann).base);
       }
+    } else if (ann.type === 'screenshot' && ann.rect) {
+      window.scrollTo({
+        top: Math.max(0, ann.rect.y + ann.rect.h / 2 - window.innerHeight / 2),
+        behavior: 'smooth'
+      });
+      const entry = state.markers[ann.id];
+      if (entry && entry.frame) flash(entry.frame, getAnnotationColors(ann).base);
     }
   }
 
@@ -4364,19 +4430,6 @@
         await editAnnotation(ann.id);
       });
       topRight.appendChild(editBtn);
-
-      if (captureAvailable()) {
-        const shotBtn = document.createElement('button');
-        shotBtn.type = 'button';
-        shotBtn.className = 'wn-annot-edit wn-annot-shot-btn wn-annotator';
-        shotBtn.setAttribute('aria-label', 'Attach a screenshot to this annotation');
-        shotBtn.innerHTML = iconCamera();
-        shotBtn.addEventListener('click', async (evt) => {
-          evt.stopPropagation();
-          await captureForAnnotation(ann.id);
-        });
-        topRight.appendChild(shotBtn);
-      }
 
       const deleteBtn = document.createElement('button');
       deleteBtn.type = 'button';
@@ -4985,9 +5038,7 @@
       focusPendingAnnotation();
       return;
     }
-    const pulled = ((payload && payload.annotations) || []).filter(
-      (ann) => ann && (ann.type === 'text' || ann.type === 'element')
-    );
+    const pulled = ((payload && payload.annotations) || []).filter(isStoredAnnotation);
     pulled.forEach((ann) => {
       if (!ann.pageKey) {
         ann.pageKey = normalizePageKey(ann.pageUrl || window.location.href);
@@ -5168,53 +5219,9 @@
     return !!(window.snapdom && typeof window.snapdom.toCanvas === 'function');
   }
 
-  // The frame the overlay opens on: the annotated text or element, with a
-  // margin, in page coordinates.
-  function annotationInitialRect(ann) {
-    const pad = 12;
-    let rect = null;
-    if (ann.type === 'text') {
-      let x1 = Infinity;
-      let y1 = Infinity;
-      let x2 = -Infinity;
-      let y2 = -Infinity;
-      getHighlightSpans(ann.id).forEach((span) => {
-        const box = span.getBoundingClientRect();
-        if (!box.width && !box.height) return;
-        x1 = Math.min(x1, box.left);
-        y1 = Math.min(y1, box.top);
-        x2 = Math.max(x2, box.right);
-        y2 = Math.max(y2, box.bottom);
-      });
-      if (x2 > x1) {
-        rect = { x: x1 + window.scrollX, y: y1 + window.scrollY, w: x2 - x1, h: y2 - y1 };
-      }
-    } else if (ann.type === 'element') {
-      let el = null;
-      try {
-        el = ann.target && ann.target.css ? document.querySelector(ann.target.css) : null;
-      } catch (err) {
-        el = null;
-      }
-      if (el) {
-        const box = el.getBoundingClientRect();
-        rect = { x: box.left + window.scrollX, y: box.top + window.scrollY, w: box.width, h: box.height };
-      } else if (ann.rect) {
-        rect = { x: ann.rect.x, y: ann.rect.y, w: ann.rect.w, h: ann.rect.h };
-      }
-    }
-    if (!rect) return null;
-    return {
-      x: Math.max(0, rect.x - pad),
-      y: Math.max(0, rect.y - pad),
-      w: rect.w + pad * 2,
-      h: rect.h + pad * 2
-    };
-  }
-
   // Resolves the framed region in page coordinates, or null when the reviewer
   // stops.
-  function selectRegion(initialRect) {
+  function selectRegion() {
     return new Promise((resolve) => {
       const overlay = document.createElement('div');
       overlay.className = 'wn-shot-overlay wn-annotator';
@@ -5225,7 +5232,7 @@
       const hint = document.createElement('div');
       hint.className = 'wn-shot-hint wn-annotator';
       const label = document.createElement('span');
-      label.textContent = 'Drag to reframe. Enter captures. Escape stops.';
+      label.textContent = 'Drag to frame a region. Enter captures. Escape stops.';
       const okBtn = document.createElement('button');
       okBtn.type = 'button';
       okBtn.className = 'primary';
@@ -5249,16 +5256,7 @@
         rectEl.style.width = `${r.w}px`;
         rectEl.style.height = `${r.h}px`;
       };
-      setRect(
-        initialRect
-          ? {
-              x: initialRect.x - window.scrollX,
-              y: initialRect.y - window.scrollY,
-              w: initialRect.w,
-              h: initialRect.h
-            }
-          : null
-      );
+      setRect(null);
 
       let dragStart = null;
       const onDown = (evt) => {
@@ -5350,14 +5348,17 @@
     }
   }
 
-  async function captureForAnnotation(id) {
-    const ann = state.annotations.find((a) => a.id === id);
-    if (!ann || !captureAvailable()) return;
-    const initial = annotationInitialRect(ann);
-    if (initial) {
-      window.scrollTo(0, Math.max(0, initial.y + initial.h / 2 - window.innerHeight / 2));
+  // The camera is a capture mode like the other two: the reviewer frames a
+  // region, comments on it, and the picture is the annotation.
+  async function captureRegionAnnotation() {
+    if (!captureAvailable() || state.mode === 'screenshot') return;
+    setMode('screenshot');
+    let rect = null;
+    try {
+      rect = await selectRegion();
+    } finally {
+      setMode(null);
     }
-    const rect = await selectRegion(initial);
     if (!rect) return;
     let shot = null;
     try {
@@ -5369,12 +5370,16 @@
       showToast('Uxnote: could not capture that region');
       return;
     }
+    const res = await awaitComment('Comment for this region?');
+    if (!res) return;
+    const { comment, priority, author } = res;
+    const id = generateId();
     let stored = null;
     if (server) {
       // The annotation itself lives on that server, so a refused upload is a
-      // transient failure and not a second mode. Nothing is attached.
+      // transient failure and not a second mode. Nothing is created.
       const blob = await new Promise((done) => shot.canvas.toBlob(done, 'image/png'));
-      const uploaded = blob ? await uploadScreenshot(blob, ann.id) : null;
+      const uploaded = blob ? await uploadScreenshot(blob, id) : null;
       if (!uploaded) {
         showToast('Uxnote: could not send the screenshot to the server');
         return;
@@ -5383,10 +5388,24 @@
     } else {
       stored = { dataUrl: shot.canvas.toDataURL('image/png'), w: shot.w, h: shot.h, capturedAt: Date.now() };
     }
-    ann.screenshot = stored;
+    const annotation = {
+      id,
+      type: 'screenshot',
+      comment: comment.trim(),
+      author: author || state.annotatorName || '',
+      priority: priority || 'medium',
+      snippet: '',
+      pageUrl: window.location.href,
+      pageKey: normalizePageKey(window.location.href),
+      rect: { x: rect.x, y: rect.y, w: rect.w, h: rect.h },
+      screenshot: stored,
+      createdAt: Date.now(),
+      status: 'active'
+    };
+    state.annotations.push(annotation);
     saveAnnotations();
+    addMarkerForAnnotation(annotation, null);
     renderList();
-    showToast('Uxnote: the screenshot is attached to the annotation');
   }
 
   // The PNG travels as the body of the request, so a server needs no multipart
