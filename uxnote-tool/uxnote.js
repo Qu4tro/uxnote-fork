@@ -9,6 +9,9 @@
  * This fork stores the annotations on the server named by data-server-url,
  * over the wire protocol of PROTOCOL.md. With no server named it stores them
  * in localStorage, on the browser that wrote them.
+ *
+ * An annotation can also carry a screenshot of the region of the page it is
+ * about. Load snapdom (window.snapdom, MIT) before this script to offer it.
  */
 (() => {
   if (window.Uxnote) {
@@ -1468,6 +1471,84 @@
       .wn-annot-modal .wn-annot-prio-btn.active {
         border-color: rgba(109, 86, 199, 0.6);
         box-shadow: 0 0 0 3px rgba(109, 86, 199, 0.16);
+      }
+      .wn-shot-overlay {
+        position: fixed;
+        inset: 0;
+        cursor: crosshair;
+        z-index: 2147483651;
+      }
+      .wn-shot-rect {
+        position: absolute;
+        box-sizing: border-box;
+        border: 2px solid #6d56c7;
+        border-radius: 4px;
+        /* The dim outside the frame is one huge spread, so no second element
+           has to track the four bands around the rectangle. */
+        box-shadow: 0 0 0 100000px rgba(18, 14, 32, 0.45);
+      }
+      .wn-shot-hint {
+        position: fixed;
+        top: 18px;
+        left: 50%;
+        transform: translateX(-50%);
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 8px 10px 8px 16px;
+        background: #f6f2fb;
+        color: #3f3852;
+        font: 12px/1.4 "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+        border: 1px solid rgba(109, 86, 199, 0.2);
+        border-radius: 999px;
+        box-shadow: 0 12px 28px rgba(73, 64, 157, 0.18);
+        z-index: 2147483652;
+      }
+      .wn-shot-hint button {
+        border: 1px solid rgba(109, 86, 199, 0.22);
+        border-radius: 999px;
+        padding: 6px 14px;
+        font: inherit;
+        font-weight: 600;
+        background: #fff;
+        color: #3e384a;
+        cursor: pointer;
+      }
+      .wn-shot-hint button.primary {
+        background: #6d56c7;
+        border-color: #6d56c7;
+        color: #fff;
+      }
+      .wn-shot-hint button:disabled {
+        opacity: 0.45;
+        cursor: default;
+      }
+      .wn-annot-shot {
+        margin: 8px 0 4px;
+      }
+      .wn-annot-shot img {
+        display: block;
+        max-width: 100%;
+        max-height: 140px;
+        border: 1px solid rgba(109, 86, 199, 0.2);
+        border-radius: 10px;
+        cursor: zoom-in;
+      }
+      .wn-shot-lightbox {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(18, 14, 32, 0.82);
+        cursor: zoom-out;
+        z-index: 2147483653;
+      }
+      .wn-shot-lightbox img {
+        max-width: 92vw;
+        max-height: 92vh;
+        border-radius: 8px;
+        box-shadow: 0 18px 48px rgba(0, 0, 0, 0.5);
       }
     `;
     document.head.appendChild(style);
@@ -4284,6 +4365,19 @@
       });
       topRight.appendChild(editBtn);
 
+      if (captureAvailable()) {
+        const shotBtn = document.createElement('button');
+        shotBtn.type = 'button';
+        shotBtn.className = 'wn-annot-edit wn-annot-shot-btn wn-annotator';
+        shotBtn.setAttribute('aria-label', 'Attach a screenshot to this annotation');
+        shotBtn.innerHTML = iconCamera();
+        shotBtn.addEventListener('click', async (evt) => {
+          evt.stopPropagation();
+          await captureForAnnotation(ann.id);
+        });
+        topRight.appendChild(shotBtn);
+      }
+
       const deleteBtn = document.createElement('button');
       deleteBtn.type = 'button';
       deleteBtn.className = 'wn-annot-delete wn-annotator';
@@ -4333,6 +4427,20 @@
 
       item.appendChild(top);
       item.appendChild(comment);
+      const shotSrc = screenshotSrc(ann);
+      if (shotSrc) {
+        const shotWrap = document.createElement('div');
+        shotWrap.className = 'wn-annot-shot';
+        const shotImg = document.createElement('img');
+        shotImg.src = shotSrc;
+        shotImg.alt = 'The screenshot of this annotation';
+        shotImg.addEventListener('click', (evt) => {
+          evt.stopPropagation();
+          openScreenshotLightbox(shotSrc);
+        });
+        shotWrap.appendChild(shotImg);
+        item.appendChild(shotWrap);
+      }
       item.appendChild(showMore);
       item.appendChild(metaWrap);
       item.addEventListener('click', () => {
@@ -4555,6 +4663,12 @@
     return iconSvg(`
       <path d="M3 7a2 2 0 0 1 2 -2h14a2 2 0 0 1 2 2v10a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-10" />
       <path d="M3 7l9 6l9 -6" />
+    `);
+  }
+  function iconCamera() {
+    return iconSvg(`
+      <path d="M4 9a2 2 0 0 1 2 -2h1.4l1.6 -2h6l1.6 2h1.4a2 2 0 0 1 2 2v8a2 2 0 0 1 -2 2h-12a2 2 0 0 1 -2 -2v-8" />
+      <circle cx="12" cy="13" r="3.2" />
     `);
   }
   function iconEdit() {
@@ -5037,6 +5151,256 @@
         warnSync('Uxnote: could not delete the annotations on the server', err);
       }
     });
+  }
+
+  // ------------------------------------------------------------------
+  // Region screenshots
+  // ------------------------------------------------------------------
+
+  // snapdom renders the page a screenshot is cropped out of. The widget never
+  // loads it: a second script tag on the page is the whole opt-in, so a strict
+  // script-src has nothing to allow that the page did not already allow.
+  function captureAvailable() {
+    return !!(window.snapdom && typeof window.snapdom.toCanvas === 'function');
+  }
+
+  // The frame the overlay opens on: the annotated text or element, with a
+  // margin, in page coordinates.
+  function annotationInitialRect(ann) {
+    const pad = 12;
+    let rect = null;
+    if (ann.type === 'text') {
+      let x1 = Infinity;
+      let y1 = Infinity;
+      let x2 = -Infinity;
+      let y2 = -Infinity;
+      getHighlightSpans(ann.id).forEach((span) => {
+        const box = span.getBoundingClientRect();
+        if (!box.width && !box.height) return;
+        x1 = Math.min(x1, box.left);
+        y1 = Math.min(y1, box.top);
+        x2 = Math.max(x2, box.right);
+        y2 = Math.max(y2, box.bottom);
+      });
+      if (x2 > x1) {
+        rect = { x: x1 + window.scrollX, y: y1 + window.scrollY, w: x2 - x1, h: y2 - y1 };
+      }
+    } else if (ann.type === 'element') {
+      let el = null;
+      try {
+        el = ann.target && ann.target.css ? document.querySelector(ann.target.css) : null;
+      } catch (err) {
+        el = null;
+      }
+      if (el) {
+        const box = el.getBoundingClientRect();
+        rect = { x: box.left + window.scrollX, y: box.top + window.scrollY, w: box.width, h: box.height };
+      } else if (ann.rect) {
+        rect = { x: ann.rect.x, y: ann.rect.y, w: ann.rect.w, h: ann.rect.h };
+      }
+    }
+    if (!rect) return null;
+    return {
+      x: Math.max(0, rect.x - pad),
+      y: Math.max(0, rect.y - pad),
+      w: rect.w + pad * 2,
+      h: rect.h + pad * 2
+    };
+  }
+
+  // Resolves the framed region in page coordinates, or null when the reviewer
+  // stops.
+  function selectRegion(initialRect) {
+    return new Promise((resolve) => {
+      const overlay = document.createElement('div');
+      overlay.className = 'wn-shot-overlay wn-annotator';
+      const rectEl = document.createElement('div');
+      rectEl.className = 'wn-shot-rect wn-annotator';
+      overlay.appendChild(rectEl);
+
+      const hint = document.createElement('div');
+      hint.className = 'wn-shot-hint wn-annotator';
+      const label = document.createElement('span');
+      label.textContent = 'Drag to reframe. Enter captures. Escape stops.';
+      const okBtn = document.createElement('button');
+      okBtn.type = 'button';
+      okBtn.className = 'primary';
+      okBtn.textContent = 'Capture';
+      const cancelBtn = document.createElement('button');
+      cancelBtn.type = 'button';
+      cancelBtn.textContent = 'Cancel';
+      hint.appendChild(label);
+      hint.appendChild(okBtn);
+      hint.appendChild(cancelBtn);
+
+      let current = null;
+      const setRect = (r) => {
+        current = r;
+        const usable = !!r && r.w >= 4 && r.h >= 4;
+        rectEl.style.display = usable ? 'block' : 'none';
+        okBtn.disabled = !usable;
+        if (!usable) return;
+        rectEl.style.left = `${r.x}px`;
+        rectEl.style.top = `${r.y}px`;
+        rectEl.style.width = `${r.w}px`;
+        rectEl.style.height = `${r.h}px`;
+      };
+      setRect(
+        initialRect
+          ? {
+              x: initialRect.x - window.scrollX,
+              y: initialRect.y - window.scrollY,
+              w: initialRect.w,
+              h: initialRect.h
+            }
+          : null
+      );
+
+      let dragStart = null;
+      const onDown = (evt) => {
+        evt.preventDefault();
+        dragStart = { x: evt.clientX, y: evt.clientY };
+        setRect({ x: evt.clientX, y: evt.clientY, w: 0, h: 0 });
+      };
+      const onMove = (evt) => {
+        if (!dragStart) return;
+        evt.preventDefault();
+        setRect({
+          x: Math.min(dragStart.x, evt.clientX),
+          y: Math.min(dragStart.y, evt.clientY),
+          w: Math.abs(evt.clientX - dragStart.x),
+          h: Math.abs(evt.clientY - dragStart.y)
+        });
+      };
+      const onUp = () => {
+        dragStart = null;
+      };
+      const finish = (result) => {
+        document.removeEventListener('keydown', onKey, true);
+        overlay.remove();
+        hint.remove();
+        resolve(result);
+      };
+      const confirmSelection = () => {
+        if (!current || current.w < 4 || current.h < 4) return;
+        finish({
+          x: current.x + window.scrollX,
+          y: current.y + window.scrollY,
+          w: current.w,
+          h: current.h
+        });
+      };
+      const onKey = (evt) => {
+        if (evt.key === 'Escape') {
+          evt.preventDefault();
+          finish(null);
+        } else if (evt.key === 'Enter') {
+          evt.preventDefault();
+          confirmSelection();
+        }
+      };
+      overlay.addEventListener('mousedown', onDown);
+      overlay.addEventListener('mousemove', onMove);
+      overlay.addEventListener('mouseup', onUp);
+      okBtn.addEventListener('click', confirmSelection);
+      cancelBtn.addEventListener('click', () => finish(null));
+      document.addEventListener('keydown', onKey, true);
+      document.body.appendChild(overlay);
+      document.body.appendChild(hint);
+    });
+  }
+
+  // Render the page with snapdom, the widget's own interface hidden, and crop
+  // the region out of it.
+  async function captureRegion(rect) {
+    // Every piece of the widget's own chrome is fixed or absolute, so taking it
+    // out of the render moves nothing else on the page. The dim overlay is
+    // chrome too, and it is the one piece that carries no .wn-annotator class.
+    const hider = document.createElement('style');
+    hider.textContent = '.wn-annotator, .wn-annot-dimmer { display: none !important; }';
+    document.head.appendChild(hider);
+    try {
+      // Two frames, so the browser has painted the page without the interface
+      // before snapdom reads it.
+      await new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)));
+      // The interface goes with the stylesheet above rather than with
+      // snapdom's own exclude option, which drops the nodes from the clone and
+      // reflows what is left, so the render stops matching the page.
+      const page = await window.snapdom.toCanvas(document.body, { scale: 1 });
+      const bodyRect = document.body.getBoundingClientRect();
+      const factor = bodyRect.width ? page.width / bodyRect.width : 1;
+      const originX = bodyRect.left + window.scrollX;
+      const originY = bodyRect.top + window.scrollY;
+      const sx = Math.max(0, Math.round((rect.x - originX) * factor));
+      const sy = Math.max(0, Math.round((rect.y - originY) * factor));
+      const sw = Math.min(page.width - sx, Math.max(1, Math.round(rect.w * factor)));
+      const sh = Math.min(page.height - sy, Math.max(1, Math.round(rect.h * factor)));
+      if (sw < 1 || sh < 1) return null;
+      const canvas = document.createElement('canvas');
+      canvas.width = sw;
+      canvas.height = sh;
+      canvas.getContext('2d').drawImage(page, sx, sy, sw, sh, 0, 0, sw, sh);
+      return { canvas, w: sw, h: sh };
+    } finally {
+      hider.remove();
+    }
+  }
+
+  async function captureForAnnotation(id) {
+    const ann = state.annotations.find((a) => a.id === id);
+    if (!ann || !captureAvailable()) return;
+    const initial = annotationInitialRect(ann);
+    if (initial) {
+      window.scrollTo(0, Math.max(0, initial.y + initial.h / 2 - window.innerHeight / 2));
+    }
+    const rect = await selectRegion(initial);
+    if (!rect) return;
+    let shot = null;
+    try {
+      shot = await captureRegion(rect);
+    } catch (err) {
+      console.warn('Uxnote screenshot:', err);
+    }
+    if (!shot) {
+      showToast('Uxnote: could not capture that region');
+      return;
+    }
+    ann.screenshot = {
+      dataUrl: shot.canvas.toDataURL('image/png'),
+      w: shot.w,
+      h: shot.h,
+      capturedAt: Date.now()
+    };
+    saveAnnotations();
+    renderList();
+    showToast('Uxnote: the screenshot is attached to the annotation');
+  }
+
+  function screenshotSrc(ann) {
+    const shot = ann && ann.screenshot;
+    return (shot && shot.dataUrl) || null;
+  }
+
+  function openScreenshotLightbox(src) {
+    const box = document.createElement('div');
+    box.className = 'wn-shot-lightbox wn-annotator';
+    const img = document.createElement('img');
+    img.src = src;
+    img.alt = 'The screenshot of this annotation';
+    box.appendChild(img);
+    const close = () => {
+      document.removeEventListener('keydown', onKey, true);
+      box.remove();
+    };
+    const onKey = (evt) => {
+      if (evt.key === 'Escape') {
+        evt.preventDefault();
+        close();
+      }
+    };
+    box.addEventListener('click', close);
+    document.addEventListener('keydown', onKey, true);
+    document.body.appendChild(box);
   }
 
   document.readyState === 'loading' ? document.addEventListener('DOMContentLoaded', init) : init();
