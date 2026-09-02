@@ -285,6 +285,25 @@
                   <input type="email" id="builder-mailto" placeholder="team@example.com">
                 </div>
               </div>
+              <div class="builder-card" id="builder-card-server">
+                <div class="card-head">
+                  <label class="builder-include" for="builder-server-enabled">
+                    <input type="checkbox" id="builder-server-enabled">
+                    <span class="sr-only" data-i18n="builder_include">Include</span>
+                  </label>
+                  <span class="builder-help" data-i18n-title="install_opt_server_body" aria-label="?">?</span>
+                </div>
+                <div class="builder-name-row"><span class="builder-name">data-server-url</span></div>
+                <p class="builder-desc" data-i18n="builder_server_desc">Server that stores the annotations.</p>
+                <div class="builder-field">
+                  <input type="text" id="builder-server-url" value="http://localhost:8123" aria-label="data-server-url">
+                </div>
+                <div class="builder-name-row"><span class="builder-sub-label">data-server-api-key</span></div>
+                <p class="builder-desc" data-i18n="builder_server_key_desc">Key sent with every request. It is visible in the page source.</p>
+                <div class="builder-field">
+                  <input type="text" id="builder-server-api-key" placeholder="review-key" aria-label="data-server-api-key">
+                </div>
+              </div>
             </div>
           </form>
 
@@ -539,6 +558,9 @@
       const topValue = byId('builder-top-value');
       const mailto = byId('builder-mailto');
       const mailtoEnabled = byId('builder-mailto-enabled');
+      const serverUrl = byId('builder-server-url');
+      const serverApiKey = byId('builder-server-api-key');
+      const serverEnabled = byId('builder-server-enabled');
 
       const normalizeHex = (val) => {
         if (!val) return '';
@@ -629,6 +651,9 @@
           topValue ? topValue.value : 'true'
         );
         addAttr(mailtoEnabled && mailtoEnabled.checked, 'data-mailto', (mailto.value || '').trim());
+        const serverOn = !!(serverEnabled && serverEnabled.checked);
+        addAttr(serverOn, 'data-server-url', (serverUrl.value || '').trim());
+        addAttr(serverOn, 'data-server-api-key', (serverApiKey.value || '').trim());
 
         if (attrs.length === 1) {
           return `<script ${attrs[0]}>${closeTag}`;
@@ -654,7 +679,10 @@
         topEnabled,
         topValue,
         mailto,
-        mailtoEnabled
+        mailtoEnabled,
+        serverUrl,
+        serverApiKey,
+        serverEnabled
       ].filter(Boolean);
 
       inputs.forEach((el) => {
@@ -738,6 +766,7 @@
       highlightCard(byId('builder-visible-enabled'), byId('builder-card-visible'));
       highlightCard(byId('builder-top-enabled'), byId('builder-card-top'));
       highlightCard(byId('builder-mailto-enabled'), byId('builder-card-mailto'));
+      highlightCard(byId('builder-server-enabled'), byId('builder-card-server'));
 
       if (i18n && typeof i18n.onChange === 'function') {
         i18n.onChange(() => {
