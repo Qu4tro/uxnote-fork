@@ -317,6 +317,18 @@
         </div>
       </div>
     </div>
+    <div id="install-screenshots">
+      <h3 class="install-subtitle" data-i18n="install_screenshots_title">Region screenshots</h3>
+      <p class="lead" data-i18n="install_screenshots_lead">Load snapdom before Uxnote, on the same page, and every annotation offers a screenshot of the region it is about:</p>
+      <div class="code-copy">
+        <div class="code-block">
+<pre><code id="screenshots-code">&lt;script src="https://qu4tro.github.io/uxnote-fork/dist/snapdom.min.js"&gt;&lt;/script&gt;
+&lt;script src="https://qu4tro.github.io/uxnote-fork/dist/uxnote.min-v1.0.0.js"&gt;&lt;/script&gt;</code></pre>
+        </div>
+        <button type="button" class="copy-btn" id="screenshots-copy" data-i18n="builder_copy">Copy</button>
+      </div>
+      <div class="builder-status" id="screenshots-status" aria-live="polite"></div>
+    </div>
   </section>
 
   <section class="section github-section" id="github">
@@ -805,24 +817,27 @@
       el.addEventListener('mouseleave', () => el.classList.remove('tip-open'));
       el.addEventListener('blur', () => el.classList.remove('tip-open'));
     });
-    const defaultCopyBtn = byId('default-copy');
-    const defaultCode = byId('default-code');
-    const defaultStatus = byId('default-status');
-    if (defaultCopyBtn && defaultCode) {
-      defaultCopyBtn.addEventListener('click', async () => {
+    const bindCopyButton = (buttonId, codeId, statusId) => {
+      const button = byId(buttonId);
+      const code = byId(codeId);
+      const status = byId(statusId);
+      if (!button || !code) return;
+      button.addEventListener('click', async () => {
         try {
-          await navigator.clipboard.writeText(defaultCode.textContent || '');
-          if (defaultStatus) defaultStatus.textContent = t('builder_copied');
+          await navigator.clipboard.writeText(code.textContent || '');
+          if (status) status.textContent = t('builder_copied');
         } catch (err) {
-          if (defaultStatus) defaultStatus.textContent = t('builder_copy_fail');
+          if (status) status.textContent = t('builder_copy_fail');
         }
-        if (defaultStatus) {
+        if (status) {
           setTimeout(() => {
-            defaultStatus.textContent = '';
+            status.textContent = '';
           }, 2000);
         }
       });
-    }
+    };
+    bindCopyButton('default-copy', 'default-code', 'default-status');
+    bindCopyButton('screenshots-copy', 'screenshots-code', 'screenshots-status');
     if (demoPointer) {
       demoPointer.addEventListener('click', dismissDemoPointer);
       window.addEventListener('resize', updateDemoPointerPosition);
