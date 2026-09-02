@@ -81,7 +81,7 @@
   const pendingFocusKey = `uxnote:pending:${siteKey}`;
   // A named server is the annotation store; no name at all means localStorage.
   const serverUrl = ((script && script.dataset.serverUrl) || '').trim().replace(/\/+$/, '');
-  const server = serverUrl ? { url: serverUrl } : null;
+  const server = serverUrl ? { url: serverUrl, apiKey: (script && script.dataset.serverApiKey) || '' } : null;
   const dimConfigAttr =
     getScriptAttr('isBackdropVisible') ||
     getScriptAttr('isbackdropvisible') ||
@@ -4603,6 +4603,14 @@
     return `${server.url}/annotations/${encodeURIComponent(id)}?site=${encodeURIComponent(siteKey)}`;
   }
 
+  // The key is in the page source, so it keeps a passer-by from writing to a
+  // review server and nothing more. An empty key sends no header.
+  function syncHeaders(headers) {
+    const merged = Object.assign({}, headers);
+    if (server.apiKey) merged['X-Uxnote-Key'] = server.apiKey;
+    return merged;
+  }
+
   function snapshotOf(annotations) {
     return new Map(annotations.map((ann) => [ann.id, JSON.stringify(ann)]));
   }
@@ -4624,7 +4632,7 @@
   async function remotePull() {
     if (!server) return;
     try {
-      const res = await fetch(annotationsUrl(), { headers: { Accept: 'application/json' } });
+      const res = await fetch(annotationsUrl(), { headers: syncHeaders({ Accept: 'application/json' }) });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const payload = await res.json();
       state.annotations = ((payload && payload.annotations) || []).filter(
@@ -4667,7 +4675,7 @@
     try {
       const res = await fetch(annotationUrl(id), {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: syncHeaders({ 'Content-Type': 'application/json' }),
         body
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -4680,7 +4688,7 @@
 
   async function remoteDelete(id) {
     try {
-      const res = await fetch(annotationUrl(id), { method: 'DELETE' });
+      const res = await fetch(annotationUrl(id), { method: 'DELETE', headers: syncHeaders() });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       syncedSnapshot.delete(id);
       syncWarned = false;
@@ -4694,7 +4702,7 @@
     if (!server) return;
     enqueueSync(async () => {
       try {
-        const res = await fetch(annotationsUrl(), { method: 'DELETE' });
+        const res = await fetch(annotationsUrl(), { method: 'DELETE', headers: syncHeaders() });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         syncedSnapshot = new Map();
         syncWarned = false;
