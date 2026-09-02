@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Fieldnote — demo page for UxNote</title>
+  <style>
+    * { margin: 0; box-sizing: border-box; }
+    body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; color: #1f2933; background: #f7f8fa; line-height: 1.55; }
+    header { display: flex; justify-content: space-between; align-items: center; padding: 1rem 3rem; background: #fff; border-bottom: 1px solid #e3e7ec; }
+    .logo { font-weight: 700; font-size: 1.25rem; color: #1d4f91; letter-spacing: -0.01em; }
+    nav a { margin-left: 1.5rem; color: #52606d; text-decoration: none; font-size: 0.95rem; }
+    .hero { max-width: 64rem; margin: 0 auto; padding: 4.5rem 2rem 3rem; display: grid; grid-template-columns: 1.2fr 1fr; gap: 3rem; align-items: center; }
+    .hero h1 { font-size: 2.5rem; line-height: 1.15; margin-bottom: 1rem; }
+    .hero p { color: #52606d; font-size: 1.1rem; margin-bottom: 1.75rem; }
+    .cta { background: #1d4f91; color: #fff; border: 0; padding: 0.85rem 1.8rem; font-size: 1rem; border-radius: 8px; cursor: pointer; }
+    .cta.secondary { background: transparent; color: #1d4f91; border: 1px solid #c2d1e6; margin-left: 0.6rem; }
+    .preview { background: #fff; border: 1px solid #e3e7ec; border-radius: 12px; padding: 1.25rem; box-shadow: 0 10px 30px rgba(31, 41, 51, 0.06); }
+    .preview .row { display: flex; justify-content: space-between; padding: 0.7rem 0; border-bottom: 1px solid #eef1f4; font-size: 0.95rem; }
+    .preview .row:last-child { border-bottom: 0; }
+    .preview .tag { background: #e8f0fb; color: #1d4f91; padding: 0.1rem 0.5rem; border-radius: 999px; font-size: 0.8rem; }
+    .features { max-width: 64rem; margin: 0 auto; padding: 2rem; display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem; }
+    .card { background: #fff; border: 1px solid #e3e7ec; border-radius: 12px; padding: 1.5rem; }
+    .card h3 { margin-bottom: 0.5rem; font-size: 1.05rem; }
+    .card p { color: #52606d; font-size: 0.95rem; }
+    .pricing { max-width: 64rem; margin: 2rem auto 0; padding: 2rem; }
+    .pricing h2 { font-size: 1.6rem; margin-bottom: 1.25rem; }
+    table { width: 100%; border-collapse: collapse; background: #fff; border: 1px solid #e3e7ec; border-radius: 12px; overflow: hidden; }
+    th, td { text-align: left; padding: 0.85rem 1rem; border-bottom: 1px solid #eef1f4; font-size: 0.95rem; }
+    th { background: #f1f4f8; font-weight: 600; }
+    tr:last-child td { border-bottom: 0; }
+    form { max-width: 64rem; margin: 2rem auto; padding: 2rem; display: flex; gap: 0.75rem; align-items: center; }
+    form label { font-weight: 600; }
+    form input { flex: 1; padding: 0.7rem 0.9rem; border: 1px solid #c8d0da; border-radius: 8px; font-size: 1rem; }
+    footer { margin-top: 3rem; padding: 2rem 3rem; background: #1f2933; color: #b9c2cc; display: flex; justify-content: space-between; font-size: 0.9rem; }
+    @media (max-width: 800px) { .hero, .features { grid-template-columns: 1fr; } header, footer { padding: 1rem 1.25rem; } }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="logo">Fieldnote</div>
+    <nav>
+      <a href="#features">Features</a>
+      <a href="#pricing">Pricing</a>
+      <a href="#">Docs</a>
+      <a href="#">Sign in</a>
+    </nav>
+  </header>
+
+  <section class="hero">
+    <div>
+      <h1 id="hero-title">Notes that stay where you took them</h1>
+      <p id="hero-copy">Fieldnote pins every observation to a place, a time, and a photo, so a survey reads the same six months later as it did on the day.</p>
+      <button class="cta" id="cta-primary">Start a survey</button>
+      <button class="cta secondary" id="cta-secondary">See a sample</button>
+    </div>
+    <div class="preview" id="preview-card">
+      <div class="row"><span>Riverbank transect 3</span><span class="tag">Today</span></div>
+      <div class="row"><span>Canopy cover, plot B</span><span class="tag">Yesterday</span></div>
+      <div class="row"><span>Soil samples, north field</span><span class="tag">Mon</span></div>
+      <div class="row"><span>Bird count, dawn</span><span class="tag">Sun</span></div>
+    </div>
+  </section>
+
+  <section class="features" id="features">
+    <div class="card" id="card-offline">
+      <h3>Works offline</h3>
+      <p>Notes, photos, and coordinates queue on the device and sync when a connection returns.</p>
+    </div>
+    <div class="card" id="card-export">
+      <h3>Exports to anything</h3>
+      <p>CSV, GeoJSON, or a printed field sheet. The data leaves in the shape your analysis wants.</p>
+    </div>
+    <div class="card" id="card-team">
+      <h3>Built for teams</h3>
+      <p>Assign plots, compare observers, and review a season in one timeline.</p>
+    </div>
+  </section>
+
+  <section class="pricing" id="pricing">
+    <h2>Pricing</h2>
+    <table>
+      <thead><tr><th>Plan</th><th>Observers</th><th>Storage</th><th>Price</th></tr></thead>
+      <tbody>
+        <tr><td>Solo</td><td>1</td><td>5 GB</td><td>Free</td></tr>
+        <tr><td>Team</td><td>Up to 10</td><td>100 GB</td><td>€12 / observer / month</td></tr>
+        <tr><td>Institution</td><td>Unlimited</td><td>1 TB</td><td>Contact us</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <form onsubmit="return false">
+    <label for="email">Get launch news</label>
+    <input id="email" type="email" placeholder="you@example.org">
+    <button class="cta" type="submit">Subscribe</button>
+  </form>
+
+  <footer>
+    <div>© 2026 Fieldnote</div>
+    <div>Privacy · Terms · Contact</div>
+  </footer>
+
+  <script src="../uxnote-tool/uxnote.js"></script>
+</body>
+</html>
