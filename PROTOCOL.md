@@ -18,7 +18,8 @@ implementation in the Python standard library.
   site key. The server treats the key as an opaque string.
 - **Annotation** — a JSON object. The server reads two properties: `id`, which
   matches `^[A-Za-z0-9_-]{1,64}$` and is unique inside a site, and `type`, which
-  is `text` or `element`. Past those two the annotation is opaque: the server
+  is `text`, `element` or `screenshot`. Past those two the annotation is opaque:
+  the server
   stores it and returns it byte-faithfully, and it strips no property and
   re-keys nothing. Re-keying is not cosmetic here: the widget decides whether a
   note changed under it by hashing the JSON, so a server that reorders the keys
@@ -234,7 +235,7 @@ Every annotation carries:
 
 ```
 id          unique string, ^[A-Za-z0-9_-]{1,64}$
-type        "text" or "element"
+type        "text", "element" or "screenshot"
 comment     the note itself
 author      the name of the reviewer who wrote it
 priority    "low", "medium" or "high"
@@ -247,9 +248,8 @@ status      "active"
 
 `type: "text"` adds `target`, a serialized text range. `type: "element"` adds
 `target` as `{ xpath, css, tag }` and `rect` as `{ x, y, w, h }` in page
-coordinates.
-
-An annotation that carries a screenshot adds `screenshot`:
+coordinates. `type: "screenshot"` adds `rect`, the framed region in page
+coordinates, and `screenshot`:
 
 ```
 url         the address the store answered with, relative to the base URL
