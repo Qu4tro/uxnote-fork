@@ -40,6 +40,44 @@ Then open http://localhost:4173/demo/.
 
 The landing page builder generates the tag with the options you pick.
 
+## Server sync
+
+Name a server and the annotations live on it, one set per site, shared by every
+reviewer who opens the page:
+
+```html
+<script src="https://qu4tro.github.io/uxnote-fork/dist/uxnote.min-v1.0.0.js"
+  data-server-url="http://localhost:8123"
+  data-server-api-key="review-key"></script>
+```
+
+| Attribute | Meaning |
+|---|---|
+| `data-server-url` | The base URL of the server. Leave it out and the widget stores the annotations in `localStorage`. |
+| `data-server-api-key` | A key the widget sends as `X-Uxnote-Key` on every request. An empty key sends no header. |
+
+A named server is the only store. The widget reads the set from it at load and
+sends one request per annotation you write, edit, or delete. It does not keep a
+second copy in `localStorage`, so a note written while the server is down is
+lost when the page reloads. The widget says so with a toast at the moment the
+request fails.
+
+**The api key is public.** It sits in the source of every page that carries the
+script tag, so anybody who can read the page can read the key. It stops a
+passer-by from writing to a review server. It is not access control. Put the
+server behind a network boundary if the notes matter.
+
+`PROTOCOL.md` holds the contract: four routes and one JSON shape. Any stack can
+implement it. `server/server.py` does, in the Python 3.9 standard library, and
+it serves the repository too, so the page under review runs on the same origin:
+
+```sh
+python3 server/server.py --port 8123 --root . --api-key review-key
+```
+
+Then open http://localhost:8123/server/demo.html and annotate it. The
+annotations land in `uxnote-data/`.
+
 ## Develop
 
 ```sh
