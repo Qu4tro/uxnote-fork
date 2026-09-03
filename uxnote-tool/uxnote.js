@@ -3,7 +3,7 @@
  * Author: ninefortyonestudio (https://github.com/ninefortyonestudio)
  * Fork: https://github.com/Qu4tro/uxnote-fork
  * Upstream: https://github.com/ninefortyonestudio/uxnote
- * Version: v2.0.0
+ * Version: v2.1.0
  * License: MIT (see LICENSE)
  *
  * This fork stores the annotations on the server named by data-server-url,
