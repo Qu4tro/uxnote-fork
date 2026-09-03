@@ -245,14 +245,15 @@ Every annotation carries:
 id          unique string, ^[A-Za-z0-9_-]{1,64}$
 type        "text", "element" or "screenshot"
 comment     the note itself
-author      the name of the reviewer who wrote it
-priority    "low", "medium" or "high"
 snippet     an excerpt of the annotated content
 pageUrl     the full URL the annotation was written on
 pageKey     origin and pathname; annotations are stored per site, drawn per page
 createdAt   epoch milliseconds
 status      "active"
 ```
+
+An annotation can carry more properties than these, such as the `author` and
+`priority` of an upstream export. The widget keeps them and reads none of them.
 
 `type: "text"` adds `target`, a serialized text range. `type: "element"` adds
 `target` as `{ xpath, css, tag }` and `rect` as `{ x, y, w, h }` in page

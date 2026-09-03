@@ -6,7 +6,7 @@ A fork of [UxNote](https://github.com/ninefortyonestudio/uxnote), the single-scr
 
 ## What it forks
 
-[ninefortyonestudio/uxnote](https://github.com/ninefortyonestudio/uxnote) v1.0.0, MIT. Upstream keeps annotations in `localStorage` and hands them off as a JSON file or an email. This fork keeps the widget, its landing page, and its build.
+[ninefortyonestudio/uxnote](https://github.com/ninefortyonestudio/uxnote) v1.0.0, MIT. Upstream keeps annotations in `localStorage` and hands them off as a JSON file or an email. This fork keeps the widget, its landing page, and its build. Upstream asks for a reviewer name and a priority with every note. This fork asks for the comment alone. A note that carries both fields, from an upstream export, keeps them, and the widget shows neither.
 
 ## What it adds
 
