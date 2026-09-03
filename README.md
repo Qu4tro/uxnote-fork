@@ -180,6 +180,29 @@ A page is its origin plus its pathname. A change of the query string or of the
 hash alone is not a route change, so a router that keeps its routes in the
 hash shows every route's annotations on every route.
 
+## Theme
+
+The widget follows the system theme. Hold one theme per site:
+
+```html
+<script src="https://qu4tro.github.io/uxnote-fork/dist/uxnote.min-v1.0.0.js"
+  data-theme="dark"></script>
+```
+
+| Value | Meaning |
+|---|---|
+| `auto` | The default. The widget reads `prefers-color-scheme` and follows it when it changes. |
+| `light` | The light theme, whatever the system says. |
+| `dark` | The dark theme, whatever the system says. |
+
+The theme covers the toolbar, the panel, the cards, the dialogs, the comment
+card, the capture overlay, and the toasts. The highlight colours do not change:
+`colorForHighlight` and its two per-type forms choose them. The widget writes
+the resolved theme on `<html>` as `data-wn-theme="light"` or
+`data-wn-theme="dark"`, so a page can style its own elements to match.
+
+The landing page follows the system theme too.
+
 ## Develop
 
 ```sh
