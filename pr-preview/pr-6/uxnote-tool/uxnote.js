@@ -231,6 +231,12 @@
         left: 50%;
         right: auto;
         transform: translateX(-50%);
+        /* Centred on left: 50% with no width of its own, the bar can only ever
+           be half the viewport wide, so it wraps long before it runs out of
+           room. It asks for the width of its row instead, and gives that up
+           only against the edges of the viewport. */
+        width: max-content;
+        max-width: calc(100vw - 28px);
         box-shadow: 0 8px 24px rgba(73, 64, 157, 0.14);
         border-radius: 999px;
         border: 1px solid rgba(109, 86, 199, 0.15);
@@ -345,6 +351,7 @@
           right: 8px;
           transform: none;
           width: calc(100vw - 16px);
+          max-width: calc(100vw - 16px);
           overflow-x: auto;
           -webkit-overflow-scrolling: touch;
         }
@@ -3390,7 +3397,7 @@
 
   // A region has no node to anchor on, so the frame is what shows on the page
   // where the picture was taken. It lives in the marker layer, which the
-  // visibility toggle and the capture hider both take out.
+  // visibility toggle takes off the page and a capture leaves out of its copy.
   function syncShotFrame(annotation, rect) {
     const entry = state.markers[annotation.id];
     let frame = entry ? entry.frame : null;
@@ -4305,98 +4312,97 @@
     });
   }
 
-  // Render the page with snapdom, the widget's own interface hidden, and crop
+  // Render the page with snapdom, the widget's own interface left out, and crop
   // the region out of it.
   async function captureRegion(rect) {
-    // Every piece of the widget's own chrome is fixed or absolute, so taking it
-    // out of the render moves nothing else on the page. The dim overlay is
-    // chrome too, and it is the one piece that carries no .wn-annotator class.
-    const hider = document.createElement('style');
-    hider.textContent = '.wn-annotator, .wn-annot-dimmer { display: none !important; }';
-    document.head.appendChild(hider);
-    try {
-      // Two frames, so the browser has painted the page without the interface
-      // before snapdom reads it.
-      await new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)));
-      // The interface goes with the stylesheet above rather than with
-      // snapdom's own exclude option, which drops the nodes from the clone and
-      // reflows what is left, so the render stops matching the page.
-      const page = await window.snapdom.toCanvas(document.body, { scale: 1 });
-      const bodyRect = document.body.getBoundingClientRect();
-      const factor = bodyRect.width ? page.width / bodyRect.width : 1;
-      const originX = bodyRect.left + window.scrollX;
-      const originY = bodyRect.top + window.scrollY;
-      const sx = Math.max(0, Math.round((rect.x - originX) * factor));
-      const sy = Math.max(0, Math.round((rect.y - originY) * factor));
-      const sw = Math.min(page.width - sx, Math.max(1, Math.round(rect.w * factor)));
-      const sh = Math.min(page.height - sy, Math.max(1, Math.round(rect.h * factor)));
-      if (sw < 1 || sh < 1) return null;
-      const canvas = document.createElement('canvas');
-      canvas.width = sw;
-      canvas.height = sh;
-      canvas.getContext('2d').drawImage(page, sx, sy, sw, sh, 0, 0, sw, sh);
-      return { canvas, w: sw, h: sh };
-    } finally {
-      hider.remove();
-    }
+    // The interface is dropped from the copy snapdom renders, and not hidden on
+    // the page: the toolbar, the panel and the dim stay in front of the
+    // reviewer while the picture is taken. The dim overlay is interface too,
+    // and it is the one piece that carries no .wn-annotator class.
+    //
+    // 'remove' and not the default 'hide', which stands a box of the same size
+    // in the flow of the copy and pushes the page down under it. Every piece of
+    // the interface is fixed or absolute, so removing it moves nothing else.
+    const page = await window.snapdom.toCanvas(document.body, {
+      scale: 1,
+      exclude: ['.wn-annotator', '.wn-annot-dimmer'],
+      excludeMode: 'remove'
+    });
+    const bodyRect = document.body.getBoundingClientRect();
+    const factor = bodyRect.width ? page.width / bodyRect.width : 1;
+    const originX = bodyRect.left + window.scrollX;
+    const originY = bodyRect.top + window.scrollY;
+    const sx = Math.max(0, Math.round((rect.x - originX) * factor));
+    const sy = Math.max(0, Math.round((rect.y - originY) * factor));
+    const sw = Math.min(page.width - sx, Math.max(1, Math.round(rect.w * factor)));
+    const sh = Math.min(page.height - sy, Math.max(1, Math.round(rect.h * factor)));
+    if (sw < 1 || sh < 1) return null;
+    const canvas = document.createElement('canvas');
+    canvas.width = sw;
+    canvas.height = sh;
+    canvas.getContext('2d').drawImage(page, sx, sy, sw, sh, 0, 0, sw, sh);
+    return { canvas, w: sw, h: sh };
   }
 
   // The camera is a capture mode like the other two: the reviewer frames a
   // region, comments on it, and the picture is the annotation.
   async function captureRegionAnnotation() {
     if (!captureAvailable() || state.mode === 'screenshot') return;
+    // The mode stands until the annotation is written or the reviewer stops,
+    // the way it does for a highlight and for an element.
     setMode('screenshot');
-    let rect = null;
     try {
-      rect = await selectRegion();
+      const rect = await selectRegion();
+      if (!rect) return;
+      // The picture is of the page the drag was released on, and it is taken
+      // while the comment is being written, so releasing the drag opens the
+      // prompt as directly as releasing a selection does.
+      const pending = captureRegion(rect).catch((err) => {
+        console.warn('Uxnote screenshot:', err);
+        return null;
+      });
+      const res = await awaitComment('Comment for this region?');
+      if (!res) return;
+      const shot = await pending;
+      if (!shot) {
+        showToast('Uxnote: could not capture that region');
+        return;
+      }
+      const { comment } = res;
+      const id = generateId();
+      let stored = null;
+      if (server) {
+        // The annotation itself lives on that server, so a refused upload is a
+        // transient failure and not a second mode. Nothing is created.
+        const blob = await new Promise((done) => shot.canvas.toBlob(done, 'image/png'));
+        const uploaded = blob ? await uploadScreenshot(blob, id) : null;
+        if (!uploaded) {
+          showToast('Uxnote: could not send the screenshot to the server');
+          return;
+        }
+        stored = { url: uploaded.url, w: shot.w, h: shot.h, capturedAt: Date.now() };
+      } else {
+        stored = { dataUrl: shot.canvas.toDataURL('image/png'), w: shot.w, h: shot.h, capturedAt: Date.now() };
+      }
+      const annotation = {
+        id,
+        type: 'screenshot',
+        comment: comment.trim(),
+        snippet: '',
+        pageUrl: window.location.href,
+        pageKey: normalizePageKey(window.location.href),
+        rect: { x: rect.x, y: rect.y, w: rect.w, h: rect.h },
+        screenshot: stored,
+        createdAt: Date.now(),
+        status: 'active'
+      };
+      state.annotations.push(annotation);
+      saveAnnotations();
+      addMarkerForAnnotation(annotation, null);
+      renderList();
     } finally {
       setMode(null);
     }
-    if (!rect) return;
-    let shot = null;
-    try {
-      shot = await captureRegion(rect);
-    } catch (err) {
-      console.warn('Uxnote screenshot:', err);
-    }
-    if (!shot) {
-      showToast('Uxnote: could not capture that region');
-      return;
-    }
-    const res = await awaitComment('Comment for this region?');
-    if (!res) return;
-    const { comment } = res;
-    const id = generateId();
-    let stored = null;
-    if (server) {
-      // The annotation itself lives on that server, so a refused upload is a
-      // transient failure and not a second mode. Nothing is created.
-      const blob = await new Promise((done) => shot.canvas.toBlob(done, 'image/png'));
-      const uploaded = blob ? await uploadScreenshot(blob, id) : null;
-      if (!uploaded) {
-        showToast('Uxnote: could not send the screenshot to the server');
-        return;
-      }
-      stored = { url: uploaded.url, w: shot.w, h: shot.h, capturedAt: Date.now() };
-    } else {
-      stored = { dataUrl: shot.canvas.toDataURL('image/png'), w: shot.w, h: shot.h, capturedAt: Date.now() };
-    }
-    const annotation = {
-      id,
-      type: 'screenshot',
-      comment: comment.trim(),
-      snippet: '',
-      pageUrl: window.location.href,
-      pageKey: normalizePageKey(window.location.href),
-      rect: { x: rect.x, y: rect.y, w: rect.w, h: rect.h },
-      screenshot: stored,
-      createdAt: Date.now(),
-      status: 'active'
-    };
-    state.annotations.push(annotation);
-    saveAnnotations();
-    addMarkerForAnnotation(annotation, null);
-    renderList();
   }
 
   // The PNG travels as the body of the request, so a server needs no multipart
