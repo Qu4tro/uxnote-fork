@@ -66,7 +66,7 @@ test('the three states do not share one tooltip', async ({ page }) => {
 });
 
 test('a page with no server named has no dot to read', async ({ page }) => {
-  await page.goto('/demo/');
+  await page.goto('/');
   await expect(page.locator('.wn-annot-toolbar')).toBeVisible();
   await expect(dotOf(page)).toHaveCount(0);
 });
