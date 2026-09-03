@@ -2645,7 +2645,7 @@
       isAnnotatableTarget(range.endContainer);
     if (!isAllowed) {
       selection.removeAllRanges();
-      showToast('Cette zone est une popup/overlay, annotation bloquée.');
+      showToast('This area is a popup or overlay. It cannot be annotated.');
       return;
     }
     const snippet = selection.toString().trim();
@@ -2691,7 +2691,7 @@
     if (state.mode !== 'element') return;
     const el = evt.target;
     if (!el || !isAnnotatableTarget(el)) {
-      showToast('Cette zone est une popup/overlay, annotation bloquée.');
+      showToast('This area is a popup or overlay. It cannot be annotated.');
       return;
     }
     evt.preventDefault();
@@ -3601,7 +3601,7 @@
         renderResolvedAnnotation(ann, resolved);
         renderList();
       } else {
-        showToast('Annotation introuvable sur cette page.');
+        showToast('This annotation is not on this page.');
         return;
       }
     }
