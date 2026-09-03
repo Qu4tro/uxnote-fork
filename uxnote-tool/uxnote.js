@@ -5413,12 +5413,11 @@
   // parser. The answer names the address the server serves the file at.
   async function uploadScreenshot(blob, id) {
     try {
-      const res = await fetch(screenshotUrl(id), {
+      const res = await syncFetch(screenshotUrl(id), {
         method: 'PUT',
         headers: syncHeaders({ 'Content-Type': 'image/png' }),
         body: blob
       });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const payload = await res.json();
       return payload && payload.url ? payload : null;
     } catch (err) {
