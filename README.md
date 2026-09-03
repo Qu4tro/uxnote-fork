@@ -95,7 +95,7 @@ rest are `data-` attributes. Every option at once:
 | `isToolVisibleAtFirstLaunch` | `true` | Shows the toolbar on the first visit. |
 | `isToolOnTopAtLaunch` | `false` | Starts the toolbar at the top instead of the bottom. |
 | `data-mailto` | empty | The recipient of the mail handoff. It does nothing while `data-mail-export` is `false`. |
-| `data-json-export` | `true` | `false` removes the export button and its dialog. |
+| `data-json-export` | `true` | `false` removes the export button. The export writes every annotation of the site and asks nothing first. |
 | `data-json-import` | `true` | `false` removes the import button, its dialog, and its list of imported files. |
 | `data-mail-export` | `true` | `false` removes the mail button and the handoff behind it. Independent of `data-json-export`. |
 | `data-server-url` | unset | The base URL of the server that stores the annotations. Unset means `localStorage`. |

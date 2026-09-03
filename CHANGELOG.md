@@ -19,6 +19,7 @@ All notable changes to this project will be documented in this file.
 - Every widget message is English.
 ### Removed
 - The reviewer name and the priority on new annotations, with the panel filters and the card chip that read them. Annotations written earlier keep both properties.
+- The export dialog. It stood to pick reviewers and priorities, and once those left the annotation it had nothing to ask; the export button writes the file on the press, holding every annotation of the site.
 - The landing page, with its option builder, its French translation, its analytics tag, and its donation button.
 
 ## [1.0.0] - 2026-01-08

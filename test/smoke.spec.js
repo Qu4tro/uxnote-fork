@@ -69,7 +69,7 @@ test('the JSON export survives a page with the mail off', async ({ page }) => {
 });
 
 test('the export button writes the file without asking first', async ({ page }) => {
-  await page.goto('/demo/');
+  await page.goto('/');
   const download = page.waitForEvent('download');
   await page.locator('.wn-annot-toolbar button[data-action="export"]').click();
   expect((await download).suggestedFilename()).toMatch(/\.json$/);
