@@ -4773,7 +4773,7 @@
   }
 
   function buildFilename() {
-    // Construit un nom de fichier lisible : titre/host + date + heure (sans secondes)
+    // Builds a readable filename: title or host, then the date and the time without seconds
     const now = new Date();
     const pad = (n) => String(n).padStart(2, '0');
     const date = `${pad(now.getDate())}-${pad(now.getMonth() + 1)}-${now.getFullYear()}`;
