@@ -1046,8 +1046,7 @@
       .wn-annot-modal-backdrop {
         position: fixed;
         inset: 0;
-        background: rgba(28, 22, 48, 0.35);
-        backdrop-filter: blur(4px);
+        background: rgba(28, 22, 48, 0.45);
         display: none;
         align-items: center;
         justify-content: center;
@@ -1074,6 +1073,20 @@
         font-size: 15px;
         font-weight: 700;
         color: #3f3852;
+      }
+      .wn-annot-comment-card {
+        position: fixed;
+        left: 50%;
+        transform: translateX(-50%);
+        min-width: 0;
+        width: min(420px, calc(100vw - 36px));
+        max-width: 420px;
+        opacity: 0.55;
+        transition: opacity 0.15s ease;
+      }
+      /* Hover alone: the textarea holds focus for the whole life of the card. */
+      .wn-annot-comment-card:hover {
+        opacity: 1;
       }
       .wn-annot-dialog-message {
         font-size: 13px;
@@ -1774,7 +1787,7 @@
     const backdrop = document.createElement('div');
     backdrop.className = 'wn-annot-modal-backdrop wn-annotator';
     const modal = document.createElement('div');
-    modal.className = 'wn-annot-modal wn-annotator';
+    modal.className = 'wn-annot-modal wn-annot-comment-card wn-annotator';
 
     const title = document.createElement('h4');
     title.textContent = 'Add a comment';
@@ -1852,6 +1865,25 @@
     return state.commentModal;
   }
 
+  // Park the card against the toolbar, 0.75em clear of it, so the page it is
+  // about stays in view while the comment is written.
+  function positionCommentCard() {
+    const modalState = state.commentModal;
+    if (!modalState || !state.toolbar) return;
+    if (!modalState.backdrop.classList.contains('show')) return;
+    const card = modalState.modal;
+    const barRect = state.toolbar.getBoundingClientRect();
+    const gap = 0.75 * (parseFloat(getComputedStyle(card).fontSize) || 16);
+    card.style.left = `${barRect.left + barRect.width / 2}px`;
+    if (position === 'top') {
+      card.style.top = `${barRect.bottom + gap}px`;
+      card.style.bottom = '';
+    } else {
+      card.style.top = '';
+      card.style.bottom = `${window.innerHeight - barRect.top + gap}px`;
+    }
+  }
+
   function askForComment(label, defaultValue = '', defaultPriority = 'medium', defaultAuthor = '') {
     return new Promise((resolve) => {
       const modalState = ensureCommentModal();
@@ -1874,6 +1906,7 @@
       nameInput.placeholder = 'Reviewer name';
 
       backdrop.classList.add('show');
+      positionCommentCard();
       if (defaultName) {
         textarea.focus();
         textarea.select();
@@ -1886,8 +1919,8 @@
         backdrop.classList.remove('show');
         okBtn.removeEventListener('click', onOk);
         cancelBtn.removeEventListener('click', onCancel);
-        backdrop.removeEventListener('click', onBackdrop);
         document.removeEventListener('keydown', onKey);
+        window.removeEventListener('resize', positionCommentCard);
         prioButtons.forEach((b, idx) => b.removeEventListener('click', prioHandlers[idx]));
         resolve(val);
       };
@@ -1903,9 +1936,6 @@
         close({ comment: textarea.value.trim(), priority, author });
       };
       const onCancel = () => close(null);
-      const onBackdrop = (evt) => {
-        if (evt.target === backdrop) close(null);
-      };
       const onKey = (evt) => {
         if (evt.key === 'Escape') close(null);
         if (evt.key === 'Enter' && !(evt.shiftKey || evt.altKey)) {
@@ -1918,8 +1948,8 @@
       cancelBtn.textContent = 'Cancel';
       okBtn.addEventListener('click', onOk);
       cancelBtn.addEventListener('click', onCancel);
-      backdrop.addEventListener('click', onBackdrop);
       document.addEventListener('keydown', onKey);
+      window.addEventListener('resize', positionCommentCard);
     });
   }
 
@@ -3250,6 +3280,7 @@
     updatePositionIcon();
     positionVisibilityToggle();
     positionTip();
+    positionCommentCard();
     positionPanel();
     applyPageOffset();
   }
