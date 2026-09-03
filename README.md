@@ -89,8 +89,8 @@ rest are `data-` attributes. Every option at once:
 | Attribute | Default | Meaning |
 |---|---|---|
 | `colorForHighlight` | `#4e9cf6` | One colour for text and element highlights, and the region frame. |
-| `colorForTextHighlight` | the colour above | The text highlight colour alone. |
-| `colorForElementHighlight` | the colour above | The element highlight colour alone. |
+| `colorForTextHighlight` | the base colour | The text highlight. Set without `colorForHighlight` it becomes the base too, so the region frame follows it, and so does the element outline unless that has its own. |
+| `colorForElementHighlight` | the base colour | The element outline. Set without `colorForHighlight` it becomes the base too, so the region frame follows it, and so does the text highlight unless that has its own. |
 | `isBackdropVisible` | `true` | Dims the page behind the annotations. |
 | `isToolVisibleAtFirstLaunch` | `true` | Shows the toolbar on the first visit. |
 | `isToolOnTopAtLaunch` | `false` | Starts the toolbar at the top instead of the bottom. |
