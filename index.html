@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Fieldnote — demo page for UxNote</title>
+  <title>Fieldnote — demo page for uxnote-fork</title>
   <style>
     * { margin: 0; box-sizing: border-box; }
     body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; color: #1f2933; background: #f7f8fa; line-height: 1.55; }
@@ -33,10 +33,18 @@
     form label { font-weight: 600; }
     form input { flex: 1; padding: 0.7rem 0.9rem; border: 1px solid #c8d0da; border-radius: 8px; font-size: 1rem; }
     footer { margin-top: 3rem; padding: 2rem 3rem; background: #1f2933; color: #b9c2cc; display: flex; justify-content: space-between; font-size: 0.9rem; }
-    @media (max-width: 800px) { .hero, .features { grid-template-columns: 1fr; } header, footer { padding: 1rem 1.25rem; } }
+    .fork-note { display: flex; align-items: center; gap: 1rem; padding: 0.6rem 3rem; background: #f3efff; border-bottom: 1px solid #d9cfff; color: #3b2f6b; font-size: 0.9rem; }
+    .fork-note img { height: 22px; width: auto; display: block; }
+    .fork-note p { margin: 0; }
+    .fork-note a { color: #5b3fd6; }
+    @media (max-width: 800px) { .hero, .features { grid-template-columns: 1fr; } header, footer { padding: 1rem 1.25rem; } .fork-note { padding: 0.6rem 1.25rem; } }
   </style>
 </head>
 <body>
+  <aside class="fork-note" data-uxnote-ignore>
+    <a href="https://github.com/Qu4tro/uxnote-fork"><img src="assets/uxnote-fork-logo.svg" alt="uxnote-fork"></a>
+    <p>This page is the demo of <a href="https://github.com/Qu4tro/uxnote-fork">uxnote-fork</a>. Fieldnote is a fictional product. Use the toolbar at the bottom to highlight text, pin an element, or drag out a region; the notes stay in this browser. The <a href="https://github.com/Qu4tro/uxnote-fork#install">README</a> holds the install snippet and every option.</p>
+  </aside>
   <header>
     <div class="logo">Fieldnote</div>
     <nav>
