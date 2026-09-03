@@ -53,20 +53,30 @@
     getScriptAttr('colorForElementHighlight') ||
     getScriptAttr('colorForElementHighligh') ||
     (script && (script.dataset.colorForElementHighlight || script.dataset.colorForElementHighligh));
-  const defaultHighlightColor = '#4e9cf6';
-  const baseHighlightColor = normalizeHexColor(
-    globalHighlightColorAttr ||
-      elementHighlightColorAttr ||
-      textHighlightColorAttr ||
-      defaultHighlightColor,
-    defaultHighlightColor
-  );
-  const textHighlightColor = normalizeHexColor(textHighlightColorAttr || baseHighlightColor, baseHighlightColor);
-  const elementHighlightColor = normalizeHexColor(elementHighlightColorAttr || baseHighlightColor, baseHighlightColor);
+  // The third kind had no name of its own. Without one, the only way to
+  // recolour a region frame was to recolour the other two with it.
+  const regionHighlightColorAttr =
+    getScriptAttr('colorForRegionHighlight') ||
+    (script && script.dataset.colorForRegionHighlight);
+  // Three kinds of annotation, so three colours: a marker, an outline or a
+  // frame says which kind it belongs to before the note is read.
+  const defaultTextHighlightColor = '#4e9cf6';
+  const defaultElementHighlightColor = '#8b5cf6';
+  const defaultRegionHighlightColor = '#f59f00';
+  // `colorForHighlight` still paints all three. What it no longer does is
+  // work the other way round: naming the text colour alone used to make it
+  // the base, and take the element outline and the region frame with it.
+  const baseHighlightColor = parseHexColor(globalHighlightColorAttr);
+  const textFallback = baseHighlightColor || defaultTextHighlightColor;
+  const elementFallback = baseHighlightColor || defaultElementHighlightColor;
+  const textHighlightColor = normalizeHexColor(textHighlightColorAttr || textFallback, textFallback);
+  const elementHighlightColor = normalizeHexColor(elementHighlightColorAttr || elementFallback, elementFallback);
+  const regionFallback = baseHighlightColor || defaultRegionHighlightColor;
+  const regionHighlightColor = normalizeHexColor(regionHighlightColorAttr || regionFallback, regionFallback);
   const colorPalette = {
     text: buildColorSet(textHighlightColor, { overlayAlpha: 0.7, softAlpha: 0.18, softerAlpha: 0.08 }),
     element: buildColorSet(elementHighlightColor, { overlayAlpha: 0.35, softAlpha: 0.12, softerAlpha: 0.04 }),
-    screenshot: buildColorSet(baseHighlightColor, { overlayAlpha: 0.35, softAlpha: 0.12, softerAlpha: 0.04 })
+    screenshot: buildColorSet(regionHighlightColor, { overlayAlpha: 0.35, softAlpha: 0.12, softerAlpha: 0.04 })
   };
   const initialPosition = (() => {
     if (startTopAttr !== null && startTopAttr !== undefined) {
@@ -251,12 +261,13 @@
         --wn-text-highlight: #4e9cf6;
         --wn-text-highlight-overlay: rgba(78, 156, 246, 0.2);
         --wn-text-highlight-soft: rgba(78, 156, 246, 0.12);
-        --wn-element-highlight: #4e9cf6;
-        --wn-element-highlight-soft: rgba(78, 156, 246, 0.12);
-        --wn-element-highlight-soft-end: rgba(78, 156, 246, 0.04);
-        --wn-element-highlight-strong: rgba(78, 156, 246, 0.9);
-        --wn-element-highlight-shadow: rgba(78, 156, 246, 0.24);
-        --wn-marker-text: #0b1622;
+        --wn-element-highlight: #8b5cf6;
+        --wn-element-highlight-soft: rgba(139, 92, 246, 0.12);
+        --wn-element-highlight-soft-end: rgba(139, 92, 246, 0.04);
+        --wn-element-highlight-strong: rgba(139, 92, 246, 0.9);
+        --wn-element-highlight-shadow: rgba(139, 92, 246, 0.24);
+        --wn-shot-frame: #f59f00;
+        --wn-marker-text: #ffffff;
         --wn-accent: #6d56c7;
         --wn-surface: #f6f2fb;
         --wn-surface-raised: #fdfcff;
@@ -987,9 +998,9 @@
         position: relative;
       }
       .uxnote-annotated {
-        outline: 2px solid var(--wn-element-highlight, #4e9cf6);
+        outline: 2px solid var(--wn-element-highlight, #8b5cf6);
         outline-offset: 2px;
-        box-shadow: 0 0 0 3px var(--wn-element-highlight-soft, rgba(78,156,246,0.08));
+        box-shadow: 0 0 0 3px var(--wn-element-highlight-soft, rgba(139,92,246,0.08));
       }
       .wn-annot-marker-layer {
         position: fixed;
@@ -1020,8 +1031,8 @@
       .wn-annot-marker:hover { background: var(--wn-marker-bg, var(--wn-element-highlight)); filter: brightness(1.05); }
       .wn-annot-outline {
         position: absolute;
-        border: 2px dashed var(--wn-element-highlight, #4e9cf6);
-        background: var(--wn-element-highlight-soft, rgba(78,156,246,0.1));
+        border: 2px dashed var(--wn-element-highlight, #8b5cf6);
+        background: var(--wn-element-highlight-soft, rgba(139,92,246,0.1));
         pointer-events: none;
         z-index: 2147482800;
       }
@@ -1348,7 +1359,7 @@
       .wn-annot-shot-frame {
         position: absolute;
         box-sizing: border-box;
-        border: 2px dashed var(--wn-shot-frame, #4e9cf6);
+        border: 2px dashed var(--wn-shot-frame, #f59f00);
         border-radius: 6px;
         pointer-events: none;
       }
@@ -2800,6 +2811,7 @@
     setVar('--wn-element-highlight-soft-end', elem.softer);
     setVar('--wn-element-highlight-strong', elem.strong);
     setVar('--wn-element-highlight-shadow', elem.shadow);
+    setVar('--wn-shot-frame', palette.screenshot.base);
     setVar('--wn-marker-text', elem.text);
   }
 
@@ -4540,8 +4552,8 @@
   function flash(el, accentColor) {
     el.style.transition = 'box-shadow 0.2s ease';
     const prev = el.style.boxShadow;
-    const accent = accentColor || (state.colors?.element?.base || '#4e9cf6');
-    const flashColor = rgbaFromHex(accent, 0.6, 'rgba(78,156,246,0.6)');
+    const accent = accentColor || (state.colors?.element?.base || '#8b5cf6');
+    const flashColor = rgbaFromHex(accent, 0.6, 'rgba(139,92,246,0.6)');
     el.style.boxShadow = `0 0 0 3px ${flashColor}`;
     setTimeout(() => {
       el.style.boxShadow = prev;

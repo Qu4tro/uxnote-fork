@@ -100,6 +100,9 @@ lines you want.
      not a starting point. -->
 <script src="https://github.com/Qu4tro/uxnote-fork/releases/download/v2.1.0/uxnote.min-v2.1.0.js"
   colorForHighlight="#4e9cf6"
+  colorForTextHighlight="#4e9cf6"
+  colorForElementHighlight="#8b5cf6"
+  colorForRegionHighlight="#f59f00"
   isBackdropVisible="true"
   isToolVisibleAtFirstLaunch="true"
   isToolOnTopAtLaunch="false"
@@ -116,9 +119,10 @@ lines you want.
 
 | Attribute | Default | Meaning |
 |---|---|---|
-| `colorForHighlight` | `#4e9cf6` | One colour for text and element highlights, and the region frame. |
-| `colorForTextHighlight` | the base colour | The text highlight. Set without `colorForHighlight` it becomes the base too, so the region frame follows it, and so does the element outline unless that has its own. |
-| `colorForElementHighlight` | the base colour | The element outline. Set without `colorForHighlight` it becomes the base too, so the region frame follows it, and so does the text highlight unless that has its own. |
+| `colorForHighlight` | unset | One colour for all three kinds at once. Unset, each kind keeps its own default. |
+| `colorForTextHighlight` | `#4e9cf6` | The text highlight, and nothing else. It overrides `colorForHighlight` for that kind and leaves the other two where they are. |
+| `colorForElementHighlight` | `#8b5cf6` | The element outline and its marker, on the same terms. |
+| `colorForRegionHighlight` | `#f59f00` | The frame of a captured region, on the same terms. |
 | `isBackdropVisible` | `true` on a mouse, `false` where the pointer is coarse | Dims the page behind the annotations. On a phone the bar is a strip and the page is the whole screen, so the dimmer costs contrast for nothing; naming it brings it back. |
 | `isToolVisibleAtFirstLaunch` | `true` | Shows the toolbar on the first visit. |
 | `isToolOnTopAtLaunch` | `false` | Starts the toolbar at the top instead of the bottom. The control that moves it afterwards is on a wide window only, so on a small screen this is the way to ask for the top. |
