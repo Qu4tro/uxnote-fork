@@ -93,6 +93,28 @@ test('reverse-auto wears the side of the system theme the page does not', async 
   await expect(page.locator('html')).toHaveAttribute('data-wn-theme', 'dark');
 });
 
+test('the page theme switch holds the demo page against the widget', async ({ page }) => {
+  // The page is explicit: a dark system resolves the widget to dark and must
+  // leave the page in light, which is the contrast the switch exists for.
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await page.goto('/');
+  await expect(page.locator('html')).toHaveAttribute('data-page-theme', 'light');
+  await expect(page.locator('html')).toHaveAttribute('data-wn-theme', 'dark');
+
+  await page.locator('.page-theme-switch button[data-page-theme-set="dark"]').click();
+  await expect(page.locator('html')).toHaveAttribute('data-page-theme', 'dark');
+
+  // The choice is read before the first paint, so a reload lands dark outright.
+  await page.reload();
+  await expect(page.locator('html')).toHaveAttribute('data-page-theme', 'dark');
+});
+
+test('the page theme switch sits inside the subtree the widget ignores', async ({ page }) => {
+  await page.goto('/');
+  const ignored = await page.locator('.page-theme-switch').evaluate((el) => !!el.closest('[data-uxnote-ignore]'));
+  expect(ignored).toBe(true);
+});
+
 const CAPTURE_FIXTURE = '/test/fixtures/server-capture.html';
 const ALLOW = { 'Access-Control-Allow-Origin': '*' };
 

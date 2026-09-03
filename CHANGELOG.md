@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 - Region screenshots. With snapdom loaded, the toolbar offers a camera. Drag to frame a region and release; the frame becomes an annotation with a comment and a picture, uploaded as a PNG when a server is set and kept inline otherwise.
 - `data-json-export` and `data-json-import` turn the JSON export and the JSON import off per site.
 - `data-theme` and a dark theme for the widget, `auto` by default.
+- An explicit light or dark for the demo page itself, switched in the note at the top of it and held in this browser. The page never follows the system, so the widget's `auto`, `light`, and `dark` each read against a background you chose.
 - Route changes. The widget follows `pushState`, `replaceState`, and `popstate`, so a single-page app keeps its annotations per route.
 - `snapdom.min.js` ships beside the minified widget in every release.
 ### Changed

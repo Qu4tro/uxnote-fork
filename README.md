@@ -16,6 +16,10 @@ a small review team reads the same set.
 <https://qu4tro.github.io/uxnote-fork/> is a demo page with the widget live on
 it. The notes stay in the visitor's browser.
 
+The page carries its own **Page theme** switch, light or dark, in the note at
+the top of it. It is the page's colours alone and it never follows the system,
+so the widget's own `data-theme` can be read against either background.
+
 Locally:
 
 ```sh
