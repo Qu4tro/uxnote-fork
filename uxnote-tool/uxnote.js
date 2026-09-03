@@ -2601,6 +2601,7 @@
     window.addEventListener('resize', positionTip);
     window.addEventListener('resize', positionVisibilityToggle);
     window.addEventListener('scroll', refreshMarkers, { passive: true });
+    watchRouteChanges();
   }
 
   function getAuthorLabel(value) {
@@ -5213,6 +5214,46 @@
         warnSync('Uxnote: could not delete the annotations on the server', err);
       }
     });
+  }
+
+  // ------------------------------------------------------------------
+  // Route changes
+  // ------------------------------------------------------------------
+
+  // A page can change without a document load. The annotations of the page
+  // just left come off the screen, and the ones of the new page go on.
+  let routeChangeTimer = null;
+  let routePageKey = normalizePageKey(window.location.href);
+
+  function onRouteChange() {
+    routeChangeTimer = null;
+    const pageKey = normalizePageKey(window.location.href);
+    if (pageKey === routePageKey) return;
+    routePageKey = pageKey;
+    clearRenderedAnnotations();
+    restoreAnnotations();
+    renumberMarkers();
+    renderList();
+    enqueueSync(remotePull);
+  }
+
+  function scheduleRouteChange() {
+    if (routeChangeTimer) clearTimeout(routeChangeTimer);
+    // Long enough for the router to have drawn the page the annotations sit on.
+    routeChangeTimer = setTimeout(onRouteChange, 120);
+  }
+
+  function watchRouteChanges() {
+    ['pushState', 'replaceState'].forEach((name) => {
+      const original = history[name];
+      if (typeof original !== 'function') return;
+      history[name] = function patched(...args) {
+        const result = original.apply(this, args);
+        scheduleRouteChange();
+        return result;
+      };
+    });
+    window.addEventListener('popstate', scheduleRouteChange);
   }
 
   // ------------------------------------------------------------------
