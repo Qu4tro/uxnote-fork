@@ -90,8 +90,6 @@ async function captureRegion(page) {
   await page.mouse.up();
   const prompt = page.locator('.wn-annot-modal-backdrop.show');
   await expect(prompt).toBeVisible();
-  // The reviewer name is still asked for at this point in the series.
-  await prompt.locator('input[placeholder="Reviewer name"]').fill('Smoke test');
   await prompt.locator('textarea').fill('a region written while the server was away');
   await prompt.locator('.wn-annot-pill.primary').click();
   await expect(page.locator('.wn-annot-modal-backdrop.show')).toHaveCount(0);
