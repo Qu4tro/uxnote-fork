@@ -4936,10 +4936,30 @@
     });
   }
 
+  // A picture written while the server was down is still inline. It goes up
+  // as a PNG before the annotation that points at it, so what reaches the
+  // server is the same shape either way and no annotation carries a base64
+  // document in its body.
+  async function uploadInlineScreenshot(ann) {
+    const shot = ann && ann.screenshot;
+    if (!shot || !shot.dataUrl) return false;
+    const res = await fetch(shot.dataUrl);
+    const blob = await res.blob();
+    const uploaded = await uploadScreenshot(blob, ann.id, { rethrow: true });
+    if (!uploaded) throw new Error('the screenshot upload answered with no address');
+    ann.screenshot = { url: uploaded.url, w: shot.w, h: shot.h, capturedAt: shot.capturedAt };
+    return true;
+  }
+
   // A failed request leaves the snapshot stale, so the next change sends it
   // again.
   async function remoteUpsert(id, body) {
     try {
+      const ann = state.annotations.find((one) => one.id === id);
+      if (ann && ann.screenshot && ann.screenshot.dataUrl) {
+        await uploadInlineScreenshot(ann);
+        body = JSON.stringify(ann);
+      }
       await syncFetch(annotationUrl(id), {
         method: 'PUT',
         headers: syncHeaders({ 'Content-Type': 'application/json' }),
@@ -5142,19 +5162,20 @@
       }
       const { comment, priority, author } = res;
       const id = generateId();
-      let stored = null;
+      // The picture rides on the annotation until a server takes it off. A
+      // server that is not answering used to throw the whole capture away,
+      // while a text or an element note written in the same minute was kept
+      // and sent again later; there is no reason for the third kind to be the
+      // one that loses the reviewer's work.
+      let stored = { dataUrl: shot.canvas.toDataURL('image/png'), w: shot.w, h: shot.h, capturedAt: Date.now() };
       if (server) {
-        // The annotation itself lives on that server, so a refused upload is a
-        // transient failure and not a second mode. Nothing is created.
         const blob = await new Promise((done) => shot.canvas.toBlob(done, 'image/png'));
         const uploaded = blob ? await uploadScreenshot(blob, id) : null;
-        if (!uploaded) {
-          showToast('Uxnote: could not send the screenshot to the server');
-          return;
+        if (uploaded) {
+          stored = { url: uploaded.url, w: shot.w, h: shot.h, capturedAt: Date.now() };
+        } else {
+          showToast('Uxnote: the picture stays on this device until the server answers');
         }
-        stored = { url: uploaded.url, w: shot.w, h: shot.h, capturedAt: Date.now() };
-      } else {
-        stored = { dataUrl: shot.canvas.toDataURL('image/png'), w: shot.w, h: shot.h, capturedAt: Date.now() };
       }
       const annotation = {
         id,
@@ -5181,7 +5202,7 @@
 
   // The PNG travels as the body of the request, so a server needs no multipart
   // parser. The answer names the address the server serves the file at.
-  async function uploadScreenshot(blob, id) {
+  async function uploadScreenshot(blob, id, opts = {}) {
     try {
       const res = await syncFetch(screenshotUrl(id), {
         method: 'PUT',
@@ -5192,6 +5213,10 @@
       return payload && payload.url ? payload : null;
     } catch (err) {
       console.warn('Uxnote screenshot:', err);
+      // The capture path takes a null and keeps the picture inline. The sync
+      // path needs the throw, so the annotation stays unsent and is tried
+      // again rather than being marked delivered without its picture.
+      if (opts.rethrow) throw err;
       return null;
     }
   }
