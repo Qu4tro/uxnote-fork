@@ -160,6 +160,8 @@
     dialogModal: null,
     importModal: null,
     markerLayer: null,
+    syncDot: null,
+    syncStatus: null,
     colors: colorPalette,
     customPosition: false,
     dimEnabled,
@@ -486,6 +488,58 @@
           opacity: 1;
           transform: translateX(-50%) translateY(0);
         }
+      }
+      .wn-annot-sync-dot {
+        position: relative;
+        flex: 0 0 auto;
+        width: 10px;
+        height: 10px;
+        margin-left: 10px;
+        border-radius: 50%;
+        background: #8b8794;
+        box-shadow: 0 0 0 3px rgba(139, 135, 148, 0.18);
+        transition: background 0.2s ease, box-shadow 0.2s ease;
+      }
+      .wn-annot-sync-dot[data-sync-status='ok'] {
+        background: #2ea043;
+        box-shadow: 0 0 0 3px rgba(46, 160, 67, 0.22);
+      }
+      .wn-annot-sync-dot[data-sync-status='refused'] {
+        background: #d29922;
+        box-shadow: 0 0 0 3px rgba(210, 153, 34, 0.24);
+      }
+      .wn-annot-sync-dot[data-sync-status='unreachable'] {
+        background: #e5534b;
+        box-shadow: 0 0 0 3px rgba(229, 83, 75, 0.24);
+      }
+      /* The dot sits at the left end of the bar, so its tooltip hangs from
+         that end rather than centring on a 10px target and running off the
+         edge of the screen. */
+      .wn-annot-sync-dot::after {
+        content: attr(data-tip);
+        position: absolute;
+        left: -8px;
+        background: rgba(35, 31, 74, 0.92);
+        color: #fff;
+        padding: 6px 8px;
+        border-radius: 8px;
+        font-size: 11px;
+        white-space: nowrap;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.12s ease, transform 0.12s ease;
+      }
+      .wn-annot-toolbar.wn-pos-bottom .wn-annot-sync-dot::after {
+        bottom: calc(100% + 10px);
+        transform: translateY(2px);
+      }
+      .wn-annot-toolbar.wn-pos-top .wn-annot-sync-dot::after {
+        top: calc(100% + 10px);
+        transform: translateY(-2px);
+      }
+      .wn-annot-sync-dot:hover::after {
+        opacity: 1;
+        transform: translateY(0);
       }
       .wn-annot-toolbar.wn-pos-right {
         left: 50%;
@@ -1469,6 +1523,17 @@
     logo.className = 'wn-annot-logo wn-annotator';
     logo.innerHTML = iconWordmark();
     frag.appendChild(logo);
+
+    // Only a page with a server has a server to report on. Without one the
+    // notes are in this browser and there is nothing the dot could say.
+    if (server) {
+      const dot = document.createElement('div');
+      dot.className = 'wn-annot-sync-dot wn-annotator';
+      dot.setAttribute('role', 'status');
+      frag.appendChild(dot);
+      state.syncDot = dot;
+      applySyncStatus();
+    }
 
     const editButtons = [
       { action: 'mode', mode: 'text', tip: 'Highlight text', icon: iconPen() },
@@ -4227,6 +4292,51 @@
   let syncQueue = Promise.resolve();
   let syncWarned = false;
 
+  // One line per state, because a single line covering three of them tells a
+  // reviewer nothing about the one they are looking at.
+  const SYNC_STATUS_TIPS = {
+    pending: 'Server: checking',
+    ok: 'Server: connected',
+    refused: 'Server: refused it -- check the address or the key',
+    unreachable: 'Server: unreachable -- notes stay in this browser'
+  };
+
+  function applySyncStatus() {
+    const dot = state.syncDot;
+    if (!dot) return;
+    const status = state.syncStatus || 'pending';
+    const tip = SYNC_STATUS_TIPS[status];
+    dot.setAttribute('data-sync-status', status);
+    dot.setAttribute('data-tip', tip);
+    dot.setAttribute('aria-label', tip);
+  }
+
+  function setSyncStatus(next) {
+    if (state.syncStatus === next) return;
+    state.syncStatus = next;
+    applySyncStatus();
+  }
+
+  // Three answers the dot can carry, and they are three different failures:
+  // the request came back and was usable, it came back and was not -- a
+  // refused key, an address that answers as something else -- or it never
+  // came back at all.
+  async function syncFetch(url, options) {
+    let res;
+    try {
+      res = await fetch(url, options);
+    } catch (err) {
+      setSyncStatus('unreachable');
+      throw err;
+    }
+    if (!res.ok) {
+      setSyncStatus('refused');
+      throw new Error(`HTTP ${res.status}`);
+    }
+    setSyncStatus('ok');
+    return res;
+  }
+
   function annotationsUrl() {
     return `${server.url}/annotations?site=${encodeURIComponent(siteKey)}`;
   }
@@ -4268,9 +4378,16 @@
   async function remotePull() {
     if (!server) return;
     try {
-      const res = await fetch(annotationsUrl(), { headers: syncHeaders({ Accept: 'application/json' }) });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const payload = await res.json();
+      const res = await syncFetch(annotationsUrl(), { headers: syncHeaders({ Accept: 'application/json' }) });
+      let payload;
+      try {
+        payload = await res.json();
+      } catch (err) {
+        // An answer that is not the annotation set means the address is
+        // serving something else, which is the reviewer's to fix.
+        setSyncStatus('refused');
+        throw err;
+      }
       state.annotations = ((payload && payload.annotations) || []).filter(isStoredAnnotation);
       state.annotations.forEach((ann) => {
         if (!ann.pageKey) {
@@ -4306,12 +4423,11 @@
   // again.
   async function remoteUpsert(id, body) {
     try {
-      const res = await fetch(annotationUrl(id), {
+      await syncFetch(annotationUrl(id), {
         method: 'PUT',
         headers: syncHeaders({ 'Content-Type': 'application/json' }),
         body
       });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       syncedSnapshot.set(id, body);
       syncWarned = false;
     } catch (err) {
@@ -4321,8 +4437,7 @@
 
   async function remoteDelete(id) {
     try {
-      const res = await fetch(annotationUrl(id), { method: 'DELETE', headers: syncHeaders() });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      await syncFetch(annotationUrl(id), { method: 'DELETE', headers: syncHeaders() });
       syncedSnapshot.delete(id);
       syncWarned = false;
     } catch (err) {
@@ -4335,8 +4450,7 @@
     if (!server) return;
     enqueueSync(async () => {
       try {
-        const res = await fetch(annotationsUrl(), { method: 'DELETE', headers: syncHeaders() });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        await syncFetch(annotationsUrl(), { method: 'DELETE', headers: syncHeaders() });
         syncedSnapshot = new Map();
         syncWarned = false;
       } catch (err) {
@@ -4590,12 +4704,11 @@
   // parser. The answer names the address the server serves the file at.
   async function uploadScreenshot(blob, id) {
     try {
-      const res = await fetch(screenshotUrl(id), {
+      const res = await syncFetch(screenshotUrl(id), {
         method: 'PUT',
         headers: syncHeaders({ 'Content-Type': 'image/png' }),
         body: blob
       });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const payload = await res.json();
       return payload && payload.url ? payload : null;
     } catch (err) {
