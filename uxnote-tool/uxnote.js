@@ -79,8 +79,6 @@
   const dockMode = (script && (script.dataset.dock || script.dataset.layout)) || '';
   const storageKey = `uxnote:site:${siteKey}`;
   const syncedStorageKey = `${storageKey}:synced`;
-  const annotatorNameStorageKey = `uxnote:annotator:${siteKey}`;
-  const annotatorNamesStorageKey = `uxnote:annotators:${siteKey}`;
   const importFilesStorageKey = `uxnote:import-files:${siteKey}`;
   const visibilityStorageKey = `uxnote:hidden:${siteKey}`;
   const pendingFocusKey = `uxnote:pending:${siteKey}`;
@@ -115,8 +113,6 @@
   const state = {
     mode: null,
     annotations: [],
-    annotatorName: '',
-    annotatorNames: [],
     importFiles: [],
     markers: {},
     highlightSpans: {},
@@ -172,8 +168,6 @@
         : initialHiddenFromVisible !== null
         ? initialHiddenFromVisible
         : parseBoolAttr(startHiddenAttr, false);
-    state.annotatorName = loadAnnotatorName();
-    state.annotatorNames = loadAnnotatorNames();
     if (jsonImport) state.importFiles = loadImportFiles();
     captureBasePadding();
     applyColorTheme();
@@ -183,7 +177,6 @@
     setAnnotatorVisibility(state.hidden);
     loadAnnotations();
     if (server && !loadSyncedSnapshot()) state.annotations = [];
-    refreshKnownAnnotatorNames();
     restoreAnnotations();
     retryResolveMissingAnnotations();
     startMissingObserver();
@@ -1792,44 +1785,9 @@
     const title = document.createElement('h4');
     title.textContent = 'Add a comment';
 
-    const nameRow = document.createElement('div');
-    nameRow.className = 'wn-annot-name-row wn-annotator';
-    const nameLabel = document.createElement('label');
-    nameLabel.textContent = 'Reviewer name';
-    const nameInputs = document.createElement('div');
-    nameInputs.className = 'wn-annot-name-inputs wn-annotator';
-    const nameInput = document.createElement('input');
-    nameInput.type = 'text';
-    nameInput.className = 'wn-annotator';
-    nameInput.placeholder = 'Reviewer name';
-    nameInputs.appendChild(nameInput);
-    nameRow.appendChild(nameLabel);
-    nameRow.appendChild(nameInputs);
-
     const textarea = document.createElement('textarea');
     textarea.className = 'wn-annotator';
     textarea.placeholder = 'Your comment...';
-
-    const prioWrapper = document.createElement('div');
-    prioWrapper.className = 'wn-annot-prio wn-annotator';
-    const prioLabel = document.createElement('label');
-    prioLabel.textContent = 'Priority';
-    const prioOptions = document.createElement('div');
-    prioOptions.className = 'wn-annot-prio-options wn-annotator';
-
-    const makePrioBtn = (value, label) => {
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'wn-annot-prio-btn wn-annotator';
-      btn.setAttribute('data-priority', value);
-      btn.innerHTML = `<span class="dot wn-annotator"></span><span class="wn-annotator">${label}</span>`;
-      return btn;
-    };
-
-    const prioButtons = [makePrioBtn('low', 'Low'), makePrioBtn('medium', 'Medium'), makePrioBtn('high', 'High')];
-    prioButtons.forEach((b) => prioOptions.appendChild(b));
-    prioWrapper.appendChild(prioLabel);
-    prioWrapper.appendChild(prioOptions);
 
     const actions = document.createElement('div');
     actions.className = 'wn-annot-actions wn-annotator';
@@ -1845,9 +1803,7 @@
     actions.appendChild(cancelBtn);
     actions.appendChild(okBtn);
     modal.appendChild(title);
-    modal.appendChild(nameRow);
     modal.appendChild(textarea);
-    modal.appendChild(prioWrapper);
     modal.appendChild(actions);
     backdrop.appendChild(modal);
     document.body.appendChild(backdrop);
@@ -1858,9 +1814,7 @@
       textarea,
       title,
       okBtn,
-      cancelBtn,
-      prioButtons,
-      nameInput
+      cancelBtn
     };
     return state.commentModal;
   }
@@ -1884,36 +1838,18 @@
     }
   }
 
-  function askForComment(label, defaultValue = '', defaultPriority = 'medium', defaultAuthor = '') {
+  function askForComment(label, defaultValue = '') {
     return new Promise((resolve) => {
       const modalState = ensureCommentModal();
-      const { backdrop, textarea, title, okBtn, cancelBtn, prioButtons, nameInput } = modalState;
+      const { backdrop, textarea, title, okBtn, cancelBtn } = modalState;
       title.textContent = label || 'Add a comment';
       textarea.value = defaultValue || '';
       textarea.placeholder = 'Your comment...';
-      prioButtons.forEach((b) => b.classList.toggle('active', b.getAttribute('data-priority') === defaultPriority));
-      const onPrioClick = (btn) => {
-        prioButtons.forEach((bb) => bb.classList.remove('active'));
-        btn.classList.add('active');
-      };
-      const prioHandlers = prioButtons.map((b) => (evt) => onPrioClick(b));
-      prioButtons.forEach((b, idx) => b.addEventListener('click', prioHandlers[idx]));
-
-      const names = state.annotatorNames || [];
-      const defaultName = defaultAuthor || state.annotatorName || names[0] || '';
-      nameInput.value = defaultName || '';
-      nameInput.disabled = false;
-      nameInput.placeholder = 'Reviewer name';
 
       backdrop.classList.add('show');
       positionCommentCard();
-      if (defaultName) {
-        textarea.focus();
-        textarea.select();
-      } else {
-        nameInput.focus();
-        nameInput.select();
-      }
+      textarea.focus();
+      textarea.select();
 
       const close = (val) => {
         backdrop.classList.remove('show');
@@ -1921,19 +1857,10 @@
         cancelBtn.removeEventListener('click', onCancel);
         document.removeEventListener('keydown', onKey);
         window.removeEventListener('resize', positionCommentCard);
-        prioButtons.forEach((b, idx) => b.removeEventListener('click', prioHandlers[idx]));
         resolve(val);
       };
-      const onOk = async () => {
-        const selected = prioButtons.find((b) => b.classList.contains('active'));
-        const priority = selected ? selected.getAttribute('data-priority') : defaultPriority;
-        const author = nameInput.value.trim();
-        if (!author) {
-          await alertDialog('Please enter a reviewer name.', 'Reviewer name required');
-          return;
-        }
-        recordAnnotatorName(author);
-        close({ comment: textarea.value.trim(), priority, author });
+      const onOk = () => {
+        close({ comment: textarea.value.trim() });
       };
       const onCancel = () => close(null);
       const onKey = (evt) => {
@@ -2423,7 +2350,6 @@
     }
     saveAnnotations();
     saveImportFiles();
-    refreshKnownAnnotatorNames();
     clearRenderedAnnotations();
     restoreAnnotations();
     renumberMarkers();
@@ -2446,9 +2372,6 @@
       return null;
     }
 
-    const fallbackAuthor = Array.isArray(parsed)
-      ? ''
-      : parsed.exportedBy || parsed.annotator || parsed.author || '';
     const payloadCreatedAt = Array.isArray(parsed) ? file.lastModified : parsed.createdAt;
     const pageUrl = Array.isArray(parsed) ? '' : parsed.pageUrl || '';
     const fileId = generateImportFileId();
@@ -2457,7 +2380,6 @@
       .filter(isStoredAnnotation)
       .map((ann) =>
         normalizeImportedAnnotation(ann, {
-          fallbackAuthor,
           createdAt: payloadCreatedAt,
           pageUrl,
           fileId,
@@ -2479,15 +2401,12 @@
 
   function normalizeImportedAnnotation(annotation, options) {
     const ann = annotation && typeof annotation === 'object' ? annotation : {};
-    const author = (ann.author || options.fallbackAuthor || '').trim();
     const pageUrl = ann.pageUrl || options.pageUrl || window.location.href;
     const id = ensureUniqueImportId(ann.id, options.existingIds);
     const normalized = {
       ...ann,
       id,
       createdAt: ann.createdAt || options.createdAt || Date.now(),
-      priority: ann.priority || 'medium',
-      author,
       pageUrl,
       importFileId: options.fileId
     };
@@ -2517,7 +2436,6 @@
     state.annotations = state.annotations.filter((ann) => ann.importFileId !== fileId);
     saveAnnotations();
     saveImportFiles();
-    refreshKnownAnnotatorNames();
     clearRenderedAnnotations();
     restoreAnnotations();
     renumberMarkers();
@@ -2940,43 +2858,6 @@
     return fallback;
   }
 
-  function loadAnnotatorName() {
-    try {
-      return localStorage.getItem(annotatorNameStorageKey) || '';
-    } catch (err) {
-      return '';
-    }
-  }
-
-  function saveAnnotatorName(name) {
-    try {
-      localStorage.setItem(annotatorNameStorageKey, name);
-    } catch (err) {
-      // ignore storage errors
-    }
-  }
-
-  function loadAnnotatorNames() {
-    try {
-      const stored = localStorage.getItem(annotatorNamesStorageKey);
-      const parsed = stored ? JSON.parse(stored) : [];
-      if (Array.isArray(parsed)) {
-        return parsed.filter((n) => typeof n === 'string' && n.trim()).map((n) => n.trim());
-      }
-      return [];
-    } catch (err) {
-      return [];
-    }
-  }
-
-  function saveAnnotatorNames(names) {
-    try {
-      localStorage.setItem(annotatorNamesStorageKey, JSON.stringify(names || []));
-    } catch (err) {
-      // ignore storage errors
-    }
-  }
-
   function loadImportFiles() {
     try {
       const stored = localStorage.getItem(importFilesStorageKey);
@@ -3002,44 +2883,6 @@
     } catch (err) {
       // ignore storage errors
     }
-  }
-
-  function recordAnnotatorName(name) {
-    const trimmed = (name || '').trim();
-    if (!trimmed) return;
-    state.annotatorName = trimmed;
-    const next = [trimmed, ...state.annotatorNames.filter((n) => n !== trimmed)];
-    state.annotatorNames = next;
-    saveAnnotatorName(trimmed);
-    saveAnnotatorNames(next);
-  }
-
-  function refreshKnownAnnotatorNames() {
-    const existing = Array.from(
-      new Set(
-        (state.annotations || [])
-          .map((a) => (a.author || '').trim())
-          .filter(Boolean)
-      )
-    );
-    const merged = Array.from(new Set([...(state.annotatorNames || []), ...existing]));
-    state.annotatorNames = merged;
-    if (!state.annotatorName) {
-      state.annotatorName = loadAnnotatorName() || merged[0] || '';
-    }
-  }
-
-  function applyAnnotatorNameToAnnotations(name, options = {}) {
-    if (!name) return false;
-    const force = options.force || false;
-    let changed = false;
-    state.annotations.forEach((ann) => {
-      if (!force && ann.author) return;
-      if (ann.author !== name) changed = true;
-      ann.author = name;
-    });
-    if (changed) saveAnnotations();
-    return changed;
   }
 
   function positionTip() {
@@ -3348,7 +3191,7 @@
     if (!snippet) return;
     const res = await awaitComment('Comment for this highlight?');
     if (!res) return;
-    const { comment, priority, author } = res;
+    const { comment } = res;
     const id = generateId();
     const payload = serializeRange(range, snippet);
     const span = applyTextHighlight(range, id);
@@ -3358,8 +3201,6 @@
       type: 'text',
       target: payload,
       comment: comment.trim(),
-      author: author || state.annotatorName || '',
-      priority: priority || 'medium',
       snippet: snippet.slice(0, 180),
       pageUrl: window.location.href,
       pageKey: normalizePageKey(window.location.href),
@@ -3396,7 +3237,7 @@
     evt.stopPropagation();
     const res = await awaitComment('Comment for this element?');
     if (!res) return;
-    const { comment, priority, author } = res;
+    const { comment } = res;
     const id = generateId();
     const targetXPath = getXPath(el);
     const targetCss = buildCssSelector(el);
@@ -3406,8 +3247,6 @@
       type: 'element',
       target: { xpath: targetXPath, css: targetCss, tag: el.tagName.toLowerCase() },
       comment: comment.trim(),
-      author: author || state.annotatorName || '',
-      priority: priority || 'medium',
       snippet: el.innerText ? el.innerText.trim().slice(0, 120) : el.tagName,
       pageUrl: window.location.href,
       pageKey: normalizePageKey(window.location.href),
@@ -4418,9 +4257,6 @@
       item.dataset.id = ann.id;
       applyItemAccent(item, getAnnotationColors(ann));
 
-      const priority = ann.priority || 'medium';
-      const priorityLabel = priority === 'high' ? 'High' : priority === 'low' ? 'Low' : 'Medium';
-
       const top = document.createElement('div');
       top.className = 'wn-annot-card-top';
       const topLeft = document.createElement('div');
@@ -4428,11 +4264,7 @@
       const number = document.createElement('div');
       number.className = 'wn-annot-number';
       number.textContent = `#${idx + 1}`;
-      const prioChip = document.createElement('div');
-      prioChip.className = `wn-annot-priority ${priority}`;
-      prioChip.innerHTML = `<span class="dot"></span><span>${priorityLabel}</span>`;
       topLeft.appendChild(number);
-      topLeft.appendChild(prioChip);
       if (ann.status === 'missing') {
         const missing = document.createElement('div');
         missing.className = 'wn-annot-missing';
@@ -4474,8 +4306,6 @@
 
       const meta = document.createElement('div');
       meta.className = 'wn-annot-meta';
-      const authorName = (ann.author || '').trim();
-      const authorLabel = (authorName || 'Unknown reviewer').toUpperCase();
       const createdAt = new Date(ann.createdAt);
       const createdAtDate = createdAt.toLocaleDateString(undefined, {
         year: 'numeric',
@@ -4486,7 +4316,7 @@
         hour: '2-digit',
         minute: '2-digit'
       });
-      meta.textContent = `${authorLabel} • ${createdAtDate} • ${createdAtTime}`;
+      meta.textContent = `${createdAtDate} • ${createdAtTime}`;
       metaWrap.appendChild(meta);
 
       const showMore = document.createElement('button');
@@ -4547,13 +4377,10 @@
   async function editAnnotation(id) {
     const ann = state.annotations.find((a) => a.id === id);
     if (!ann) return;
-    const res = await askForComment('Edit this annotation', ann.comment || '', ann.priority || 'medium', ann.author || state.annotatorName || '');
+    const res = await askForComment('Edit this annotation', ann.comment || '');
     if (!res) return;
-    const { comment, priority, author } = res;
+    const { comment } = res;
     ann.comment = comment.trim();
-    ann.priority = priority || 'medium';
-    ann.author = author || ann.author || state.annotatorName || '';
-    recordAnnotatorName(ann.author);
     saveAnnotations();
     renderList();
   }
@@ -5058,7 +4885,6 @@
     reconcile(pulled);
     syncWarned = false;
     persistAnnotations();
-    refreshKnownAnnotatorNames();
     clearRenderedAnnotations();
     restoreAnnotations();
     renumberMarkers();
@@ -5449,7 +5275,7 @@
         showToast('Uxnote: could not capture that region');
         return;
       }
-      const { comment, priority, author } = res;
+      const { comment } = res;
       const id = generateId();
       // The picture rides on the annotation until a server takes it off. A
       // server that is not answering used to throw the whole capture away,
@@ -5470,8 +5296,6 @@
         id,
         type: 'screenshot',
         comment: comment.trim(),
-        author: author || state.annotatorName || '',
-        priority: priority || 'medium',
         snippet: '',
         pageUrl: window.location.href,
         pageKey: normalizePageKey(window.location.href),
