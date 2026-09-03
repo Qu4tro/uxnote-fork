@@ -38,7 +38,7 @@ test('the toolbar holds one row on a laptop screen', async ({ page }) => {
 });
 
 test('the toolbar offers the mail handoff on its own button', async ({ page }) => {
-  await page.goto('/demo/');
+  await page.goto('/');
   const mail = page.locator('.wn-annot-toolbar button[data-action="mail"]');
   await expect(mail).toBeVisible();
   await expect(mail).toHaveAttribute('data-tip', 'Send by mail');
