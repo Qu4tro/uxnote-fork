@@ -3672,10 +3672,10 @@
       footer = document.createElement('div');
       footer.className = 'wn-annot-footer wn-annotator';
       const link = document.createElement('a');
-      link.href = 'https://uxnote.ninefortyone.studio';
+      link.href = 'https://github.com/Qu4tro/uxnote-fork';
       link.target = '_blank';
       link.rel = 'noreferrer noopener';
-      link.textContent = '© UxNote – by NineFortyOne.Studio';
+      link.textContent = 'uxnote-fork on GitHub';
       footer.appendChild(link);
       state.panel.appendChild(footer);
     }
