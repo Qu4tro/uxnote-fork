@@ -135,7 +135,7 @@ test('every option in the settings grid says what it does', async ({ page }) => 
   await expect(cards.locator('.settings-desc')).toHaveCount(count);
 });
 
-test('the demo page refuses the server options from the query string', async ({ page }) => {
+test('the demo page refuses a server that is not on the loopback address', async ({ page }) => {
   await page.goto('/?server-url=https://example.invalid&server-api-key=k');
   const carried = await page.evaluate(() =>
     Array.from(document.querySelectorAll('script')).some(
@@ -143,7 +143,81 @@ test('the demo page refuses the server options from the query string', async ({ 
     )
   );
   expect(carried).toBe(false);
+  // Silence would read as a link that worked, so the notice names both what it
+  // dropped and the rule that dropped it.
   await expect(page.locator('#settings-notice')).toBeVisible();
+  await expect(page.locator('#settings-notice')).toContainText('server-url, server-api-key');
+  await expect(page.locator('#settings-notice')).toContainText('loopback address only');
+});
+
+test('the demo page takes a loopback server onto the script tag', async ({ page }) => {
+  await page.goto('/?server-url=http%3A%2F%2F127.0.0.1%3A8123&server-api-key=local-key');
+  const carried = await page.evaluate(() => {
+    const tag = Array.from(document.querySelectorAll('script')).find((s) => s.hasAttribute('data-server-url'));
+    return tag && [tag.getAttribute('data-server-url'), tag.getAttribute('data-server-api-key')];
+  });
+  expect(carried).toEqual(['http://127.0.0.1:8123/', 'local-key']);
+  await expect(page.locator('#settings-notice')).toBeHidden();
+  await expect(page.locator('#settings-snippet')).toContainText('data-server-url="http://127.0.0.1:8123/"');
+});
+
+test('applying a set carries it through the reload and leaves the defaults out', async ({ page }) => {
+  await page.goto('/');
+  await page.fill('#set-server-url', 'http://localhost:8123');
+  await page.fill('#set-server-api-key', 'local-key');
+  await page.click('#settings-apply');
+  await page.waitForURL(/server-url=/);
+  // Only the two edited options travel; everything still at its default is
+  // absent from the query string, so a plain path means defaults.
+  expect(new URL(page.url()).searchParams.toString()).toBe(
+    'server-url=http%3A%2F%2Flocalhost%3A8123%2F&server-api-key=local-key'
+  );
+  await expect(page.locator('#set-server-url')).toHaveValue('http://localhost:8123/');
+  const key = await page.evaluate(() => {
+    const tag = Array.from(document.querySelectorAll('script')).find((s) => s.hasAttribute('data-server-url'));
+    return tag && tag.getAttribute('data-server-api-key');
+  });
+  expect(key).toBe('local-key');
+});
+
+test('the server fields come filled with the address the bundled server answers on', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.locator('#set-server-url')).toHaveValue('http://localhost:8123');
+  await expect(page.locator('#set-server-api-key')).toHaveValue('review-key');
+  // Filled is not applied. A visitor who runs no server should not land on a
+  // page already pointed at one, so a plain load still keeps the notes here.
+  const carried = await page.evaluate(() =>
+    Array.from(document.querySelectorAll('script')).some((s) => s.hasAttribute('data-server-url'))
+  );
+  expect(carried).toBe(false);
+  // The snippet is the tag the widget was built from, so a field that is filled
+  // only because it was seeded stays out of it until it is applied or edited.
+  await expect(page.locator('#settings-snippet')).not.toContainText('data-server-url');
+  await expect(page.locator('#settings-snippet')).not.toContainText('data-server-api-key');
+  // Editing one is acting on it, and the snippet says so before Apply is near.
+  await page.fill('#set-server-api-key', 'review-key-2');
+  await expect(page.locator('#settings-snippet')).toContainText('data-server-api-key="review-key-2"');
+  await page.fill('#set-server-api-key', 'review-key');
+
+  // What the filling buys is the press: nothing to type before Apply.
+  await page.click('#settings-apply');
+  await page.waitForURL(/server-url=/);
+  const applied = await page.evaluate(() => {
+    const tag = Array.from(document.querySelectorAll('script')).find((s) => s.hasAttribute('data-server-url'));
+    return tag && [tag.getAttribute('data-server-url'), tag.getAttribute('data-server-api-key')];
+  });
+  expect(applied).toEqual(['http://localhost:8123/', 'review-key']);
+  // Applied is in the set, so now the snippet carries it.
+  await expect(page.locator('#settings-snippet')).toContainText('data-server-url="http://localhost:8123/"');
+});
+
+test('the demo page drops a server key that arrives on its own', async ({ page }) => {
+  await page.goto('/?server-api-key=local-key');
+  const carried = await page.evaluate(() =>
+    Array.from(document.querySelectorAll('script')).some((s) => s.hasAttribute('data-server-api-key'))
+  );
+  expect(carried).toBe(false);
+  await expect(page.locator('#settings-notice')).toContainText('no server to reach');
 });
 
 const CAPTURE_FIXTURE = '/test/fixtures/server-capture.html';

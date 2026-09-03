@@ -105,6 +105,7 @@
     .settings-grid select, .settings-grid input { padding: 0.5rem 0.6rem; border: 1px solid #c8d0da; border-radius: 8px; font-size: 0.95rem; background: #fff; color: inherit; }
     .settings-grid input[type="color"] { width: 100%; height: 2.5rem; padding: 0.2rem; }
     .settings-actions { display: flex; align-items: center; margin-bottom: 1.25rem; }
+    .settings p code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.9em; color: #1d4f91; }
     .settings p.settings-notice { background: #fdf0e6; border: 1px solid #edc39a; border-radius: 8px; padding: 0.7rem 1rem; color: #7a4b12; max-width: none; }
     .settings-snippet { background: #fff; border: 1px solid #e3e7ec; border-radius: 12px; padding: 1rem 1.25rem; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.85rem; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
     footer { margin-top: 3rem; padding: 2rem 3rem; background: var(--page-footer-bg); color: var(--page-footer-text); display: flex; justify-content: space-between; font-size: 0.9rem; }
@@ -196,6 +197,15 @@
     <p>The widget reads its options from its script tag, once, when the page
       loads. This page carries them in the query string, so applying a change
       reloads the page. The notes you have already taken stay where they are.</p>
+    <p>Two of the options name a server to keep the notes on instead of this
+      browser. A link must not be able to point your notes at somebody else's
+      server, so this page takes a loopback address only: <code>localhost</code>,
+      anything in 127.0.0.0/8, or <code>[::1]</code>. The repo ships
+      <code>server/server.py</code> to run there, with
+      <code>python3 server/server.py --port 8123</code>. The hosted demo is served
+      over HTTPS from github.io and browsers restrict a public page reaching a
+      loopback address (Private Network Access), so the two server options are
+      meant for a demo you run locally and may be blocked here.</p>
     <div class="settings-grid">
       <label for="set-theme"><span class="settings-name">data-theme</span>
         <span class="settings-desc">Theme of the toolbar, panel, and dialogs. auto follows the system and changes with it.</span>
@@ -256,6 +266,14 @@
         <span class="settings-desc">The recipient of the send-by-mail handoff in the export dialog. It fills a draft; it sends nothing.</span>
         <input id="set-mailto" type="email" placeholder="team@example.org">
       </label>
+      <label for="set-server-url"><span class="settings-name">data-server-url</span>
+        <span class="settings-desc">Keeps the notes on a server instead of this browser. This page takes a loopback address only.</span>
+        <input id="set-server-url" type="url" placeholder="http://localhost:8123">
+      </label>
+      <label for="set-server-api-key"><span class="settings-name">data-server-api-key</span>
+        <span class="settings-desc">Sent as X-Uxnote-Key on every request to that server.</span>
+        <input id="set-server-api-key" type="text" placeholder="review-key">
+      </label>
     </div>
     <div class="settings-actions">
       <button class="cta" type="button" id="settings-apply">Apply and reload</button>
@@ -315,15 +333,40 @@
         { key: 'color',           attr: 'colorForHighlight',          kind: 'color',  fallback: '#4e9cf6' },
         { key: 'color-text',      attr: 'colorForTextHighlight',      kind: 'color',  fallback: '#4e9cf6' },
         { key: 'color-element',   attr: 'colorForElementHighlight',   kind: 'color',  fallback: '#4e9cf6' },
-        { key: 'mailto',          attr: 'data-mailto',                kind: 'email',  fallback: '' }
+        { key: 'mailto',          attr: 'data-mailto',                kind: 'email',  fallback: '' },
+        // A seed is what the control comes filled with, which is not the same
+        // as what the widget starts on: these two carry the address and key
+        // that server/server.py listens on, so reaching it is one press of
+        // Apply rather than a trip to the README. Their default stays empty,
+        // so a plain load keeps the notes in this browser.
+        { key: 'server-url',      attr: 'data-server-url',            kind: 'url',    fallback: '', seed: 'http://localhost:8123' },
+        { key: 'server-api-key',  attr: 'data-server-api-key',        kind: 'key',    fallback: '', seed: 'review-key' }
       ];
-      // This page has no server. A crafted link must not be able to point a
-      // visitor's notes at one, so these are named and refused.
-      var REFUSED = ['serverurl', 'serverapikey', 'server', 'apikey'];
+      // A crafted link must not be able to point a visitor's notes at somebody
+      // else's server. A server on the loopback address is the visitor's own
+      // machine, so that one is allowed and every other is refused. These keys
+      // name no option at all, and saying so beats failing quietly.
+      var REFUSED = ['server', 'apikey'];
       var SOURCE = 'uxnote-tool/uxnote.js';
       // The literal characters that close a script tag would close this block.
       var CLOSE_TAG = '<\/script>';
       var params = new URLSearchParams(location.search);
+
+      // Parsed, never pattern-matched: a string test is what a crafted address
+      // walks past. The parser settles the host first, so 127.1, 0x7f.0.0.1 and
+      // [0:0:0:0:0:0:0:1] all arrive here in the one form this reads.
+      function loopbackUrl(value) {
+        var url;
+        try {
+          url = new URL(value);
+        } catch (err) {
+          return null;
+        }
+        if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
+        var host = url.hostname.toLowerCase();
+        var loopback = host === 'localhost' || host === '[::1]' || /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(host);
+        return loopback ? url.href : null;
+      }
 
       // Anything that does not clean is dropped, so the widget falls through to
       // its own default rather than reading a value it cannot use.
@@ -341,6 +384,12 @@
           if (hex.length === 3) hex = hex.charAt(0) + hex.charAt(0) + hex.charAt(1) + hex.charAt(1) + hex.charAt(2) + hex.charAt(2);
           return '#' + hex.toLowerCase();
         }
+        if (option.kind === 'url') return loopbackUrl(value);
+        if (option.kind === 'key') {
+          // The key is opaque to this page. It only has to be one word that
+          // survives an attribute, a query string, and this snippet.
+          return value.length <= 200 && /^[^\s<>"']+$/.test(value) ? value : null;
+        }
         if (value.length > 254) return null;
         return /^[^\s@<>"']+@[^\s@<>"']+\.[^\s@<>"']+$/.test(value) ? value : null;
       }
@@ -352,6 +401,8 @@
         var value = clean(option, params.get(option.key));
         if (value !== null) chosen[option.key] = value;
       });
+      // On its own the key names nothing, so it goes wherever the url went.
+      if (!('server-url' in chosen)) delete chosen['server-api-key'];
 
       var tag = document.createElement('script');
       tag.src = SOURCE;
@@ -371,7 +422,8 @@
       // Seeded from the query string on every load, so the form shows what the
       // widget received and a dropped value falls back to the default in view.
       OPTIONS.forEach(function (option) {
-        controlFor(option).value = option.key in chosen ? chosen[option.key] : option.fallback;
+        var seeded = 'seed' in option ? option.seed : option.fallback;
+        controlFor(option).value = option.key in chosen ? chosen[option.key] : seeded;
       });
 
       // Read from the controls rather than from the query, so the snippet keeps
@@ -381,6 +433,7 @@
         OPTIONS.forEach(function (option) {
           values[option.key] = clean(option, controlFor(option).value);
         });
+        if (values['server-url'] === null) values['server-api-key'] = null;
         return values;
       }
 
@@ -388,11 +441,23 @@
         return value === null || value === option.fallback;
       }
 
+      // A seeded field is a suggestion until somebody acts on it. The widget on
+      // this load was handed no server, so the snippet must not print one: a
+      // value that is in the form only because it was seeded stays out of the
+      // set until the query carries it or the visitor edits it. Apply reads the
+      // controls, not this, so the seeded pair still travels on the first press.
+      var touched = {};
+      function seededOnly(option, value) {
+        if (!('seed' in option) || option.key in chosen || touched[option.key]) return false;
+        return value === clean(option, option.seed);
+      }
+
       function render() {
         var values = currentValues();
         var text = '<script src="' + SOURCE + '"';
         OPTIONS.forEach(function (option) {
           if (isDefault(option, values[option.key])) return;
+          if (seededOnly(option, values[option.key])) return;
           text += '\n  ' + option.attr + '="' + values[option.key] + '"';
         });
         snippet.textContent = text + '>' + CLOSE_TAG;
@@ -414,8 +479,13 @@
         location.assign(location.pathname);
       });
 
-      section.addEventListener('input', render);
-      section.addEventListener('change', render);
+      function onEdit(event) {
+        var id = event.target && event.target.id;
+        if (id && id.indexOf('set-') === 0) touched[id.slice(4)] = true;
+        render();
+      }
+      section.addEventListener('input', onEdit);
+      section.addEventListener('change', onEdit);
       render();
 
       // Silence would look like the link had worked, so say what was ignored.
@@ -424,9 +494,15 @@
         var normalized = key.toLowerCase().replace(/[^a-z]/g, '');
         if (REFUSED.indexOf(normalized) !== -1 && refused.indexOf(key) === -1) refused.push(key);
       });
+      var urlDropped = params.get('server-url') !== null && !('server-url' in chosen);
+      var keyDropped = params.get('server-api-key') !== null && !('server-api-key' in chosen);
+      if (urlDropped) refused.push('server-url');
+      if (keyDropped) refused.push('server-api-key');
       if (refused.length) {
-        notice.textContent = 'This demo has no server behind it, so it ignored ' + refused.join(', ') +
-          ' from the address bar. The notes stay in this browser.';
+        notice.textContent = 'This page ignored ' + refused.join(', ') + ' from the address bar.' +
+          (urlDropped ? ' This demo takes a server on a loopback address only: localhost, anything in 127.0.0.0/8, or [::1].' : '') +
+          (keyDropped && !urlDropped && !('server-url' in chosen) ? ' A key on its own has no server to reach.' : '') +
+          ('server-url' in chosen ? '' : ' The notes stay in this browser.');
         notice.hidden = false;
       }
     })();
