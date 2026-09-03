@@ -1645,7 +1645,7 @@
     if (panelExportBtn) {
       panelExportBtn.addEventListener('click', (evt) => {
         evt.stopPropagation();
-        openExportModal();
+        if (jsonExport) exportAnnotations();
       });
     }
 

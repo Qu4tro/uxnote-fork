@@ -109,8 +109,11 @@ test('export leaves the bar for the panel and stays a 44px target', async ({ pag
   expect(box.height).toBeGreaterThanOrEqual(TOUCH_MINIMUM);
   const deleteAll = await page.locator('.wn-annot-delete-all').boundingBox();
   expect(deleteAll.height).toBeGreaterThanOrEqual(TOUCH_MINIMUM);
+  const download = page.waitForEvent('download');
   await exportBtn.click();
-  await expect(page.locator('.wn-annot-modal-backdrop.show')).toBeVisible();
+  // The press writes the file. Nothing asks first, here or on a laptop.
+  expect((await download).suggestedFilename()).toMatch(/\.json$/);
+  await expect(page.locator('.wn-annot-modal-backdrop.show')).toHaveCount(0);
 });
 
 test('the landscape phone gets the compact layout, not the desktop one', async ({ page }, testInfo) => {
