@@ -690,8 +690,8 @@
         background: #ffffff;
         border: 1px solid rgba(109, 86, 199, 0.14);
         border-radius: 14px;
-        padding: 14px;
-        margin-bottom: 12px;
+        padding: 10px 12px;
+        margin-bottom: 10px;
         cursor: pointer;
         transition: border-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
         box-shadow: 0 2px 8px rgba(73, 64, 157, 0.08);
@@ -715,20 +715,21 @@
         display: flex;
         align-items: center;
         justify-content: space-between;
-        gap: 10px;
+        gap: 8px;
         margin-bottom: 8px;
-        align-items: flex-start;
       }
       .wn-annot-card-top-left {
         display: inline-flex;
         align-items: center;
-        gap: 10px;
+        flex-wrap: wrap;
+        gap: 8px;
+        row-gap: 4px;
         min-width: 0;
       }
       .wn-annot-card-top-right {
         display: inline-flex;
         align-items: center;
-        gap: 8px;
+        gap: 6px;
         margin-left: auto;
         min-width: 0;
       }
@@ -736,8 +737,8 @@
         border: 1px solid rgba(209, 59, 59, 0.2);
         background: rgba(209, 59, 59, 0.08);
         color: #d13b3b;
-        width: 30px;
-        height: 30px;
+        width: 28px;
+        height: 28px;
         border-radius: 8px;
         display: inline-flex;
         align-items: center;
@@ -758,8 +759,8 @@
         border: 1px solid rgba(109, 86, 199, 0.22);
         background: rgba(109, 86, 199, 0.08);
         color: #4b4557;
-        width: 30px;
-        height: 30px;
+        width: 28px;
+        height: 28px;
         border-radius: 8px;
         display: inline-flex;
         align-items: center;
@@ -802,10 +803,10 @@
         font-weight: 700;
       }
       .wn-annot-number {
-        min-width: 32px;
-        height: 32px;
-        padding: 0 10px;
-        border-radius: 12px;
+        min-width: 26px;
+        height: 22px;
+        padding: 0 8px;
+        border-radius: 8px;
         background: var(--wn-item-number-bg, rgba(109, 86, 199, 0.12));
         border: 1px solid var(--wn-item-number-border, rgba(109, 86, 199, 0.24));
         color: var(--wn-item-number-text, #000000);
@@ -822,19 +823,9 @@
         text-transform: uppercase;
         letter-spacing: 0.3px;
         max-width: 220px;
-        text-align: right;
-        word-break: break-word;
+        text-align: left;
+        white-space: nowrap;
         line-height: 1.4;
-      }
-      .wn-annot-meta-bottom {
-        display: flex;
-        flex-direction: column;
-        align-items: flex-end;
-        gap: 2px;
-        margin-left: auto;
-        margin-top: 10px;
-        width: 100%;
-        text-align: right;
       }
       .wn-annot-missing {
         display: inline-flex;
@@ -882,7 +873,7 @@
         font-size: 12px;
         cursor: pointer;
         margin-left: auto;
-        margin-top: 6px;
+        margin-top: 4px;
       }
       .uxnote-textmark {
         display: inline;
@@ -3745,8 +3736,6 @@
         missing.textContent = 'Missing';
         topLeft.appendChild(missing);
       }
-      const metaWrap = document.createElement('div');
-      metaWrap.className = 'wn-annot-meta-bottom';
       const topRight = document.createElement('div');
       topRight.className = 'wn-annot-card-top-right';
 
@@ -3791,7 +3780,7 @@
         minute: '2-digit'
       });
       meta.textContent = `${createdAtDate} • ${createdAtTime}`;
-      metaWrap.appendChild(meta);
+      topLeft.appendChild(meta);
 
       const showMore = document.createElement('button');
       showMore.type = 'button';
@@ -3823,7 +3812,6 @@
         item.appendChild(shotWrap);
       }
       item.appendChild(showMore);
-      item.appendChild(metaWrap);
       item.addEventListener('click', () => {
         focusAnnotation(ann.id, true, ann.pageUrl, ann.pageKey);
         if (isMobileLayout() && state.panel) {
