@@ -64,7 +64,7 @@ test('the JSON export survives a page with the mail off', async ({ page }) => {
   await page.goto('/test/fixtures/json-export-without-mail.html');
   await expect(page.locator('.wn-annot-toolbar button[data-action="mail"]')).toHaveCount(0);
   await page.locator('.wn-annot-toolbar button[data-action="export"]').click();
-  const modal = page.locator('.wn-annot-export-modal');
+  const modal = page.locator('.wn-annot-modal-backdrop.show .wn-annot-modal');
   await expect(modal).toBeVisible();
   // The dialog exports a file and nothing else: the mail pill lived here once.
   await expect(modal.locator('.wn-annot-pill', { hasText: 'Send by mail' })).toHaveCount(0);
