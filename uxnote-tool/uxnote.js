@@ -1679,9 +1679,7 @@
     }
     document.body.appendChild(panel);
     state.panel = panel;
-    if (isMobileLayout()) {
-      panel.style.display = 'none';
-    }
+    panel.style.display = 'none';
     const deleteAllBtn = panel.querySelector('.wn-annot-delete-all');
     if (deleteAllBtn) {
       deleteAllBtn.addEventListener('click', async (evt) => {
