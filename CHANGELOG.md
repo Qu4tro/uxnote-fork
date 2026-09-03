@@ -14,6 +14,8 @@ All notable changes to this project will be documented in this file.
 - A preview on the element picker. On a coarse pointer the first tap outlines the element under the finger and names it, with `Wider` and `Narrower` to walk the chain it sits in and `Pin here` to commit. Wider is also the answer to a fat finger: start anywhere inside a block and climb to the block.
 - A guard on the screenshot render. snapdom draws the whole document before the crop comes out of it, and a long page on a slow device could sit on it with no end; the wait is bounded now and the toast says which of the two happened.
 - Touch checks on the four phone viewports, driving real touch events: a release mid-selection commits nothing, a multi-word selection reaches the prompt whole, the element preview stands before the commit and the picker stops at the page, one tap of the camera writes an annotation carrying the viewport rect, and the bars follow the toolbar to whichever edge it is on.
+- An `On a small screen` section in the README, for the half of the mobile work that answers to the room rather than to the pointer: the five controls the toolbar carries, the import and top/bottom controls it leaves out, export in the panel head as one share or download, and the panel, the comment prompt and the dialogs as sheets on the bottom edge. A narrow or short desktop window is named there too.
+- The rule every `true` / `false` option follows, in the README. `true`, `1`, `yes`, `on` and `false`, `0`, `no`, `off` are read and anything else falls back to the default -- and an attribute written with no value carries the empty string, so `data-json-export` on its own leaves the export switched on. Turning one off means writing the word.
 ### Changed
 - The toolbar carries five controls on a compact layout -- hide, highlight text, annotate an element, capture, notes -- each 48px, in one row, with no scrolling strip. Import and the top/bottom toggle are left out there, and export moves to the panel head beside delete-all.
 - Fixed chrome is placed with `left` and `right` insets and sized in percent rather than `vw`. A host page that overflows horizontally makes the containing block wider than `100vw`, which used to size the toolbar by one box and position it against another. The rules meant to anchor the bar to the edges on a small screen now carry enough specificity to apply at all.
@@ -26,11 +28,14 @@ All notable changes to this project will be documented in this file.
 - Export takes the share sheet where the layout is compact and the browser has one, and the download the widget already used where it has not. A wide window keeps the download, and keeps the mail button beside it: a `mailto:` carries the whole document in a URL, the first long comment overruns it, and a share sheet is where a handoff belongs on a phone anyway.
 - The comment card's `opacity: 0.55` and the `:hover` that undid it are drawn only where a pointer can hover. Without one the card never came back, and the page read straight through the comment being written.
 - The sheet surfaces are named in the `color-scheme: dark` selector list, so the native controls they hold follow the theme rather than rendering light on dark.
-- A narrow window on a desktop gets the sheets too, and keeps its tooltips and its parked comment card. How much room there is and what kind of pointer is driving are separate questions.
+- A narrow window on a desktop gets the sheets too -- its comment prompt among them -- and keeps everything a mouse can use: the tooltips, and the outline that previews an element before it is pinned. How much room there is and what kind of pointer is driving are separate questions.
 - The camera takes the visible viewport in one tap on a coarse pointer, and the drag overlay is not built there at all. The framing gesture is the page's own scroll. The annotation carries the same `rect` a dragged frame would, so markers, frames and the hop to a note are unchanged.
 - A highlight is committed from the `Add note` bar rather than from a release where the pointer is coarse. A mouse still commits on the release.
 - An element is committed from `Pin here` rather than from the tap that found it where the pointer is coarse. A mouse still previews on hover and commits on the click.
 - The mode tip names the gesture the form factor actually takes, and stands down while a capture bar holds the same strip of screen.
+- The README says which of its sentences describe a mouse alone: the comment card parked beside the toolbar and translucent until it is pointed at, the drag that frames a region, and the mail button beside the export.
+- The block of every attribute at once is labelled as a reference of names rather than a snippet to start from. Copied whole it pointed the widget at a server on `http://localhost:8123` with the key `review-key` and mailed to `team@example.com`.
+- The Options table says where each control lives once the layout is compact, and that the page dimmer starts off where the pointer is coarse.
 ### Fixed
 - The visibility button was built with a French label and tooltip before the first sync replaced them.
 - Region capture did nothing at all on a touch screen. `selectRegion()` bound mouse events only, so a touch drag framed nothing, opened no prompt, and left the reviewer inside an overlay whose hint named the Escape key.
@@ -39,6 +44,7 @@ All notable changes to this project will be documented in this file.
 - Annotating in element mode no longer calls the widget's own toolbar a popup. Its controls were never a target, and saying so on every press of them was noise.
 - The element outline is drawn to what the page actually shows of the element. Outlining a row of the demo page's pricing table, which sits in a scroller narrower than itself, took the document from 375px to 459px -- and fixed chrome is positioned against that width, so the toolbar went with it.
 - A store with no room left says so. The write failed silently, and a capture on a coarse pointer is a whole viewport rather than a hand-framed corner of one, so the room runs out sooner.
+- The README's screenshot of a panel card showed a card the widget had already stopped drawing when the file was committed: the timestamp under the thumbnail rather than beside the number. Retaken at the same framing.
 
 ## [2.1.0] - 2026-09-03
 ### Added
