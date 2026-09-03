@@ -100,7 +100,8 @@
     .settings p { color: #52606d; font-size: 0.95rem; max-width: 46rem; margin-bottom: 1.1rem; }
     .settings-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-bottom: 1.25rem; }
     .settings-grid label { display: flex; flex-direction: column; gap: 0.4rem; background: #fff; border: 1px solid #e3e7ec; border-radius: 12px; padding: 0.9rem 1rem; }
-    .settings-grid span { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.85rem; color: #1d4f91; }
+    .settings-grid .settings-name { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.85rem; color: #1d4f91; }
+    .settings-grid .settings-desc { display: block; color: #52606d; font-size: 0.85rem; line-height: 1.45; margin-bottom: auto; }
     .settings-grid select, .settings-grid input { padding: 0.5rem 0.6rem; border: 1px solid #c8d0da; border-radius: 8px; font-size: 0.95rem; background: #fff; color: inherit; }
     .settings-grid input[type="color"] { width: 100%; height: 2.5rem; padding: 0.2rem; }
     .settings-actions { display: flex; align-items: center; margin-bottom: 1.25rem; }
@@ -196,53 +197,63 @@
       loads. This page carries them in the query string, so applying a change
       reloads the page. The notes you have already taken stay where they are.</p>
     <div class="settings-grid">
-      <label for="set-theme"><span>data-theme</span>
+      <label for="set-theme"><span class="settings-name">data-theme</span>
+        <span class="settings-desc">Theme of the toolbar, panel, and dialogs. auto follows the system and changes with it.</span>
         <select id="set-theme">
           <option value="auto">auto</option>
           <option value="light">light</option>
           <option value="dark">dark</option>
         </select>
       </label>
-      <label for="set-json-export"><span>data-json-export</span>
+      <label for="set-json-export"><span class="settings-name">data-json-export</span>
+        <span class="settings-desc">The export button and its dialog. false takes the send-by-mail handoff inside it away too.</span>
         <select id="set-json-export">
           <option value="true">true</option>
           <option value="false">false</option>
         </select>
       </label>
-      <label for="set-json-import"><span>data-json-import</span>
+      <label for="set-json-import"><span class="settings-name">data-json-import</span>
+        <span class="settings-desc">The import button, its dialog, and the list of files imported into this page.</span>
         <select id="set-json-import">
           <option value="true">true</option>
           <option value="false">false</option>
         </select>
       </label>
-      <label for="set-backdrop"><span>isBackdropVisible</span>
+      <label for="set-backdrop"><span class="settings-name">isBackdropVisible</span>
+        <span class="settings-desc">Dims the page behind the widget for as long as the toolbar is on screen.</span>
         <select id="set-backdrop">
           <option value="true">true</option>
           <option value="false">false</option>
         </select>
       </label>
-      <label for="set-toolbar-visible"><span>isToolVisibleAtFirstLaunch</span>
+      <label for="set-toolbar-visible"><span class="settings-name">isToolVisibleAtFirstLaunch</span>
+        <span class="settings-desc">Whether the toolbar starts open. A hide made in this browser is remembered and wins.</span>
         <select id="set-toolbar-visible">
           <option value="true">true</option>
           <option value="false">false</option>
         </select>
       </label>
-      <label for="set-toolbar-top"><span>isToolOnTopAtLaunch</span>
+      <label for="set-toolbar-top"><span class="settings-name">isToolOnTopAtLaunch</span>
+        <span class="settings-desc">Starts the toolbar at the top rather than the bottom. A move made from the toolbar is remembered and wins.</span>
         <select id="set-toolbar-top">
           <option value="true">true</option>
           <option value="false">false</option>
         </select>
       </label>
-      <label for="set-color"><span>colorForHighlight</span>
+      <label for="set-color"><span class="settings-name">colorForHighlight</span>
+        <span class="settings-desc">The colour of a text highlight, an element's outline, and a region's frame alike.</span>
         <input id="set-color" type="color" value="#4e9cf6">
       </label>
-      <label for="set-color-text"><span>colorForTextHighlight</span>
+      <label for="set-color-text"><span class="settings-name">colorForTextHighlight</span>
+        <span class="settings-desc">Overrides it for text highlights. Given alone, it becomes the colour of all three.</span>
         <input id="set-color-text" type="color" value="#4e9cf6">
       </label>
-      <label for="set-color-element"><span>colorForElementHighlight</span>
+      <label for="set-color-element"><span class="settings-name">colorForElementHighlight</span>
+        <span class="settings-desc">Overrides it for an element's outline and its marker. Given alone, it becomes the colour of all three.</span>
         <input id="set-color-element" type="color" value="#4e9cf6">
       </label>
-      <label for="set-mailto"><span>data-mailto</span>
+      <label for="set-mailto"><span class="settings-name">data-mailto</span>
+        <span class="settings-desc">The recipient of the send-by-mail handoff in the export dialog. It fills a draft; it sends nothing.</span>
         <input id="set-mailto" type="email" placeholder="team@example.org">
       </label>
     </div>

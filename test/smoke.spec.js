@@ -127,6 +127,14 @@ test('the query string sets the widget options', async ({ page }) => {
   expect(highlight).toBe('#e04f5f');
 });
 
+test('every option in the settings grid says what it does', async ({ page }) => {
+  await page.goto('/');
+  const cards = page.locator('.settings-grid label');
+  const count = await cards.count();
+  expect(count).toBeGreaterThan(0);
+  await expect(cards.locator('.settings-desc')).toHaveCount(count);
+});
+
 test('the demo page refuses the server options from the query string', async ({ page }) => {
   await page.goto('/?server-url=https://example.invalid&server-api-key=k');
   const carried = await page.evaluate(() =>
