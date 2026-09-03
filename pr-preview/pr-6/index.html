@@ -294,7 +294,7 @@
                   <span class="builder-help" data-i18n-title="install_opt_json_export_body" aria-label="?">?</span>
                 </div>
                 <div class="builder-name-row"><span class="builder-name">data-json-export</span></div>
-                <p class="builder-desc" data-i18n="builder_json_export_desc">JSON export button and dialog. false also removes the email handoff.</p>
+                <p class="builder-desc" data-i18n="builder_json_export_desc">JSON export button and dialog.</p>
                 <div class="builder-field">
                   <select id="builder-json-export-value" aria-label="data-json-export">
                     <option value="true">true</option>
@@ -314,6 +314,23 @@
                 <p class="builder-desc" data-i18n="builder_json_import_desc">JSON import button and dialog.</p>
                 <div class="builder-field">
                   <select id="builder-json-import-value" aria-label="data-json-import">
+                    <option value="true">true</option>
+                    <option value="false" selected>false</option>
+                  </select>
+                </div>
+              </div>
+              <div class="builder-card" id="builder-card-mail-export">
+                <div class="card-head">
+                  <label class="builder-include" for="builder-mail-export-enabled">
+                    <input type="checkbox" id="builder-mail-export-enabled">
+                    <span class="sr-only" data-i18n="builder_include">Include</span>
+                  </label>
+                  <span class="builder-help" data-i18n-title="install_opt_mail_export_body" aria-label="?">?</span>
+                </div>
+                <div class="builder-name-row"><span class="builder-name">data-mail-export</span></div>
+                <p class="builder-desc" data-i18n="builder_mail_export_desc">Send by mail button. false also silences data-mailto.</p>
+                <div class="builder-field">
+                  <select id="builder-mail-export-value" aria-label="data-mail-export">
                     <option value="true">true</option>
                     <option value="false" selected>false</option>
                   </select>
@@ -611,6 +628,8 @@
       const jsonExportValue = byId('builder-json-export-value');
       const jsonImportEnabled = byId('builder-json-import-enabled');
       const jsonImportValue = byId('builder-json-import-value');
+      const mailExportEnabled = byId('builder-mail-export-enabled');
+      const mailExportValue = byId('builder-mail-export-value');
 
       const normalizeHex = (val) => {
         if (!val) return '';
@@ -703,6 +722,7 @@
         addAttr(mailtoEnabled && mailtoEnabled.checked, 'data-mailto', (mailto.value || '').trim());
         setDisabled([jsonExportValue], !(jsonExportEnabled && jsonExportEnabled.checked));
         setDisabled([jsonImportValue], !(jsonImportEnabled && jsonImportEnabled.checked));
+        setDisabled([mailExportValue], !(mailExportEnabled && mailExportEnabled.checked));
         addAttr(
           jsonExportEnabled && jsonExportEnabled.checked,
           'data-json-export',
@@ -712,6 +732,11 @@
           jsonImportEnabled && jsonImportEnabled.checked,
           'data-json-import',
           jsonImportValue ? jsonImportValue.value : 'false'
+        );
+        addAttr(
+          mailExportEnabled && mailExportEnabled.checked,
+          'data-mail-export',
+          mailExportValue ? mailExportValue.value : 'false'
         );
         const serverOn = !!(serverEnabled && serverEnabled.checked);
         addAttr(serverOn, 'data-server-url', (serverUrl.value || '').trim());
@@ -746,6 +771,8 @@
         jsonExportValue,
         jsonImportEnabled,
         jsonImportValue,
+        mailExportEnabled,
+        mailExportValue,
         serverUrl,
         serverApiKey,
         serverEnabled
@@ -834,6 +861,7 @@
       highlightCard(byId('builder-mailto-enabled'), byId('builder-card-mailto'));
       highlightCard(byId('builder-json-export-enabled'), byId('builder-card-json-export'));
       highlightCard(byId('builder-json-import-enabled'), byId('builder-card-json-import'));
+      highlightCard(byId('builder-mail-export-enabled'), byId('builder-card-mail-export'));
       highlightCard(byId('builder-server-enabled'), byId('builder-card-server'));
 
       if (i18n && typeof i18n.onChange === 'function') {

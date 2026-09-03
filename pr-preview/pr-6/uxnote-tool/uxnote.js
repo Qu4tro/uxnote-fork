@@ -86,6 +86,7 @@
   const server = serverUrl ? { url: serverUrl, apiKey: (script && script.dataset.serverApiKey) || '' } : null;
   const jsonExport = parseBoolAttr(script && script.dataset.jsonExport, true);
   const jsonImport = parseBoolAttr(script && script.dataset.jsonImport, true);
+  const mailExport = parseBoolAttr(script && script.dataset.mailExport, true);
   const dimConfigAttr =
     getScriptAttr('isBackdropVisible') ||
     getScriptAttr('isbackdropvisible') ||
@@ -1305,6 +1306,7 @@
     const exportButtons = [];
     if (jsonImport) exportButtons.push({ action: 'import', tip: 'Import JSON', icon: iconUpload() });
     if (jsonExport) exportButtons.push({ action: 'export', tip: 'Export JSON', icon: iconDownload() });
+    if (mailExport) exportButtons.push({ action: 'mail', tip: 'Send by mail', icon: iconMail() });
     const controlButtons = [
       { action: 'toggle-pos', tip: 'Toolbar top / bottom', icon: iconSwap() },
       { action: 'toggle-panel', tip: 'Show / hide annotations', icon: iconPanel() }
@@ -1568,16 +1570,11 @@
     cancelBtn.type = 'button';
     cancelBtn.className = 'wn-annot-pill cancel wn-annotator';
     cancelBtn.textContent = 'Cancel';
-    const mailBtn = document.createElement('button');
-    mailBtn.type = 'button';
-    mailBtn.className = 'wn-annot-pill secondary wn-annotator';
-    mailBtn.textContent = 'Send by mail';
     const exportBtn = document.createElement('button');
     exportBtn.type = 'button';
     exportBtn.className = 'wn-annot-pill primary wn-annotator';
     exportBtn.textContent = 'Export file';
     actions.appendChild(cancelBtn);
-    actions.appendChild(mailBtn);
     actions.appendChild(exportBtn);
 
     modal.appendChild(title);
@@ -1602,11 +1599,6 @@
 
     exportBtn.addEventListener('click', () => {
       exportAnnotations();
-      close();
-    });
-
-    mailBtn.addEventListener('click', () => {
-      emailAnnotations();
       close();
     });
 
@@ -2372,6 +2364,10 @@
     }
     if (action === 'import') {
       openImportModal();
+      return;
+    }
+    if (action === 'mail') {
+      await emailAnnotations();
       return;
     }
     if (action === 'toggle-panel') {
