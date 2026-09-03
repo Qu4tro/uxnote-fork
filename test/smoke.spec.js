@@ -63,12 +63,19 @@ test('the mail handoff survives a page with the JSON export off', async ({ page 
 test('the JSON export survives a page with the mail off', async ({ page }) => {
   await page.goto('/test/fixtures/json-export-without-mail.html');
   await expect(page.locator('.wn-annot-toolbar button[data-action="mail"]')).toHaveCount(0);
+  const download = page.waitForEvent('download');
   await page.locator('.wn-annot-toolbar button[data-action="export"]').click();
-  const modal = page.locator('.wn-annot-modal-backdrop.show .wn-annot-modal');
-  await expect(modal).toBeVisible();
-  // The dialog exports a file and nothing else: the mail pill lived here once.
-  await expect(modal.locator('.wn-annot-pill', { hasText: 'Send by mail' })).toHaveCount(0);
-  await expect(modal.locator('.wn-annot-pill', { hasText: 'Export file' })).toBeVisible();
+  expect((await download).suggestedFilename()).toMatch(/\.json$/);
+});
+
+test('the export button writes the file without asking first', async ({ page }) => {
+  await page.goto('/demo/');
+  const download = page.waitForEvent('download');
+  await page.locator('.wn-annot-toolbar button[data-action="export"]').click();
+  expect((await download).suggestedFilename()).toMatch(/\.json$/);
+  // The file holds every annotation of the site whatever is answered, so
+  // nothing stands between the press and it.
+  await expect(page.locator('.wn-annot-modal-backdrop.show')).toHaveCount(0);
 });
 
 const CAPTURE_FIXTURE = '/test/fixtures/server-capture.html';
