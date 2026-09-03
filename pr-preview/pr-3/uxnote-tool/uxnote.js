@@ -238,6 +238,12 @@
         left: 50%;
         right: auto;
         transform: translateX(-50%);
+        /* Centred on left: 50% with no width of its own, the bar can only ever
+           be half the viewport wide, so it wraps long before it runs out of
+           room. It asks for the width of its row instead, and gives that up
+           only against the edges of the viewport. */
+        width: max-content;
+        max-width: calc(100vw - 28px);
         box-shadow: 0 8px 24px rgba(73, 64, 157, 0.14);
         border-radius: 999px;
         border: 1px solid rgba(109, 86, 199, 0.15);
@@ -352,6 +358,7 @@
           right: 8px;
           transform: none;
           width: calc(100vw - 16px);
+          max-width: calc(100vw - 16px);
           overflow-x: auto;
           -webkit-overflow-scrolling: touch;
         }
