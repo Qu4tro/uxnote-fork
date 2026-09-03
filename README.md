@@ -130,28 +130,41 @@ it, so nothing carries a base64 document to the server.
 `npm run build` writes `snapdom.min.js` into `dist/` beside the minified widget,
 so both URLs above resolve against one directory.
 
-## Export and import
+## Export, import and mail
 
-The toolbar offers a JSON export and a JSON import. Both are on by default.
-Turn either one off per site:
+The toolbar offers a JSON export, a JSON import and a handoff to the mail
+client. Each one is a button of its own, each one is on by default, and each one
+has its own attribute. Turn any of them off per site:
 
 ```html
 <script src="https://qu4tro.github.io/uxnote-fork/dist/uxnote.min-v1.0.0.js"
   data-json-export="false"
-  data-json-import="false"></script>
+  data-json-import="false"
+  data-mail-export="false"></script>
 ```
 
 | Attribute | Meaning |
 |---|---|
-| `data-json-export` | `true` by default. `false` removes the export button, its dialog, and the email handoff inside that dialog. |
+| `data-json-export` | `true` by default. `false` removes the export button and its dialog. |
 | `data-json-import` | `true` by default. `false` removes the import button, its dialog, and its list of imported files. |
+| `data-mail-export` | `true` by default. `false` removes the mail button and the handoff behind it. |
 
-`data-mailto` keeps its meaning: it names the recipient of the email handoff.
-It does nothing while `data-json-export` is `false`.
+The three are independent. A site that wants the mail handoff and no JSON file
+sets `data-json-export="false"` and leaves the mail button alone; a site that
+wants the JSON file and no mail sets `data-mail-export="false"` and keeps the
+export dialog.
+
+`data-mailto` keeps its meaning: it names the recipient of the mail handoff.
+It does nothing while `data-mail-export` is `false`.
+
+The mail button hands every annotation of the page to the mail client at once;
+it opens no dialog. The export dialog is where a reviewer or a priority is
+picked before a file is written.
 
 An annotation imported earlier stays in the store when the import is off. Only
-the dialog that lists the imported files is gone. When both options are off,
-the toolbar drops the group between the capture modes and the panel controls.
+the dialog that lists the imported files is gone. When all three options are
+off, the toolbar drops the group between the capture modes and the panel
+controls.
 
 ## Develop
 
