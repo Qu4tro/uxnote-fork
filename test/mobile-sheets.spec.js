@@ -8,6 +8,11 @@ const { test, expect } = require('@playwright/test');
 
 const TOUCH_MINIMUM = 44;
 const SHEET_ACTION_MINIMUM = 48;
+// A box measured on a device pixel ratio comes back a hair under the CSS
+// value it was given: 47.99998 for a 48px pill, on the landscape phone and
+// only on some machines. Half a pixel of slack, the same as the placement
+// checks use.
+const SLACK = 0.5;
 
 function viewport(page) {
   return page.evaluate(() => ({
@@ -77,8 +82,8 @@ test('the panel is dismissable without the toolbar', async ({ page }) => {
   const close = page.locator('.wn-annot-panel .wn-annot-sheet-close');
   await expect(close).toBeVisible();
   const box = await close.boundingBox();
-  expect(box.width).toBeGreaterThanOrEqual(TOUCH_MINIMUM);
-  expect(box.height).toBeGreaterThanOrEqual(TOUCH_MINIMUM);
+  expect(box.width).toBeGreaterThanOrEqual(TOUCH_MINIMUM - SLACK);
+  expect(box.height).toBeGreaterThanOrEqual(TOUCH_MINIMUM - SLACK);
   await close.click();
   await expect(page.locator('.wn-annot-panel')).toBeHidden();
 });
@@ -208,7 +213,7 @@ test('the comment prompt is an opaque sheet with thumb-sized actions', async ({ 
   expect(Math.round(box.width)).toBe(view.width);
   for (const pill of await page.locator('.wn-annot-comment-card .wn-annot-pill').all()) {
     const rect = await pill.boundingBox();
-    expect(rect.height).toBeGreaterThanOrEqual(SHEET_ACTION_MINIMUM);
+    expect(rect.height).toBeGreaterThanOrEqual(SHEET_ACTION_MINIMUM - SLACK);
   }
 });
 
@@ -333,8 +338,8 @@ test('the screenshot lightbox carries a close button', async ({ page }) => {
   await expect(close).toBeVisible();
   const rect = await close.boundingBox();
   // Escape was the only deliberate way out, and a phone has no Escape.
-  expect(rect.width).toBeGreaterThanOrEqual(TOUCH_MINIMUM);
-  expect(rect.height).toBeGreaterThanOrEqual(TOUCH_MINIMUM);
+  expect(rect.width).toBeGreaterThanOrEqual(TOUCH_MINIMUM - SLACK);
+  expect(rect.height).toBeGreaterThanOrEqual(TOUCH_MINIMUM - SLACK);
   await close.click();
   await expect(box).toHaveCount(0);
 });
