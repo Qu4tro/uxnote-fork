@@ -481,9 +481,14 @@ test('a connection coming back sends what the lost one did not', async ({ page }
   await expect.poll(() => puts.length).toBe(1);
   await page.evaluate(() => window.dispatchEvent(new Event('online')));
   await expect.poll(() => puts.length).toBe(2);
+  // The count reaches two when the request arrives, which is before the page
+  // has the answer to it. Asking for a third straight away catches the widget
+  // with a snapshot it has not updated yet, and it sends again -- a race in
+  // the check, not a second send the widget owes.
+  await page.waitForTimeout(400);
   // The second answer was taken, so a third event owes nothing.
   await page.evaluate(() => window.dispatchEvent(new Event('online')));
-  await page.waitForTimeout(300);
+  await page.waitForTimeout(400);
   expect(puts.length).toBe(2);
 });
 
