@@ -1231,15 +1231,6 @@
         color: #3e384a;
         cursor: pointer;
       }
-      .wn-shot-hint button.primary {
-        background: #6d56c7;
-        border-color: #6d56c7;
-        color: #fff;
-      }
-      .wn-shot-hint button:disabled {
-        opacity: 0.45;
-        cursor: default;
-      }
       .wn-annot-shot {
         margin: 8px 0 4px;
       }
@@ -4242,24 +4233,16 @@
       const hint = document.createElement('div');
       hint.className = 'wn-shot-hint wn-annotator';
       const label = document.createElement('span');
-      label.textContent = 'Drag to frame a region. Enter captures. Escape stops.';
-      const okBtn = document.createElement('button');
-      okBtn.type = 'button';
-      okBtn.className = 'primary';
-      okBtn.textContent = 'Capture';
+      label.textContent = 'Drag to frame a region. Escape stops.';
       const cancelBtn = document.createElement('button');
       cancelBtn.type = 'button';
       cancelBtn.textContent = 'Cancel';
       hint.appendChild(label);
-      hint.appendChild(okBtn);
       hint.appendChild(cancelBtn);
 
-      let current = null;
       const setRect = (r) => {
-        current = r;
         const usable = !!r && r.w >= 4 && r.h >= 4;
         rectEl.style.display = usable ? 'block' : 'none';
-        okBtn.disabled = !usable;
         if (!usable) return;
         rectEl.style.left = `${r.x}px`;
         rectEl.style.top = `${r.y}px`;
@@ -4268,54 +4251,66 @@
       };
       setRect(null);
 
+      // The pointer crosses the hint bar and leaves the viewport mid-drag, so
+      // the move and the release are read on the document and the point is held
+      // inside the frame the reviewer can see.
+      const pointIn = (evt) => ({
+        x: Math.min(Math.max(evt.clientX, 0), document.documentElement.clientWidth),
+        y: Math.min(Math.max(evt.clientY, 0), document.documentElement.clientHeight)
+      });
+      const rectFrom = (a, b) => ({
+        x: Math.min(a.x, b.x),
+        y: Math.min(a.y, b.y),
+        w: Math.abs(b.x - a.x),
+        h: Math.abs(b.y - a.y)
+      });
+
       let dragStart = null;
       const onDown = (evt) => {
         evt.preventDefault();
-        dragStart = { x: evt.clientX, y: evt.clientY };
-        setRect({ x: evt.clientX, y: evt.clientY, w: 0, h: 0 });
+        dragStart = pointIn(evt);
+        setRect(null);
       };
       const onMove = (evt) => {
         if (!dragStart) return;
         evt.preventDefault();
-        setRect({
-          x: Math.min(dragStart.x, evt.clientX),
-          y: Math.min(dragStart.y, evt.clientY),
-          w: Math.abs(evt.clientX - dragStart.x),
-          h: Math.abs(evt.clientY - dragStart.y)
-        });
+        setRect(rectFrom(dragStart, pointIn(evt)));
       };
-      const onUp = () => {
+      // A release under the floor is a stray click: it frames nothing and the
+      // overlay stays open for another drag.
+      const onUp = (evt) => {
+        if (!dragStart) return;
+        const r = rectFrom(dragStart, pointIn(evt));
         dragStart = null;
+        if (r.w < 4 || r.h < 4) {
+          setRect(null);
+          return;
+        }
+        finish({
+          x: r.x + window.scrollX,
+          y: r.y + window.scrollY,
+          w: r.w,
+          h: r.h
+        });
       };
       const finish = (result) => {
         document.removeEventListener('keydown', onKey, true);
+        document.removeEventListener('mousemove', onMove, true);
+        document.removeEventListener('mouseup', onUp, true);
         overlay.remove();
         hint.remove();
         resolve(result);
-      };
-      const confirmSelection = () => {
-        if (!current || current.w < 4 || current.h < 4) return;
-        finish({
-          x: current.x + window.scrollX,
-          y: current.y + window.scrollY,
-          w: current.w,
-          h: current.h
-        });
       };
       const onKey = (evt) => {
         if (evt.key === 'Escape') {
           evt.preventDefault();
           finish(null);
-        } else if (evt.key === 'Enter') {
-          evt.preventDefault();
-          confirmSelection();
         }
       };
       overlay.addEventListener('mousedown', onDown);
-      overlay.addEventListener('mousemove', onMove);
-      overlay.addEventListener('mouseup', onUp);
-      okBtn.addEventListener('click', confirmSelection);
       cancelBtn.addEventListener('click', () => finish(null));
+      document.addEventListener('mousemove', onMove, true);
+      document.addEventListener('mouseup', onUp, true);
       document.addEventListener('keydown', onKey, true);
       document.body.appendChild(overlay);
       document.body.appendChild(hint);
