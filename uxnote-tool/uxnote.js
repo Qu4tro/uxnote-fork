@@ -88,6 +88,9 @@
   const jsonExport = parseBoolAttr(script && script.dataset.jsonExport, true);
   const jsonImport = parseBoolAttr(script && script.dataset.jsonImport, true);
   const mailExport = parseBoolAttr(script && script.dataset.mailExport, true);
+  const themeAttr = ((script && script.dataset.theme) || '').trim().toLowerCase();
+  const theme = themeAttr === 'light' || themeAttr === 'dark' ? themeAttr : 'auto';
+  const darkQuery = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
   const dimConfigAttr =
     getScriptAttr('isBackdropVisible') ||
     getScriptAttr('isbackdropvisible') ||
@@ -168,6 +171,7 @@
     if (jsonImport) state.importFiles = loadImportFiles();
     captureBasePadding();
     applyColorTheme();
+    applyTheme();
     injectStyles();
     createShell();
     createDimmer();
@@ -228,6 +232,26 @@
         --wn-shadow: rgba(73, 64, 157, 0.16);
         --wn-backdrop: rgba(28, 22, 48, 0.45);
         --wn-danger: #b83232;
+      }
+      :root[data-wn-theme="dark"] {
+        --wn-surface: #1e1a2e;
+        --wn-surface-raised: #262138;
+        --wn-surface-input: #15121f;
+        --wn-text: #ece8f6;
+        --wn-text-muted: #b8b1c9;
+        --wn-text-faint: #958ea6;
+        --wn-border: rgba(196, 184, 255, 0.2);
+        --wn-shadow: rgba(0, 0, 0, 0.45);
+        --wn-backdrop: rgba(0, 0, 0, 0.6);
+        --wn-danger: #f08c8c;
+      }
+      /* Native controls inside the chrome follow the theme; the page keeps its own. */
+      :root[data-wn-theme="dark"] .wn-annot-panel,
+      :root[data-wn-theme="dark"] .wn-annot-modal {
+        color-scheme: dark;
+      }
+      :root[data-wn-theme="dark"] .wn-annot-logo-img [fill="#000000"] {
+        fill: var(--wn-text);
       }
       .wn-annot-toolbar {
         --wn-icon-font: "SF Pro Symbols", "SF Pro Display", "SF Pro Text", -apple-system, system-ui, "Segoe UI", "Inter", sans-serif;
@@ -2043,6 +2067,10 @@
     window.addEventListener('resize', positionVisibilityToggle);
     window.addEventListener('scroll', refreshMarkers, { passive: true });
     watchRouteChanges();
+    if (theme === 'auto' && darkQuery) {
+      if (darkQuery.addEventListener) darkQuery.addEventListener('change', applyTheme);
+      else if (darkQuery.addListener) darkQuery.addListener(applyTheme);
+    }
   }
 
   function initFilters() {
@@ -2157,6 +2185,11 @@
     } catch (err) {
       // ignore
     }
+  }
+
+  function applyTheme() {
+    const dark = theme === 'dark' || (theme === 'auto' && !!(darkQuery && darkQuery.matches));
+    document.documentElement.setAttribute('data-wn-theme', dark ? 'dark' : 'light');
   }
 
   function applyColorTheme() {
