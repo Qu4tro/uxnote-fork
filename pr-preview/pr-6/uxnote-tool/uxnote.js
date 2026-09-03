@@ -4048,10 +4048,10 @@
   // One line per state, because a single line covering three of them tells a
   // reviewer nothing about the one they are looking at.
   const SYNC_STATUS_TIPS = {
-    pending: 'Server: checking',
-    ok: 'Server: connected',
-    refused: 'Server: refused it -- check the address or the key',
-    unreachable: 'Server: unreachable -- notes stay in this browser'
+    pending: 'Checking the server',
+    ok: 'Server connected',
+    refused: 'Server refused it: check the address or the key',
+    unreachable: 'Server unreachable: notes stay in this browser'
   };
 
   function applySyncStatus() {
