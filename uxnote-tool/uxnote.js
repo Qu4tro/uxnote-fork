@@ -217,10 +217,19 @@
         --wn-element-highlight-strong: rgba(78, 156, 246, 0.9);
         --wn-element-highlight-shadow: rgba(78, 156, 246, 0.24);
         --wn-marker-text: #0b1622;
+        --wn-accent: #6d56c7;
+        --wn-surface: #f6f2fb;
+        --wn-surface-raised: #fdfcff;
+        --wn-surface-input: #ffffff;
+        --wn-text: #342d43;
+        --wn-text-muted: #5a5266;
+        --wn-text-faint: #7b7588;
+        --wn-border: rgba(109, 86, 199, 0.18);
+        --wn-shadow: rgba(73, 64, 157, 0.16);
+        --wn-backdrop: rgba(28, 22, 48, 0.45);
+        --wn-danger: #b83232;
       }
       .wn-annot-toolbar {
-        --wn-accent: #6d56c7;
-        --wn-bg: #f6f2fb;
         --wn-icon-font: "SF Pro Symbols", "SF Pro Display", "SF Pro Text", -apple-system, system-ui, "Segoe UI", "Inter", sans-serif;
         --wn-group-gap: 12px;
         --wn-spacer: 50px;
@@ -232,8 +241,8 @@
         gap: 10px;
         flex-wrap: wrap;
         padding: 10px 14px;
-        background: var(--wn-bg);
-        color: #4b4557;
+        background: var(--wn-surface);
+        color: var(--wn-text-muted);
         z-index: 2147483647;
         font-family: var(--wn-icon-font);
         left: 50%;
@@ -245,15 +254,15 @@
            only against the edges of the viewport. */
         width: max-content;
         max-width: calc(100vw - 28px);
-        box-shadow: 0 8px 24px rgba(73, 64, 157, 0.14);
+        box-shadow: 0 8px 24px var(--wn-shadow);
         border-radius: 999px;
-        border: 1px solid rgba(109, 86, 199, 0.15);
+        border: 1px solid var(--wn-border);
         backdrop-filter: blur(10px);
       }
       .wn-annot-toolbar button {
         border: none;
         background: transparent;
-        color: #575062;
+        color: var(--wn-text-muted);
         padding: 0;
         cursor: pointer;
         font-size: 0;
@@ -285,10 +294,10 @@
         align-items: center;
         justify-content: center;
         border-radius: 50%;
-        border: 1px solid rgba(109, 86, 199, 0.15);
-        background: #f6f2fb;
-        color: #4b4557;
-        box-shadow: 0 8px 24px rgba(73, 64, 157, 0.18);
+        border: 1px solid var(--wn-border);
+        background: var(--wn-surface);
+        color: var(--wn-text-muted);
+        box-shadow: 0 8px 24px var(--wn-shadow);
         backdrop-filter: blur(10px);
         cursor: pointer;
         transition: all 0.2s ease;
@@ -314,7 +323,7 @@
       }
       .wn-annot-visibility-btn:hover {
         background: rgba(109, 86, 199, 0.12);
-        color: #3e384a;
+        color: var(--wn-text);
       }
       .wn-annot-visibility-btn:hover::after { opacity: 1; transform: translateY(0); }
       .wn-annot-visibility-btn:active {
@@ -398,9 +407,9 @@
         }
         body.wn-annot-hidden .wn-annot-visibility-btn {
           opacity: 0.7;
-          background: rgba(246, 242, 251, 0.35);
-          border-color: rgba(109, 86, 199, 0.22);
-          box-shadow: 0 6px 16px rgba(73, 64, 157, 0.16);
+          background: var(--wn-surface);
+          border-color: var(--wn-border);
+          box-shadow: 0 6px 16px var(--wn-shadow);
         }
         .wn-annot-logo {
           display: none;
@@ -408,7 +417,7 @@
       }
       .wn-annot-toolbar button:hover {
         background: rgba(109, 86, 199, 0.12);
-        color: #3e384a;
+        color: var(--wn-text);
       }
       .wn-annot-toolbar button:active {
         background: rgba(109, 86, 199, 0.18);
@@ -586,11 +595,11 @@
         bottom: 18px;
         width: min(360px, calc(100vw - 36px));
         max-height: calc(100vh - 36px);
-        background: #fdfcff;
-        color: #342d43;
-        border: 1px solid rgba(109, 86, 199, 0.16);
+        background: var(--wn-surface-raised);
+        color: var(--wn-text);
+        border: 1px solid var(--wn-border);
         border-radius: 18px;
-        box-shadow: 0 10px 26px rgba(73, 64, 157, 0.16);
+        box-shadow: 0 10px 26px var(--wn-shadow);
         padding: 18px;
         overflow-y: auto;
         z-index: 2147483000;
@@ -603,7 +612,7 @@
         margin: 0 0 14px;
         font-size: 15px;
         letter-spacing: 0.2px;
-        color: #3f3852;
+        color: var(--wn-text);
         font-weight: 700;
       }
       .wn-annot-panel-head {
@@ -631,11 +640,11 @@
       .wn-annot-filters input[type="search"] {
         height: 34px;
         border-radius: 12px;
-        border: 1px solid rgba(109, 86, 199, 0.18);
-        background: #fff;
+        border: 1px solid var(--wn-border);
+        background: var(--wn-surface-input);
         padding: 6px 10px;
         font-size: 12px;
-        color: #342d43;
+        color: var(--wn-text);
       }
       .wn-annot-filter-row input[type="search"] {
         width: 100%;
@@ -646,11 +655,11 @@
         box-shadow: 0 0 0 3px rgba(109, 86, 199, 0.14);
       }
       .wn-annot-panel .wn-annot-empty {
-        color: #7b7588;
+        color: var(--wn-text-faint);
         font-size: 13px;
         padding: 10px 0;
         background: rgba(109, 86, 199, 0.04);
-        border: 1px dashed rgba(109, 86, 199, 0.18);
+        border: 1px dashed var(--wn-border);
         border-radius: 12px;
         text-align: center;
       }
@@ -660,7 +669,7 @@
         gap: 6px;
         background: rgba(209, 59, 59, 0.1);
         border: 1px solid rgba(209, 59, 59, 0.25);
-        color: #b83232;
+        color: var(--wn-danger);
         padding: 6px 10px;
         border-radius: 10px;
         font-weight: 700;
@@ -686,19 +695,19 @@
         padding-bottom: 4px;
       }
       .wn-annot-item {
-        background: #ffffff;
-        border: 1px solid rgba(109, 86, 199, 0.14);
+        background: var(--wn-surface-raised);
+        border: 1px solid var(--wn-border);
         border-radius: 14px;
         padding: 10px 12px;
         margin-bottom: 10px;
         cursor: pointer;
         transition: border-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
-        box-shadow: 0 2px 8px rgba(73, 64, 157, 0.08);
+        box-shadow: 0 2px 8px var(--wn-shadow);
       }
       .wn-annot-item:hover {
         border-color: rgba(109, 86, 199, 0.32);
         transform: translateY(-1px);
-        box-shadow: 0 4px 12px rgba(73, 64, 157, 0.12);
+        box-shadow: 0 4px 12px var(--wn-shadow);
       }
       .wn-annot-item.is-focused {
         border-color: var(--wn-item-accent-strong, var(--wn-element-highlight-strong));
@@ -735,7 +744,7 @@
       .wn-annot-delete {
         border: 1px solid rgba(209, 59, 59, 0.2);
         background: rgba(209, 59, 59, 0.08);
-        color: #d13b3b;
+        color: var(--wn-danger);
         width: 28px;
         height: 28px;
         border-radius: 8px;
@@ -749,15 +758,15 @@
       .wn-annot-delete:hover {
         background: rgba(209, 59, 59, 0.14);
         border-color: rgba(209, 59, 59, 0.3);
-        color: #b83232;
+        color: var(--wn-danger);
       }
       .wn-annot-delete:active {
         transform: translateY(1px);
       }
       .wn-annot-edit {
-        border: 1px solid rgba(109, 86, 199, 0.22);
+        border: 1px solid var(--wn-border);
         background: rgba(109, 86, 199, 0.08);
-        color: #4b4557;
+        color: var(--wn-text-muted);
         width: 28px;
         height: 28px;
         border-radius: 8px;
@@ -771,7 +780,7 @@
       .wn-annot-edit:hover {
         background: rgba(109, 86, 199, 0.14);
         border-color: rgba(109, 86, 199, 0.3);
-        color: #352f46;
+        color: var(--wn-text);
       }
       .wn-annot-edit:active {
         transform: translateY(1px);
@@ -790,8 +799,8 @@
         margin-top: auto;
         text-align: center;
         font-size: 12px;
-        color: #7b7588;
-        background: linear-gradient(180deg, transparent, rgba(255,255,255,0.75));
+        color: var(--wn-text-faint);
+        background: linear-gradient(180deg, transparent, var(--wn-surface-raised));
         position: sticky;
         bottom: 0;
         padding-bottom: 6px;
@@ -808,7 +817,7 @@
         border-radius: 8px;
         background: var(--wn-item-number-bg, rgba(109, 86, 199, 0.12));
         border: 1px solid var(--wn-item-number-border, rgba(109, 86, 199, 0.24));
-        color: var(--wn-item-number-text, #000000);
+        color: var(--wn-text);
         font-weight: 800;
         font-size: 12px;
         display: inline-flex;
@@ -818,7 +827,7 @@
       }
       .wn-annot-meta {
         font-size: 11px;
-        color: #7f7891;
+        color: var(--wn-text-faint);
         text-transform: uppercase;
         letter-spacing: 0.3px;
         max-width: 220px;
@@ -832,7 +841,7 @@
         gap: 6px;
         font-size: 11px;
         font-weight: 700;
-        color: #a03232;
+        color: var(--wn-danger);
         padding: 6px 10px;
         border-radius: 999px;
         border: 1px solid rgba(224, 91, 91, 0.35);
@@ -843,12 +852,12 @@
       .wn-annot-title {
         font-size: 13px;
         font-weight: 700;
-        color: #352f46;
+        color: var(--wn-text);
         margin-bottom: 8px;
       }
       .wn-annot-comment {
         font-size: 12px;
-        color: #5a5266;
+        color: var(--wn-text-muted);
         background: rgba(109, 86, 199, 0.06);
         border: 1px dashed rgba(109, 86, 199, 0.3);
         border-radius: 12px;
@@ -867,7 +876,7 @@
       .wn-annot-showmore {
         border: none;
         background: transparent;
-        color: #6d56c7;
+        color: var(--wn-accent);
         font-weight: 700;
         font-size: 12px;
         cursor: pointer;
@@ -928,13 +937,13 @@
         left: 50%;
         bottom: 26px;
         transform: translateX(-50%);
-        background: #f6f2fb;
-        color: #3f3852;
+        background: var(--wn-surface);
+        color: var(--wn-text);
         padding: 10px 14px;
         border-radius: 999px;
         font-size: 12px;
-        border: 1px solid rgba(109, 86, 199, 0.2);
-        box-shadow: 0 12px 28px rgba(73, 64, 157, 0.18);
+        border: 1px solid var(--wn-border);
+        box-shadow: 0 12px 28px var(--wn-shadow);
         opacity: 0;
         pointer-events: none;
         transition: opacity 0.2s ease, transform 0.2s ease;
@@ -948,16 +957,16 @@
         position: fixed;
         left: 50%;
         transform: translateX(-50%);
-        background: #f6f2fb;
-        color: #342d43;
+        background: var(--wn-surface);
+        color: var(--wn-text);
         padding: 10px 14px;
         border-radius: 999px;
         font-size: 12px;
         z-index: 2147483100;
         pointer-events: none;
         opacity: 0;
-        border: 1px solid rgba(109, 86, 199, 0.16);
-        box-shadow: 0 10px 24px rgba(73, 64, 157, 0.15);
+        border: 1px solid var(--wn-border);
+        box-shadow: 0 10px 24px var(--wn-shadow);
         transition: opacity 0.2s ease, transform 0.2s ease;
       }
       .wn-annot-tip.show { opacity: 1; }
@@ -974,7 +983,7 @@
       .wn-annot-modal-backdrop {
         position: fixed;
         inset: 0;
-        background: rgba(28, 22, 48, 0.45);
+        background: var(--wn-backdrop);
         display: none;
         align-items: center;
         justify-content: center;
@@ -983,11 +992,11 @@
       }
       .wn-annot-modal-backdrop.show { display: flex; }
       .wn-annot-modal {
-        background: #f6f2fb;
-        color: #342d43;
-        border: 1px solid rgba(109, 86, 199, 0.18);
+        background: var(--wn-surface);
+        color: var(--wn-text);
+        border: 1px solid var(--wn-border);
         border-radius: 16px;
-        box-shadow: 0 16px 38px rgba(73, 64, 157, 0.2);
+        box-shadow: 0 16px 38px var(--wn-shadow);
         padding: 18px;
         min-width: min(440px, calc(100vw - 40px));
         max-width: 520px;
@@ -1000,7 +1009,7 @@
         margin: 0;
         font-size: 15px;
         font-weight: 700;
-        color: #3f3852;
+        color: var(--wn-text);
       }
       .wn-annot-comment-card {
         position: fixed;
@@ -1019,17 +1028,17 @@
       .wn-annot-dialog-message {
         font-size: 13px;
         line-height: 1.6;
-        color: #3f3852;
+        color: var(--wn-text);
       }
       .wn-annot-modal textarea {
         width: 100%;
         min-height: 90px;
         border-radius: 12px;
-        border: 1px solid rgba(109, 86, 199, 0.22);
-        background: #fff;
+        border: 1px solid var(--wn-border);
+        background: var(--wn-surface-input);
         padding: 10px 12px;
         font-size: 14px;
-        color: #342d43;
+        color: var(--wn-text);
         resize: vertical;
         outline: none;
         box-shadow: inset 0 1px 2px rgba(0,0,0,0.05);
@@ -1058,7 +1067,7 @@
         border: 1.5px dashed rgba(109, 86, 199, 0.32);
         border-radius: 14px;
         padding: 14px;
-        background: linear-gradient(135deg, rgba(109, 86, 199, 0.08), rgba(246, 242, 251, 0.95));
+        background: linear-gradient(135deg, rgba(109, 86, 199, 0.08), var(--wn-surface));
         cursor: pointer;
         transition: border 0.2s ease, transform 0.2s ease;
       }
@@ -1068,7 +1077,7 @@
       }
       .wn-annot-import-drop.dragover {
         border-color: rgba(109, 86, 199, 0.9);
-        background: linear-gradient(135deg, rgba(109, 86, 199, 0.16), rgba(246, 242, 251, 0.95));
+        background: linear-gradient(135deg, rgba(109, 86, 199, 0.16), var(--wn-surface));
       }
       .wn-annot-import-drop input {
         position: absolute;
@@ -1079,18 +1088,18 @@
       .wn-annot-import-drop-title {
         font-size: 13px;
         font-weight: 700;
-        color: #3f3852;
+        color: var(--wn-text);
       }
       .wn-annot-import-drop-sub {
         font-size: 12px;
-        color: #5a5266;
+        color: var(--wn-text-muted);
         margin-top: 4px;
       }
       .wn-annot-import-panel {
-        border: 1px solid rgba(109, 86, 199, 0.12);
+        border: 1px solid var(--wn-border);
         border-radius: 14px;
         padding: 12px;
-        background: #fff;
+        background: var(--wn-surface-input);
         display: flex;
         flex-direction: column;
         gap: 10px;
@@ -1100,7 +1109,7 @@
         margin: 0;
         font-size: 13px;
         font-weight: 700;
-        color: #3f3852;
+        color: var(--wn-text);
       }
       .wn-annot-import-title-row {
         display: flex;
@@ -1110,17 +1119,17 @@
       }
       .wn-annot-import-count {
         background: rgba(109, 86, 199, 0.16);
-        color: #4b4557;
+        color: var(--wn-text-muted);
         border-radius: 999px;
         padding: 4px 8px;
         font-weight: 600;
         font-size: 11px;
-        border: 1px solid rgba(109, 86, 199, 0.2);
+        border: 1px solid var(--wn-border);
       }
       .wn-annot-import-panel p {
         margin: 0;
         font-size: 12px;
-        color: #5a5266;
+        color: var(--wn-text-muted);
       }
       .wn-annot-import-list {
         display: grid;
@@ -1130,8 +1139,8 @@
         padding-right: 4px;
       }
       .wn-annot-import-card {
-        border: 1px solid rgba(109, 86, 199, 0.14);
-        background: #f8f6fd;
+        border: 1px solid var(--wn-border);
+        background: var(--wn-surface);
         border-radius: 12px;
         padding: 10px 12px;
         display: flex;
@@ -1150,14 +1159,14 @@
       .wn-annot-import-name {
         font-size: 13px;
         font-weight: 600;
-        color: #3f3852;
+        color: var(--wn-text);
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
       }
       .wn-annot-import-sub {
         font-size: 11px;
-        color: #5a5266;
+        color: var(--wn-text-muted);
         font-family: "SF Mono", "SFMono-Regular", ui-monospace, monospace;
         white-space: nowrap;
         overflow: hidden;
@@ -1170,17 +1179,17 @@
       }
       .wn-annot-import-badge {
         background: rgba(109, 86, 199, 0.16);
-        color: #4b4557;
+        color: var(--wn-text-muted);
         border-radius: 999px;
         padding: 4px 8px;
         font-weight: 600;
         font-size: 11px;
-        border: 1px solid rgba(109, 86, 199, 0.2);
+        border: 1px solid var(--wn-border);
       }
       .wn-annot-import-remove {
         border: 1px solid rgba(209, 59, 59, 0.35);
         background: rgba(209, 59, 59, 0.12);
-        color: #b83232;
+        color: var(--wn-danger);
         width: 26px;
         height: 26px;
         padding: 0;
@@ -1195,8 +1204,8 @@
       }
       .wn-annot-import-empty {
         font-size: 12px;
-        color: #5a5266;
-        border: 1px dashed rgba(109, 86, 199, 0.18);
+        color: var(--wn-text-muted);
+        border: 1px dashed var(--wn-border);
         border-radius: 10px;
         padding: 10px;
         text-align: center;
@@ -1217,14 +1226,14 @@
       }
       .wn-annot-modal .wn-annot-pill.cancel {
         background: transparent;
-        color: #5a5563;
-        border: 1px solid rgba(109, 86, 199, 0.25);
+        color: var(--wn-text-muted);
+        border: 1px solid var(--wn-border);
       }
       .wn-annot-modal .wn-annot-pill.cancel:hover {
         background: rgba(109, 86, 199, 0.08);
       }
       .wn-annot-modal .wn-annot-pill.primary {
-        background: #6d56c7;
+        background: var(--wn-accent);
         color: #fdfdff;
         box-shadow: 0 10px 24px rgba(109, 86, 199, 0.35);
       }
@@ -1234,8 +1243,8 @@
       }
       .wn-annot-modal .wn-annot-pill.secondary {
         background: rgba(109, 86, 199, 0.12);
-        color: #4b4557;
-        border: 1px solid rgba(109, 86, 199, 0.22);
+        color: var(--wn-text-muted);
+        border: 1px solid var(--wn-border);
       }
       .wn-annot-modal .wn-annot-pill.secondary:hover {
         background: rgba(109, 86, 199, 0.18);
@@ -1256,7 +1265,7 @@
       .wn-shot-rect {
         position: absolute;
         box-sizing: border-box;
-        border: 2px solid #6d56c7;
+        border: 2px solid var(--wn-accent);
         border-radius: 4px;
         /* The dim outside the frame is one huge spread, so no second element
            has to track the four bands around the rectangle. */
@@ -1271,22 +1280,22 @@
         align-items: center;
         gap: 10px;
         padding: 8px 10px 8px 16px;
-        background: #f6f2fb;
-        color: #3f3852;
+        background: var(--wn-surface);
+        color: var(--wn-text);
         font: 12px/1.4 "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
-        border: 1px solid rgba(109, 86, 199, 0.2);
+        border: 1px solid var(--wn-border);
         border-radius: 999px;
-        box-shadow: 0 12px 28px rgba(73, 64, 157, 0.18);
+        box-shadow: 0 12px 28px var(--wn-shadow);
         z-index: 2147483652;
       }
       .wn-shot-hint button {
-        border: 1px solid rgba(109, 86, 199, 0.22);
+        border: 1px solid var(--wn-border);
         border-radius: 999px;
         padding: 6px 14px;
         font: inherit;
         font-weight: 600;
-        background: #fff;
-        color: #3e384a;
+        background: var(--wn-surface-input);
+        color: var(--wn-text);
         cursor: pointer;
       }
       .wn-annot-shot {
@@ -1296,7 +1305,7 @@
         display: block;
         max-width: 100%;
         max-height: 140px;
-        border: 1px solid rgba(109, 86, 199, 0.2);
+        border: 1px solid var(--wn-border);
         border-radius: 10px;
         cursor: zoom-in;
       }
@@ -2254,7 +2263,6 @@
     item.style.setProperty('--wn-item-accent-soft-end', palette.softer);
     item.style.setProperty('--wn-item-number-bg', palette.pill);
     item.style.setProperty('--wn-item-number-border', palette.pillBorder);
-    item.style.setProperty('--wn-item-number-text', '#000000');
   }
 
   function parseBoolAttr(val, fallback = false) {
