@@ -134,8 +134,6 @@
     dimOpacity,
     dimOverlay: null,
     filters: {
-      priority: 'all',
-      author: 'all',
       query: ''
     },
     hidden: false,
@@ -1658,23 +1656,6 @@
           <div class="wn-annot-filter-row wn-annotator">
             <input id="wn-filter-search" class="wn-annotator" type="search" placeholder="Keyword search" />
           </div>
-          <div class="wn-annot-filter-row wn-annotator">
-            <label class="wn-annot-filter-label wn-annotator" for="wn-filter-priority">Priority</label>
-            <select id="wn-filter-priority" class="wn-annotator">
-              <option value="all">All</option>
-              <option value="high">High</option>
-              <option value="medium">Medium</option>
-              <option value="low">Low</option>
-            </select>
-            <button class="wn-annot-filter-clear wn-annotator" type="button" data-filter-clear="priority" aria-label="Clear priority filter">✕</button>
-          </div>
-          <div class="wn-annot-filter-row wn-annotator">
-            <label class="wn-annot-filter-label wn-annotator" for="wn-filter-author">Reviewer</label>
-            <select id="wn-filter-author" class="wn-annotator">
-              <option value="all">All</option>
-            </select>
-            <button class="wn-annot-filter-clear wn-annotator" type="button" data-filter-clear="author" aria-label="Clear reviewer filter">✕</button>
-          </div>
         </div>
       </div>
       <div class="wn-annot-list"></div>
@@ -1891,40 +1872,14 @@
     const backdrop = document.createElement('div');
     backdrop.className = 'wn-annot-modal-backdrop wn-annotator';
     const modal = document.createElement('div');
-    modal.className = 'wn-annot-modal wn-annotator wn-annot-export-modal';
+    modal.className = 'wn-annot-modal wn-annotator';
 
     const title = document.createElement('h4');
     title.textContent = 'Export annotations';
 
-    const body = document.createElement('div');
-    body.className = 'wn-annot-export-grid wn-annotator';
-
-    const reviewerPanel = document.createElement('div');
-    reviewerPanel.className = 'wn-annot-export-panel wn-annotator';
-    const reviewerTitle = document.createElement('h5');
-    reviewerTitle.textContent = 'Reviewers';
-    const reviewerDesc = document.createElement('p');
-    reviewerDesc.textContent = 'Choose reviewers to include.';
-    const reviewerList = document.createElement('div');
-    reviewerList.className = 'wn-annot-export-list wn-annotator';
-    reviewerPanel.appendChild(reviewerTitle);
-    reviewerPanel.appendChild(reviewerDesc);
-    reviewerPanel.appendChild(reviewerList);
-
-    const prioPanel = document.createElement('div');
-    prioPanel.className = 'wn-annot-export-panel wn-annotator';
-    const prioTitle = document.createElement('h5');
-    prioTitle.textContent = 'Criticality';
-    const prioDesc = document.createElement('p');
-    prioDesc.textContent = 'Select priority levels.';
-    const prioList = document.createElement('div');
-    prioList.className = 'wn-annot-export-list wn-annotator';
-    prioPanel.appendChild(prioTitle);
-    prioPanel.appendChild(prioDesc);
-    prioPanel.appendChild(prioList);
-
-    body.appendChild(reviewerPanel);
-    body.appendChild(prioPanel);
+    const message = document.createElement('div');
+    message.className = 'wn-annot-dialog-message wn-annotator';
+    message.textContent = 'The export holds every annotation of this site, on every page.';
 
     const actions = document.createElement('div');
     actions.className = 'wn-annot-actions wn-annotator';
@@ -1940,7 +1895,7 @@
     actions.appendChild(exportBtn);
 
     modal.appendChild(title);
-    modal.appendChild(body);
+    modal.appendChild(message);
     modal.appendChild(actions);
     backdrop.appendChild(modal);
     document.body.appendChild(backdrop);
@@ -1960,92 +1915,19 @@
     backdrop.addEventListener('click', onBackdrop);
 
     exportBtn.addEventListener('click', () => {
-      const reviewers = getCheckedValues(reviewerList);
-      const priorities = getCheckedValues(prioList);
-      exportAnnotationsFiltered({
-        reviewers,
-        priorities
-      });
+      exportAnnotations();
       close();
     });
 
-    state.exportModal = {
-      backdrop,
-      reviewerList,
-      prioList,
-      onKey
-    };
+    state.exportModal = { backdrop, onKey };
     return state.exportModal;
   }
 
   function openExportModal() {
     if (!jsonExport) return;
     const modalState = ensureExportModal();
-    renderExportModal();
     modalState.backdrop.classList.add('show');
     document.addEventListener('keydown', modalState.onKey);
-  }
-
-  function renderExportModal() {
-    if (!state.exportModal) return;
-    const { reviewerList, prioList } = state.exportModal;
-
-    reviewerList.innerHTML = '';
-    getExportReviewers().forEach((reviewer) => {
-      reviewerList.appendChild(makeExportCheckbox(reviewer.value, reviewer.label, true));
-    });
-
-    prioList.innerHTML = '';
-    getExportPriorities().forEach((prio) => {
-      prioList.appendChild(makeExportCheckbox(prio.value, prio.label, true));
-    });
-  }
-
-  function getExportReviewers() {
-    const reviewers = Array.from(
-      new Set(
-        state.annotations.map((ann) => {
-          const name = (ann.author || '').trim();
-          return name || '__unknown';
-        })
-      )
-    )
-      .filter(Boolean)
-      .sort((a, b) => getAuthorLabel(a).localeCompare(getAuthorLabel(b)));
-
-    return reviewers.map((value) => ({
-      value,
-      label: getAuthorLabel(value)
-    }));
-  }
-
-  function getExportPriorities() {
-    return [
-      { value: 'high', label: 'High' },
-      { value: 'medium', label: 'Medium' },
-      { value: 'low', label: 'Low' }
-    ];
-  }
-
-  function makeExportCheckbox(value, label, checked) {
-    const row = document.createElement('label');
-    row.className = 'wn-annot-export-item wn-annotator';
-    const input = document.createElement('input');
-    input.type = 'checkbox';
-    input.value = value;
-    input.checked = checked;
-    input.className = 'wn-annotator';
-    const text = document.createElement('span');
-    text.textContent = label;
-    row.appendChild(input);
-    row.appendChild(text);
-    return row;
-  }
-
-  function getCheckedValues(container) {
-    return Array.from(container.querySelectorAll('input[type="checkbox"]'))
-      .filter((input) => input.checked)
-      .map((input) => input.value);
   }
 
   function ensureImportModal() {
@@ -2080,9 +1962,6 @@
     dropzone.appendChild(fileInput);
     dropzone.appendChild(dropContent);
 
-    const grid = document.createElement('div');
-    grid.className = 'wn-annot-import-grid wn-annotator';
-
     const filesPanel = document.createElement('div');
     filesPanel.className = 'wn-annot-import-panel wn-annotator';
     const filesTitleRow = document.createElement('div');
@@ -2102,42 +1981,6 @@
     filesPanel.appendChild(filesDesc);
     filesPanel.appendChild(fileList);
 
-    const reviewersPanel = document.createElement('div');
-    reviewersPanel.className = 'wn-annot-import-panel wn-annotator';
-    const reviewersTitle = document.createElement('h5');
-    reviewersTitle.textContent = 'Reviewer summary';
-    const reviewersDesc = document.createElement('p');
-    reviewersDesc.textContent = 'Counts based on imported files.';
-    const stats = document.createElement('div');
-    stats.className = 'wn-annot-import-stats wn-annotator';
-    const statReviewers = document.createElement('div');
-    statReviewers.className = 'wn-annot-import-stat wn-annotator';
-    const statReviewersLabel = document.createElement('span');
-    statReviewersLabel.textContent = 'Reviewers';
-    const statReviewersValue = document.createElement('span');
-    statReviewersValue.textContent = '0';
-    statReviewers.appendChild(statReviewersLabel);
-    statReviewers.appendChild(statReviewersValue);
-    const statComments = document.createElement('div');
-    statComments.className = 'wn-annot-import-stat wn-annotator';
-    const statCommentsLabel = document.createElement('span');
-    statCommentsLabel.textContent = 'Comments';
-    const statCommentsValue = document.createElement('span');
-    statCommentsValue.textContent = '0';
-    statComments.appendChild(statCommentsLabel);
-    statComments.appendChild(statCommentsValue);
-    stats.appendChild(statReviewers);
-    stats.appendChild(statComments);
-    const reviewerList = document.createElement('div');
-    reviewerList.className = 'wn-annot-import-list wn-annotator';
-    reviewersPanel.appendChild(reviewersTitle);
-    reviewersPanel.appendChild(reviewersDesc);
-    reviewersPanel.appendChild(stats);
-    reviewersPanel.appendChild(reviewerList);
-
-    grid.appendChild(filesPanel);
-    grid.appendChild(reviewersPanel);
-
     const actions = document.createElement('div');
     actions.className = 'wn-annot-actions wn-annotator';
     const closeBtn = document.createElement('button');
@@ -2147,7 +1990,7 @@
     actions.appendChild(closeBtn);
 
     body.appendChild(dropzone);
-    body.appendChild(grid);
+    body.appendChild(filesPanel);
     modal.appendChild(title);
     modal.appendChild(body);
     modal.appendChild(actions);
@@ -2208,10 +2051,7 @@
       modal,
       fileInput,
       fileList,
-      reviewerList,
       filesCount,
-      statReviewersValue,
-      statCommentsValue,
       onKey,
       close
     };
@@ -2228,8 +2068,8 @@
 
   function renderImportModal() {
     if (!state.importModal) return;
-    const { fileList, reviewerList, filesCount, statReviewersValue, statCommentsValue } = state.importModal;
-    const { fileCounts, reviewerCounts, totalComments } = buildImportSummary();
+    const { fileList, filesCount } = state.importModal;
+    const { fileCounts } = buildImportSummary();
 
     fileList.innerHTML = '';
     if (!state.importFiles.length) {
@@ -2274,61 +2114,17 @@
       });
     }
 
-    reviewerList.innerHTML = '';
-    if (!reviewerCounts.size) {
-      const empty = document.createElement('div');
-      empty.className = 'wn-annot-import-empty wn-annotator';
-      empty.textContent = 'No reviewers yet.';
-      reviewerList.appendChild(empty);
-    } else {
-      Array.from(reviewerCounts.entries())
-        .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-        .forEach(([name, count]) => {
-          const card = document.createElement('div');
-          card.className = 'wn-annot-import-card wn-annotator';
-
-          const meta = document.createElement('div');
-          meta.className = 'wn-annot-import-meta wn-annotator';
-          const reviewerName = document.createElement('div');
-          reviewerName.className = 'wn-annot-import-name wn-annotator';
-          reviewerName.textContent = name;
-          const reviewerCount = document.createElement('div');
-          reviewerCount.className = 'wn-annot-import-sub wn-annotator';
-          reviewerCount.textContent = `${count} comments`;
-          meta.appendChild(reviewerName);
-          meta.appendChild(reviewerCount);
-
-          const badge = document.createElement('div');
-          badge.className = 'wn-annot-import-badge wn-annotator';
-          badge.textContent = String(count);
-
-          card.appendChild(meta);
-          card.appendChild(badge);
-          reviewerList.appendChild(card);
-        });
-    }
-
     filesCount.textContent = String(state.importFiles.length);
-    statReviewersValue.textContent = String(reviewerCounts.size);
-    statCommentsValue.textContent = String(totalComments);
   }
 
   function buildImportSummary() {
     const fileCounts = new Map();
-    const reviewerCounts = new Map();
-    const imported = state.annotations.filter((ann) => ann.importFileId);
-    imported.forEach((ann) => {
+    state.annotations.forEach((ann) => {
       if (ann.importFileId) {
         fileCounts.set(ann.importFileId, (fileCounts.get(ann.importFileId) || 0) + 1);
       }
-      const reviewer = (ann.author || '').trim() || 'Unknown reviewer';
-      reviewerCounts.set(reviewer, (reviewerCounts.get(reviewer) || 0) + 1);
     });
-    return {
-      fileCounts,
-      reviewerCounts,
-      totalComments: imported.length
-    };
+    return { fileCounts };
   }
 
   async function handleImportFiles(files) {
@@ -2550,99 +2346,20 @@
     watchRouteChanges();
   }
 
-  function getAuthorLabel(value) {
-    return value === '__unknown' ? 'Unknown' : value;
-  }
-
-  function updateFilterClearButtons() {
-    if (!state.panel) return;
-    const prioritySelect = state.panel.querySelector('#wn-filter-priority');
-    const authorSelect = state.panel.querySelector('#wn-filter-author');
-    const priorityClear = state.panel.querySelector('[data-filter-clear="priority"]');
-    const authorClear = state.panel.querySelector('[data-filter-clear="author"]');
-    if (priorityClear && prioritySelect) {
-      priorityClear.style.display = prioritySelect.value === 'all' ? 'none' : 'inline-flex';
-    }
-    if (authorClear && authorSelect) {
-      authorClear.style.display = authorSelect.value === 'all' ? 'none' : 'inline-flex';
-    }
-  }
-
-  function updateAuthorFilterOptions() {
-    if (!state.panel) return;
-    const select = state.panel.querySelector('#wn-filter-author');
-    if (!select) return;
-    const current = state.filters.author || 'all';
-    const authors = Array.from(
-      new Set(
-        state.annotations.map((ann) => {
-          const name = (ann.author || '').trim();
-          return name || '__unknown';
-        })
-      )
-    ).filter((v) => v);
-
-    select.innerHTML = '';
-    const allOption = document.createElement('option');
-    allOption.value = 'all';
-    allOption.textContent = 'All';
-    select.appendChild(allOption);
-
-    authors
-      .sort((a, b) => getAuthorLabel(a).localeCompare(getAuthorLabel(b)))
-      .forEach((value) => {
-        const opt = document.createElement('option');
-        opt.value = value;
-        opt.textContent = getAuthorLabel(value);
-        select.appendChild(opt);
-      });
-
-    const values = ['all', ...authors];
-    select.value = values.includes(current) ? current : 'all';
-    state.filters.author = select.value;
-    updateFilterClearButtons();
-  }
-
   function initFilters() {
-    // Install filters (priority + author + search) and re-render on change
+    // Install the keyword search and re-render on change
     if (!state.panel) return;
-    const prioritySelect = state.panel.querySelector('#wn-filter-priority');
-    const authorSelect = state.panel.querySelector('#wn-filter-author');
     const searchInput = state.panel.querySelector('#wn-filter-search');
-    const priorityClear = state.panel.querySelector('[data-filter-clear="priority"]');
-    const authorClear = state.panel.querySelector('[data-filter-clear="author"]');
-    if (!prioritySelect || !authorSelect || !searchInput) return;
+    if (!searchInput) return;
 
-    prioritySelect.value = state.filters.priority;
-    authorSelect.value = state.filters.author;
     searchInput.value = state.filters.query;
 
     const trigger = () => {
-      state.filters.priority = prioritySelect.value;
-      state.filters.author = authorSelect.value;
       state.filters.query = searchInput.value.trim().toLowerCase();
       renderList();
-      updateFilterClearButtons();
     };
 
-    prioritySelect.addEventListener('change', trigger);
-    authorSelect.addEventListener('change', trigger);
     searchInput.addEventListener('input', trigger);
-    if (priorityClear) {
-      priorityClear.addEventListener('click', () => {
-        prioritySelect.value = 'all';
-        trigger();
-      });
-    }
-    if (authorClear) {
-      authorClear.addEventListener('click', () => {
-        authorSelect.value = 'all';
-        trigger();
-      });
-    }
-
-    updateAuthorFilterOptions();
-    updateFilterClearButtons();
   }
 
   function setMode(nextMode, options = {}) {
@@ -4227,7 +3944,6 @@
     const list = state.panel.querySelector('.wn-annot-list');
       const title = state.panel.querySelector('h3');
       list.innerHTML = '';
-      updateAuthorFilterOptions();
       if (!state.annotations.length) {
         const empty = document.createElement('div');
         empty.className = 'wn-annot-empty';
@@ -4241,14 +3957,9 @@
       .slice()
       .sort((a, b) => a.createdAt - b.createdAt)
       .filter((ann) => {
-    const prioOk = state.filters.priority === 'all' || (ann.priority || 'medium') === state.filters.priority;
         const q = state.filters.query;
-        const haystack = `${ann.comment || ''} ${ann.snippet || ''} ${ann.author || ''}`.toLowerCase();
-        const searchOk = !q || haystack.includes(q);
-        const authorFilter = state.filters.author || 'all';
-        const authorValue = (ann.author || '').trim() || '__unknown';
-        const authorOk = authorFilter === 'all' || authorValue === authorFilter;
-    return prioOk && searchOk && authorOk;
+        const haystack = `${ann.comment || ''} ${ann.snippet || ''}`.toLowerCase();
+        return !q || haystack.includes(q);
   });
     if (title) title.textContent = `Annotations (${filtered.length})`;
     filtered.forEach((ann, idx) => {
@@ -4402,26 +4113,6 @@
   function exportAnnotations() {
     // Export local annotations to a JSON file named with site and time
     const payload = buildAnnotationsPayload();
-    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = buildFilename();
-    a.click();
-    URL.revokeObjectURL(url);
-  }
-
-  function exportAnnotationsFiltered(filters) {
-    const reviewers = new Set((filters && filters.reviewers) || []);
-    const priorities = new Set((filters && filters.priorities) || []);
-    const filtered = state.annotations.filter((ann) => {
-      const reviewerValue = (ann.author || '').trim() || '__unknown';
-      const priorityValue = ann.priority || 'medium';
-      const reviewerOk = !reviewers.size || reviewers.has(reviewerValue);
-      const priorityOk = !priorities.size || priorities.has(priorityValue);
-      return reviewerOk && priorityOk;
-    });
-    const payload = buildAnnotationsPayload(filtered);
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
