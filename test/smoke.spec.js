@@ -15,7 +15,7 @@ test('the toolbar offers a capture button', async ({ page }) => {
 });
 
 test('the capture leaves the interface on the page', async ({ page }) => {
-  await page.goto('/demo/');
+  await page.goto('/');
   await page.locator('.wn-annot-toolbar button[data-mode="screenshot"]').click();
   await expect(page.locator('.wn-shot-overlay')).toBeVisible();
   await page.mouse.move(200, 300);
@@ -29,7 +29,7 @@ test('the capture leaves the interface on the page', async ({ page }) => {
 });
 
 test('the toolbar holds one row on a laptop screen', async ({ page }) => {
-  await page.goto('/demo/');
+  await page.goto('/');
   for (const width of [1280, 1366, 1440]) {
     await page.setViewportSize({ width, height: 768 });
     const box = await page.locator('.wn-annot-toolbar').boundingBox();
