@@ -62,6 +62,17 @@ second copy in `localStorage`, so a note written while the server is down is
 lost when the page reloads. The widget says so with a toast at the moment the
 request fails.
 
+**A dot beside the wordmark carries the answer to the last request**, so the
+state of the server is on the screen rather than in a toast that has gone. It
+is drawn only on a page that names a server, and it has three states, each
+with its own line on hover:
+
+| Dot | Meaning |
+|---|---|
+| Green | The last request was answered and the notes are on the server. |
+| Yellow | The address answered, but not as this API: a refused key, or something else serving that path. |
+| Red | Nothing answered. The server is down, the address is wrong, or the browser refused to reach it. |
+
 **The api key is public.** It sits in the source of every page that carries the
 script tag, so anybody who can read the page can read the key. It stops a
 passer-by from writing to a review server. It is not access control. Put the
