@@ -374,8 +374,7 @@
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        padding-top:5px;
-        padding-left:15px;
+        padding-left: 15px;
         padding-right: 0px;
       }
       .wn-annot-logo svg {
