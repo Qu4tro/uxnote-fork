@@ -344,9 +344,10 @@
       ];
       // A crafted link must not be able to point a visitor's notes at somebody
       // else's server. A server on the loopback address is the visitor's own
-      // machine, so that one is allowed and every other is refused. These keys
-      // name no option at all, and saying so beats failing quietly.
-      var REFUSED = ['server', 'apikey'];
+      // machine, so that one is allowed and every other is refused. Normalised
+      // (lowercased, letters only), these name a server option that this page
+      // does not read: a misspelling of one, or a bare server or key.
+      var REFUSED = ['serverurl', 'serverapikey', 'server', 'apikey'];
       var SOURCE = 'uxnote-tool/uxnote.js';
       // The literal characters that close a script tag would close this block.
       var CLOSE_TAG = '<\/script>';
@@ -490,17 +491,21 @@
 
       // Silence would look like the link had worked, so say what was ignored.
       var refused = [];
+      var read = OPTIONS.map(function (option) { return option.key; });
       params.forEach(function (value, key) {
+        // The keys this page does read answer for themselves below.
+        if (read.indexOf(key) !== -1) return;
         var normalized = key.toLowerCase().replace(/[^a-z]/g, '');
         if (REFUSED.indexOf(normalized) !== -1 && refused.indexOf(key) === -1) refused.push(key);
       });
+      var misspelled = refused.length > 0;
       var urlDropped = params.get('server-url') !== null && !('server-url' in chosen);
       var keyDropped = params.get('server-api-key') !== null && !('server-api-key' in chosen);
       if (urlDropped) refused.push('server-url');
       if (keyDropped) refused.push('server-api-key');
       if (refused.length) {
         notice.textContent = 'This page ignored ' + refused.join(', ') + ' from the address bar.' +
-          (urlDropped ? ' This demo takes a server on a loopback address only: localhost, anything in 127.0.0.0/8, or [::1].' : '') +
+          (urlDropped || misspelled ? ' This demo takes a server on a loopback address only: localhost, anything in 127.0.0.0/8, or [::1].' : '') +
           (keyDropped && !urlDropped && !('server-url' in chosen) ? ' A key on its own has no server to reach.' : '') +
           ('server-url' in chosen ? '' : ' The notes stay in this browser.');
         notice.hidden = false;

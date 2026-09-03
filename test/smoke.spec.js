@@ -150,6 +150,14 @@ test('the demo page refuses a server that is not on the loopback address', async
   await expect(page.locator('#settings-notice')).toContainText('loopback address only');
 });
 
+test('the demo page names a server key spelled some other way', async ({ page }) => {
+  await page.goto('/?serverUrl=https://example.invalid&Server_Url=x&api_key=k');
+  // These name no option this page reads, so nothing applies them. Saying so
+  // beats letting the link look honoured.
+  await expect(page.locator('#settings-notice')).toContainText('serverUrl, Server_Url, api_key');
+  await expect(page.locator('#settings-notice')).toContainText('loopback address only');
+});
+
 test('the demo page takes a loopback server onto the script tag', async ({ page }) => {
   await page.goto('/?server-url=http%3A%2F%2F127.0.0.1%3A8123&server-api-key=local-key');
   const carried = await page.evaluate(() => {
