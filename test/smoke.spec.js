@@ -27,3 +27,12 @@ test('the capture leaves the interface on the page', async ({ page }) => {
   expect(await page.locator('.wn-annot-toolbar').isVisible()).toBe(true);
   await expect(page.locator('.wn-annot-modal-backdrop.show')).toBeVisible();
 });
+
+test('the toolbar holds one row on a laptop screen', async ({ page }) => {
+  await page.goto('/demo/');
+  for (const width of [1280, 1366, 1440]) {
+    await page.setViewportSize({ width, height: 768 });
+    const box = await page.locator('.wn-annot-toolbar').boundingBox();
+    expect(box.height, `the toolbar wrapped at ${width}px`).toBeLessThan(100);
+  }
+});
