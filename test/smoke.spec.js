@@ -111,6 +111,69 @@ test('the toolbar keeps its full set on a laptop screen', async ({ page }) => {
   expect(floating).toBe(true);
 });
 
+test('the panel keeps its side rail and draws no sheet chrome', async ({ page }) => {
+  await page.goto('/');
+  await page.locator('.wn-annot-toolbar button[data-action="toggle-panel"]').click();
+  const panel = page.locator('.wn-annot-panel');
+  await expect(panel).toBeVisible();
+  const box = await panel.boundingBox();
+  const view = await page.evaluate(() => ({
+    width: document.documentElement.clientWidth,
+    height: document.documentElement.clientHeight
+  }));
+  // A rail on the right, not a sheet on the bottom edge.
+  expect(Math.round(box.width)).toBe(360);
+  expect(box.x + box.width).toBeLessThanOrEqual(view.width - 17);
+  await expect(panel).toHaveCSS('border-bottom-left-radius', '18px');
+  await expect(page.locator('.wn-annot-panel .wn-annot-sheet-grip')).toBeHidden();
+  await expect(page.locator('.wn-annot-panel-export')).toBeHidden();
+  // Nothing holds the page still here; the panel never covered it.
+  expect(await page.evaluate(() => document.documentElement.style.overflow)).toBe('');
+});
+
+test('the export modal keeps its three answers on a laptop screen', async ({ page }) => {
+  await page.goto('/');
+  await page.locator('.wn-annot-toolbar button[data-action="export"]').click();
+  const modal = page.locator('.wn-annot-modal-backdrop.show');
+  await expect(modal).toBeVisible();
+  await expect(modal.locator('.wn-annot-pill')).toHaveText(['Cancel', 'Send by mail', 'Export file']);
+});
+
+test('the comment card is still parked and translucent where there is hover', async ({ page }) => {
+  await page.goto('/');
+  await page.locator('.wn-annot-toolbar button[data-mode="element"]').click();
+  await page.locator('.card').first().click();
+  const card = page.locator('.wn-annot-comment-card');
+  await expect(card).toBeVisible();
+  // The premise holds on a desktop: the card is parked over the page it is
+  // about, and reading through it is the point.
+  await expect(card).toHaveCSS('opacity', '0.55');
+  const box = await card.boundingBox();
+  expect(Math.round(box.width)).toBe(420);
+  await expect(page.locator('.wn-annot-comment-card .wn-annot-sheet-grip')).toBeHidden();
+});
+
+test('a narrow window gets the sheet and keeps its hover previews', async ({ page }) => {
+  await page.goto('/');
+  // The two axes answer two questions. How much room there is decides that
+  // this is a sheet; what kind of pointer is driving decides that the tooltips
+  // and the parked card's hover are still worth drawing. A mouse in a small
+  // window is not a finger.
+  await page.setViewportSize({ width: 600, height: 800 });
+  await page.locator('.wn-annot-toolbar button[data-action="toggle-panel"]').click();
+  const panel = page.locator('.wn-annot-panel');
+  const box = await panel.boundingBox();
+  expect(Math.round(box.x)).toBe(0);
+  expect(Math.round(box.width)).toBe(600);
+  await expect(panel).toHaveCSS('border-bottom-left-radius', '0px');
+  await expect(page.locator('.wn-annot-panel .wn-annot-sheet-grip')).toBeVisible();
+  const tip = await page
+    .locator('.wn-annot-btn')
+    .first()
+    .evaluate((el) => getComputedStyle(el, '::after').content);
+  expect(tip).not.toBe('none');
+});
+
 test('the widget writes the resolved theme on the html element', async ({ page }) => {
   await page.emulateMedia({ colorScheme: 'dark' });
   await page.goto('/');

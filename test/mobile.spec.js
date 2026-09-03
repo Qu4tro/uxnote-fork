@@ -109,11 +109,8 @@ test('export leaves the bar for the panel and stays a 44px target', async ({ pag
   expect(box.height).toBeGreaterThanOrEqual(TOUCH_MINIMUM);
   const deleteAll = await page.locator('.wn-annot-delete-all').boundingBox();
   expect(deleteAll.height).toBeGreaterThanOrEqual(TOUCH_MINIMUM);
-  const download = page.waitForEvent('download');
-  await exportBtn.click();
-  // The press writes the file. Nothing asks first, here or on a laptop.
-  expect((await download).suggestedFilename()).toMatch(/\.json$/);
-  await expect(page.locator('.wn-annot-modal-backdrop.show')).toHaveCount(0);
+  // What it does when tapped is measured in mobile-sheets.spec.js: one action,
+  // and no modal standing in front of it.
 });
 
 test('the landscape phone gets the compact layout, not the desktop one', async ({ page }, testInfo) => {
@@ -159,7 +156,7 @@ test('the page dimmer is off by default on touch', async ({ page }) => {
   await expect(page.locator('.wn-annot-dimmer')).toHaveCount(1);
 });
 
-test('the panel fills the viewport without measuring itself in vw or vh', async ({ page }) => {
+test('the panel is placed by insets, not by a viewport unit', async ({ page }) => {
   await page.goto('/');
   await page.locator('.wn-annot-toolbar button[data-action="toggle-panel"]').click();
   const panel = page.locator('.wn-annot-panel');
@@ -169,9 +166,15 @@ test('the panel fills the viewport without measuring itself in vw or vh', async 
     w: document.documentElement.clientWidth,
     h: document.documentElement.clientHeight
   }));
+  // It spans the screen edge to edge without asking for 100vw, which a host
+  // page that overflows horizontally makes wider than the screen, and it stays
+  // inside the height without asking for 100vh, which iOS Safari measures past
+  // its own bottom bar. How tall it stands is a sheet's business, and is
+  // measured in mobile-sheets.spec.js.
   expect(Math.round(box.x)).toBe(0);
   expect(Math.round(box.width)).toBe(view.w);
-  expect(Math.round(box.height)).toBe(view.h);
+  expect(box.y).toBeGreaterThanOrEqual(-0.5);
+  expect(box.y + box.height).toBeLessThanOrEqual(view.h + 0.5);
 });
 
 test('the visibility control sits in the bar and reads in English', async ({ page }) => {

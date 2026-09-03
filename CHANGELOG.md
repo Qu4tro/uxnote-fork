@@ -7,6 +7,9 @@ All notable changes to this project will be documented in this file.
 - A form factor the widget reads on two axes instead of one. `(pointer: coarse) and (hover: none)` decides behaviour and target size; `(max-width: 640px), (max-height: 480px)` decides layout density. Both are subscribed, so a rotation rebuilds the toolbar rather than only moving it. A phone in landscape is wider than 640px and now gets the compact layout it needs, and a narrow desktop window keeps its hover previews.
 - Mobile checks in the test suite, on four phone viewports with touch emulation: the toolbar neither scrolls nor wraps, no control is clipped or off screen, every target is at least 44px, the demo page does not widen the document, and the landscape case gets the compact layout.
 - A check that the server under test is serving the working copy, because a run outside CI reuses a server already listening on the port.
+- A sheet shell the notes panel, the comment prompt and the confirm dialogs share on a compact layout: anchored to the bottom edge, 85% of the viewport at most, a handle that dismisses it on a drag, a close button of its own, safe-area padding, its list scrolling inside it, and the page held still underneath. The panel had no way to dismiss itself at all -- the only exit was a toolbar button the panel was painted over, along with its own footer.
+- A close button on the screenshot lightbox. `Escape` closed it and nothing else did, and a phone has no `Escape`.
+- Sheet checks on the four phone viewports: the panel is dismissable without the toolbar, no sheet runs past the viewport or under the toolbar, the page is held still under an open sheet and let go after, a note tapped in the list still carries the page to itself, the import dialog is not built at all, and export opens no modal.
 ### Changed
 - The toolbar carries five controls on a compact layout -- hide, highlight text, annotate an element, capture, notes -- each 48px, in one row, with no scrolling strip. Import and the top/bottom toggle are left out there, and export moves to the panel head beside delete-all.
 - Fixed chrome is placed with `left` and `right` insets and sized in percent rather than `vw`. A host page that overflows horizontally makes the containing block wider than `100vw`, which used to size the toolbar by one box and position it against another. The rules meant to anchor the bar to the edges on a small screen now carry enough specificity to apply at all.
@@ -16,6 +19,10 @@ All notable changes to this project will be documented in this file.
 - The page dimmer is off by default on a coarse pointer. `isBackdropVisible` still turns it on by name.
 - A marker is held inside its host. A touch-sized marker on a block that runs the full width of the screen used to hang past the edge, which widened the document and moved every fixed element on the page with it.
 - The demo page's pricing table scrolls on its own instead of widening the page, and its subscribe row wraps on a narrow screen.
+- Export is one action where the layout is compact: the file goes to the share sheet where the browser has one, and to the download the widget already used where it has not. The three answers and the mail handoff stay on a wide window, where there is room to choose between them; a `mailto:` carries the whole document in a URL, and the first long comment overruns it.
+- The comment card's `opacity: 0.55` and the `:hover` that undid it are drawn only where a pointer can hover. Without one the card never came back, and the page read straight through the comment being written.
+- The sheet surfaces are named in the `color-scheme: dark` selector list, so the native controls they hold follow the theme rather than rendering light on dark.
+- A narrow window on a desktop gets the sheets too, and keeps its tooltips and its parked comment card. How much room there is and what kind of pointer is driving are separate questions.
 ### Fixed
 - The visibility button was built with a French label and tooltip before the first sync replaced them.
 
