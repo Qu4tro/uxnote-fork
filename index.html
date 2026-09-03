@@ -222,7 +222,7 @@
         </select>
       </label>
       <label for="set-json-export"><span class="settings-name">data-json-export</span>
-        <span class="settings-desc">The export button and its dialog. false takes the send-by-mail handoff inside it away too.</span>
+        <span class="settings-desc">The export button and its dialog. The send-by-mail button answers to its own option and stays.</span>
         <select id="set-json-export">
           <option value="true">true</option>
           <option value="false">false</option>
@@ -231,6 +231,13 @@
       <label for="set-json-import"><span class="settings-name">data-json-import</span>
         <span class="settings-desc">The import button, its dialog, and the list of files imported into this page.</span>
         <select id="set-json-import">
+          <option value="true">true</option>
+          <option value="false">false</option>
+        </select>
+      </label>
+      <label for="set-mail-export"><span class="settings-name">data-mail-export</span>
+        <span class="settings-desc">The send-by-mail button and the draft it opens. Independent of data-json-export.</span>
+        <select id="set-mail-export">
           <option value="true">true</option>
           <option value="false">false</option>
         </select>
@@ -269,7 +276,7 @@
         <input id="set-color-element" type="color" value="#4e9cf6">
       </label>
       <label for="set-mailto"><span class="settings-name">data-mailto</span>
-        <span class="settings-desc">The recipient of the send-by-mail handoff in the export dialog. It fills a draft; it sends nothing.</span>
+        <span class="settings-desc">The recipient of the send-by-mail button's draft. It does nothing while data-mail-export is false.</span>
         <input id="set-mailto" type="email" placeholder="team@example.org">
       </label>
       <label for="set-server-url"><span class="settings-name">data-server-url</span>
@@ -333,6 +340,7 @@
         { key: 'theme',           attr: 'data-theme',                 kind: 'choice', values: ['auto', 'light', 'dark'], fallback: 'auto' },
         { key: 'json-export',     attr: 'data-json-export',           kind: 'choice', values: BOOLS, fallback: 'true' },
         { key: 'json-import',     attr: 'data-json-import',           kind: 'choice', values: BOOLS, fallback: 'true' },
+        { key: 'mail-export',     attr: 'data-mail-export',           kind: 'choice', values: BOOLS, fallback: 'true' },
         { key: 'backdrop',        attr: 'isBackdropVisible',          kind: 'choice', values: BOOLS, fallback: 'true' },
         { key: 'toolbar-visible', attr: 'isToolVisibleAtFirstLaunch', kind: 'choice', values: BOOLS, fallback: 'true' },
         { key: 'toolbar-top',     attr: 'isToolOnTopAtLaunch',        kind: 'choice', values: BOOLS, fallback: 'false' },

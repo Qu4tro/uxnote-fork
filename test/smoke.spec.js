@@ -118,13 +118,22 @@ test('the page theme switch sits inside the subtree the widget ignores', async (
 test('the query string sets the widget options', async ({ page }) => {
   await page.goto('/?json-export=false&theme=dark&color=%23e04f5f');
   await expect(page.locator('.wn-annot-toolbar button[data-action="export"]')).toHaveCount(0);
-  // Only the requested option changed; the import button is untouched.
+  // Only the requested option changed; the import and mail buttons are untouched.
   await expect(page.locator('.wn-annot-toolbar button[data-action="import"]')).toBeVisible();
+  await expect(page.locator('.wn-annot-toolbar button[data-action="mail"]')).toBeVisible();
   await expect(page.locator('html')).toHaveAttribute('data-wn-theme', 'dark');
   const highlight = await page.evaluate(() =>
     getComputedStyle(document.documentElement).getPropertyValue('--wn-text-highlight').trim()
   );
   expect(highlight).toBe('#e04f5f');
+});
+
+test('the mail handoff has an option of its own here too', async ({ page }) => {
+  await page.goto('/?mail-export=false');
+  await expect(page.locator('.wn-annot-toolbar button[data-action="mail"]')).toHaveCount(0);
+  // The JSON export answers to a different attribute and is still here.
+  await expect(page.locator('.wn-annot-toolbar button[data-action="export"]')).toBeVisible();
+  await expect(page.locator('#settings-snippet')).toContainText('data-mail-export="false"');
 });
 
 test('every option in the settings grid says what it does', async ({ page }) => {
