@@ -54,9 +54,10 @@ The answer is `200`, `application/json`:
 
 A site key the server never saw answers `200` with an empty array, not `404`.
 
-The widget reads the set at load, and again whenever the probe finds a server
-that was not answering and now is. What the server answers does not replace
-what the widget held: the two are reconciled, under **How the widget writes**.
+The widget reads the set at load, on each route change, and whenever the probe
+finds a server that was not answering and now is. What the server answers does
+not replace what the widget held: the two are reconciled, under **How the widget
+writes**.
 
 ### Write one annotation
 
