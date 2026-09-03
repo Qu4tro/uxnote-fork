@@ -1,61 +1,145 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-page-theme="light">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Fieldnote — demo page for uxnote-fork</title>
+  <script>
+    // Read the held page theme before the first paint, so a dark page never
+    // flashes light on the way in.
+    (function () {
+      let stored = null;
+      try { stored = localStorage.getItem('uxnote-fork-demo:page-theme'); } catch (e) { stored = null; }
+      document.documentElement.setAttribute('data-page-theme', stored === 'dark' ? 'dark' : 'light');
+    })();
+  </script>
   <style>
+    /* The page holds its own colours and never follows the system: the whole
+       point of the switch is a known background to read the widget against.
+       These are the page's, not the widget's; the widget keys off
+       :root[data-wn-theme] and names its own properties --wn-*. */
+    :root {
+      color-scheme: light;
+      --page-bg: #f7f8fa;
+      --page-text: #1f2933;
+      --page-text-muted: #52606d;
+      --page-surface: #fff;
+      --page-surface-alt: #f1f4f8;
+      --page-border: #e3e7ec;
+      --page-border-soft: #eef1f4;
+      --page-shadow: rgba(31, 41, 51, 0.06);
+      --page-accent: #1d4f91;
+      --page-accent-soft: #e8f0fb;
+      --page-accent-border: #c2d1e6;
+      --page-cta-bg: #1d4f91;
+      --page-cta-text: #fff;
+      --page-input-bg: #fff;
+      --page-input-border: #c8d0da;
+      --page-footer-bg: #1f2933;
+      --page-footer-text: #b9c2cc;
+      --page-note-bg: #f3efff;
+      --page-note-border: #d9cfff;
+      --page-note-text: #3b2f6b;
+      --page-note-accent: #5b3fd6;
+      --page-note-accent-ink: #fff;
+      --page-notice-bg: #fdf0e6;
+      --page-notice-border: #edc39a;
+      --page-notice-text: #7a4b12;
+    }
+    :root[data-page-theme="dark"] {
+      color-scheme: dark;
+      --page-bg: #14171c;
+      --page-text: #e7ebf1;
+      --page-text-muted: #9fa9b6;
+      --page-surface: #1c2027;
+      --page-surface-alt: #232932;
+      --page-border: #2c333d;
+      --page-border-soft: #262c35;
+      --page-shadow: rgba(0, 0, 0, 0.45);
+      --page-accent: #8fbcf0;
+      --page-accent-soft: #22334a;
+      --page-accent-border: #33506f;
+      --page-cta-bg: #2f6ab5;
+      --page-cta-text: #fff;
+      --page-input-bg: #12151a;
+      --page-input-border: #39424e;
+      --page-footer-bg: #0e1014;
+      --page-footer-text: #99a3ae;
+      --page-note-bg: #221d33;
+      --page-note-border: #372e54;
+      --page-note-text: #d9d2f2;
+      --page-note-accent: #b6a2ff;
+      --page-note-accent-ink: #1c1730;
+      --page-notice-bg: #33261a;
+      --page-notice-border: #5c452a;
+      --page-notice-text: #f0cfa6;
+    }
     * { margin: 0; box-sizing: border-box; }
-    body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; color: #1f2933; background: #f7f8fa; line-height: 1.55; }
-    header { display: flex; justify-content: space-between; align-items: center; padding: 1rem 3rem; background: #fff; border-bottom: 1px solid #e3e7ec; }
-    .logo { font-weight: 700; font-size: 1.25rem; color: #1d4f91; letter-spacing: -0.01em; }
-    nav a { margin-left: 1.5rem; color: #52606d; text-decoration: none; font-size: 0.95rem; }
+    body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; color: var(--page-text); background: var(--page-bg); line-height: 1.55; }
+    header { display: flex; justify-content: space-between; align-items: center; padding: 1rem 3rem; background: var(--page-surface); border-bottom: 1px solid var(--page-border); }
+    .logo { font-weight: 700; font-size: 1.25rem; color: var(--page-accent); letter-spacing: -0.01em; }
+    nav a { margin-left: 1.5rem; color: var(--page-text-muted); text-decoration: none; font-size: 0.95rem; }
     .hero { max-width: 64rem; margin: 0 auto; padding: 4.5rem 2rem 3rem; display: grid; grid-template-columns: 1.2fr 1fr; gap: 3rem; align-items: center; }
     .hero h1 { font-size: 2.5rem; line-height: 1.15; margin-bottom: 1rem; }
-    .hero p { color: #52606d; font-size: 1.1rem; margin-bottom: 1.75rem; }
-    .cta { background: #1d4f91; color: #fff; border: 0; padding: 0.85rem 1.8rem; font-size: 1rem; border-radius: 8px; cursor: pointer; }
-    .cta.secondary { background: transparent; color: #1d4f91; border: 1px solid #c2d1e6; margin-left: 0.6rem; }
-    .preview { background: #fff; border: 1px solid #e3e7ec; border-radius: 12px; padding: 1.25rem; box-shadow: 0 10px 30px rgba(31, 41, 51, 0.06); }
-    .preview .row { display: flex; justify-content: space-between; padding: 0.7rem 0; border-bottom: 1px solid #eef1f4; font-size: 0.95rem; }
+    .hero p { color: var(--page-text-muted); font-size: 1.1rem; margin-bottom: 1.75rem; }
+    .cta { background: var(--page-cta-bg); color: var(--page-cta-text); border: 0; padding: 0.85rem 1.8rem; font-size: 1rem; border-radius: 8px; cursor: pointer; }
+    .cta.secondary { background: transparent; color: var(--page-accent); border: 1px solid var(--page-accent-border); margin-left: 0.6rem; }
+    .preview { background: var(--page-surface); border: 1px solid var(--page-border); border-radius: 12px; padding: 1.25rem; box-shadow: 0 10px 30px var(--page-shadow); }
+    .preview .row { display: flex; justify-content: space-between; padding: 0.7rem 0; border-bottom: 1px solid var(--page-border-soft); font-size: 0.95rem; }
     .preview .row:last-child { border-bottom: 0; }
-    .preview .tag { background: #e8f0fb; color: #1d4f91; padding: 0.1rem 0.5rem; border-radius: 999px; font-size: 0.8rem; }
+    .preview .tag { background: var(--page-accent-soft); color: var(--page-accent); padding: 0.1rem 0.5rem; border-radius: 999px; font-size: 0.8rem; }
     .features { max-width: 64rem; margin: 0 auto; padding: 2rem; display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem; }
-    .card { background: #fff; border: 1px solid #e3e7ec; border-radius: 12px; padding: 1.5rem; }
+    .card { background: var(--page-surface); border: 1px solid var(--page-border); border-radius: 12px; padding: 1.5rem; }
     .card h3 { margin-bottom: 0.5rem; font-size: 1.05rem; }
-    .card p { color: #52606d; font-size: 0.95rem; }
+    .card p { color: var(--page-text-muted); font-size: 0.95rem; }
     .pricing { max-width: 64rem; margin: 2rem auto 0; padding: 2rem; }
     .pricing h2 { font-size: 1.6rem; margin-bottom: 1.25rem; }
     .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-    table { width: 100%; border-collapse: collapse; background: #fff; border: 1px solid #e3e7ec; border-radius: 12px; overflow: hidden; }
-    th, td { text-align: left; padding: 0.85rem 1rem; border-bottom: 1px solid #eef1f4; font-size: 0.95rem; }
-    th { background: #f1f4f8; font-weight: 600; }
+    table { width: 100%; border-collapse: collapse; background: var(--page-surface); border: 1px solid var(--page-border); border-radius: 12px; overflow: hidden; }
+    th, td { text-align: left; padding: 0.85rem 1rem; border-bottom: 1px solid var(--page-border-soft); font-size: 0.95rem; }
+    th { background: var(--page-surface-alt); font-weight: 600; }
     tr:last-child td { border-bottom: 0; }
     form { max-width: 64rem; margin: 2rem auto; padding: 2rem; display: flex; gap: 0.75rem; align-items: center; }
     form label { font-weight: 600; }
-    form input { flex: 1; padding: 0.7rem 0.9rem; border: 1px solid #c8d0da; border-radius: 8px; font-size: 1rem; }
+    form input { flex: 1; padding: 0.7rem 0.9rem; background: var(--page-input-bg); color: var(--page-text); border: 1px solid var(--page-input-border); border-radius: 8px; font-size: 1rem; }
     .settings { max-width: 64rem; margin: 2rem auto 0; padding: 2rem; }
     .settings h2 { font-size: 1.6rem; margin-bottom: 0.75rem; }
-    .settings p { color: #52606d; font-size: 0.95rem; max-width: 46rem; margin-bottom: 1.1rem; }
+    .settings p { color: var(--page-text-muted); font-size: 0.95rem; max-width: 46rem; margin-bottom: 1.1rem; }
     .settings-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-bottom: 1.25rem; }
-    .settings-grid label { display: flex; flex-direction: column; gap: 0.4rem; background: #fff; border: 1px solid #e3e7ec; border-radius: 12px; padding: 0.9rem 1rem; }
-    .settings-grid span { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.85rem; color: #1d4f91; }
-    .settings-grid select, .settings-grid input { padding: 0.5rem 0.6rem; border: 1px solid #c8d0da; border-radius: 8px; font-size: 0.95rem; background: #fff; color: inherit; }
+    .settings-grid label { display: flex; flex-direction: column; gap: 0.4rem; background: var(--page-surface); border: 1px solid var(--page-border); border-radius: 12px; padding: 0.9rem 1rem; }
+    .settings-grid .settings-name { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.85rem; color: var(--page-accent); }
+    .settings-grid .settings-desc { display: block; color: var(--page-text-muted); font-size: 0.85rem; line-height: 1.45; margin-bottom: auto; }
+    .settings-grid select, .settings-grid input { padding: 0.5rem 0.6rem; border: 1px solid var(--page-input-border); border-radius: 8px; font-size: 0.95rem; background: var(--page-input-bg); color: inherit; }
     .settings-grid input[type="color"] { width: 100%; height: 2.5rem; padding: 0.2rem; }
     .settings-actions { display: flex; align-items: center; margin-bottom: 1.25rem; }
-    .settings p.settings-notice { background: #fdf0e6; border: 1px solid #edc39a; border-radius: 8px; padding: 0.7rem 1rem; color: #7a4b12; max-width: none; }
-    .settings-snippet { background: #fff; border: 1px solid #e3e7ec; border-radius: 12px; padding: 1rem 1.25rem; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.85rem; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
-    footer { margin-top: 3rem; padding: 2rem 3rem; background: #1f2933; color: #b9c2cc; display: flex; justify-content: space-between; font-size: 0.9rem; }
-    .fork-note { display: flex; align-items: center; gap: 1rem; padding: 0.6rem 3rem; background: #f3efff; border-bottom: 1px solid #d9cfff; color: #3b2f6b; font-size: 0.9rem; }
+    .settings p code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.9em; color: var(--page-accent); }
+    .settings p.settings-notice { background: var(--page-notice-bg); border: 1px solid var(--page-notice-border); border-radius: 8px; padding: 0.7rem 1rem; color: var(--page-notice-text); max-width: none; }
+    .settings-snippet { background: var(--page-surface); border: 1px solid var(--page-border); border-radius: 12px; padding: 1rem 1.25rem; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.85rem; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
+    footer { margin-top: 3rem; padding: 2rem 3rem; background: var(--page-footer-bg); color: var(--page-footer-text); display: flex; justify-content: space-between; font-size: 0.9rem; }
+    .fork-note { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem; padding: 0.6rem 3rem; background: var(--page-note-bg); border-bottom: 1px solid var(--page-note-border); color: var(--page-note-text); font-size: 0.9rem; }
     .fork-note img { height: 22px; width: auto; display: block; }
-    .fork-note p { margin: 0; }
-    .fork-note a { color: #5b3fd6; }
+    .fork-note p { margin: 0; flex: 1; min-width: 18rem; }
+    .fork-note a { color: var(--page-note-accent); }
+    .page-theme { display: flex; align-items: center; gap: 0.5rem; margin-left: auto; }
+    .page-theme-label { font-weight: 600; white-space: nowrap; }
+    .page-theme-switch { display: flex; border: 1px solid var(--page-note-border); border-radius: 999px; overflow: hidden; }
+    .page-theme-switch button { border: 0; background: transparent; color: inherit; font: inherit; font-size: 0.85rem; padding: 0.25rem 0.8rem; cursor: pointer; }
+    .page-theme-switch button[aria-pressed="true"] { background: var(--page-note-accent); color: var(--page-note-accent-ink); }
+    .page-theme-switch button:focus-visible { outline: 2px solid var(--page-note-accent); outline-offset: -2px; }
     @media (max-width: 800px) { .hero, .features, .settings-grid { grid-template-columns: 1fr; } header, footer { padding: 1rem 1.25rem; } .fork-note { padding: 0.6rem 1.25rem; } form { flex-wrap: wrap; } form input { flex: 1 1 12rem; min-width: 0; } }
   </style>
 </head>
 <body>
   <aside class="fork-note" data-uxnote-ignore>
     <a href="https://github.com/Qu4tro/uxnote-fork"><img src="assets/uxnote-fork-logo.svg" alt="uxnote-fork"></a>
-    <p>This page is the demo of <a href="https://github.com/Qu4tro/uxnote-fork">uxnote-fork</a>. Fieldnote is a fictional product. Use the toolbar at the bottom to highlight text, pin an element, or drag out a region; the notes stay in this browser. The <a href="https://github.com/Qu4tro/uxnote-fork#install">README</a> holds the install snippet and every option.</p>
+    <p>This page is the demo of <a href="https://github.com/Qu4tro/uxnote-fork">uxnote-fork</a>. Fieldnote is a fictional product. Use the toolbar at the bottom to highlight text, pin an element, or drag out a region; the notes stay in this browser. <strong>Page theme</strong> colours this page alone and holds what you pick, so the widget's own theme can be read against either background. The <a href="https://github.com/Qu4tro/uxnote-fork#install">README</a> holds the install snippet and every option.</p>
+    <div class="page-theme">
+      <span class="page-theme-label" id="page-theme-label">Page theme</span>
+      <div class="page-theme-switch" role="group" aria-labelledby="page-theme-label">
+        <button type="button" data-page-theme-set="light" aria-pressed="true">Light</button>
+        <button type="button" data-page-theme-set="dark" aria-pressed="false">Dark</button>
+      </div>
+    </div>
   </aside>
   <header>
     <div class="logo">Fieldnote</div>
@@ -117,60 +201,87 @@
     <button class="cta" type="submit">Subscribe</button>
   </form>
 
-  <section class="settings" id="demo-settings" data-uxnote-ignore>
+  <section class="settings" id="demo-settings">
     <h2>Widget settings</h2>
     <p>The widget reads its options from its script tag, once, when the page
       loads. This page carries them in the query string, so applying a change
       reloads the page. The notes you have already taken stay where they are.</p>
+    <p>Two of the options name a server to keep the notes on instead of this
+      browser. A link must not be able to point your notes at somebody else's
+      server, so this page takes a loopback address only: <code>localhost</code>,
+      anything in 127.0.0.0/8, or <code>[::1]</code>. The repo ships
+      <code>server/server.py</code> to run there, with
+      <code>python3 server/server.py --port 8123</code>. The hosted demo is served
+      over HTTPS from github.io and browsers restrict a public page reaching a
+      loopback address (Private Network Access), so the two server options are
+      meant for a demo you run locally and may be blocked here.</p>
     <div class="settings-grid">
-      <label for="set-theme"><span>data-theme</span>
+      <label for="set-theme"><span class="settings-name">data-theme</span>
+        <span class="settings-desc">Theme of the toolbar, panel, and dialogs. auto follows the system and changes with it.</span>
         <select id="set-theme">
           <option value="auto">auto</option>
           <option value="light">light</option>
           <option value="dark">dark</option>
         </select>
       </label>
-      <label for="set-json-export"><span>data-json-export</span>
+      <label for="set-json-export"><span class="settings-name">data-json-export</span>
+        <span class="settings-desc">The export button and its dialog. false takes the send-by-mail handoff inside it away too.</span>
         <select id="set-json-export">
           <option value="true">true</option>
           <option value="false">false</option>
         </select>
       </label>
-      <label for="set-json-import"><span>data-json-import</span>
+      <label for="set-json-import"><span class="settings-name">data-json-import</span>
+        <span class="settings-desc">The import button, its dialog, and the list of files imported into this page.</span>
         <select id="set-json-import">
           <option value="true">true</option>
           <option value="false">false</option>
         </select>
       </label>
-      <label for="set-backdrop"><span>isBackdropVisible</span>
+      <label for="set-backdrop"><span class="settings-name">isBackdropVisible</span>
+        <span class="settings-desc">Dims the page behind the widget for as long as the toolbar is on screen.</span>
         <select id="set-backdrop">
           <option value="true">true</option>
           <option value="false">false</option>
         </select>
       </label>
-      <label for="set-toolbar-visible"><span>isToolVisibleAtFirstLaunch</span>
+      <label for="set-toolbar-visible"><span class="settings-name">isToolVisibleAtFirstLaunch</span>
+        <span class="settings-desc">Whether the toolbar starts open. A hide made in this browser is remembered and wins.</span>
         <select id="set-toolbar-visible">
           <option value="true">true</option>
           <option value="false">false</option>
         </select>
       </label>
-      <label for="set-toolbar-top"><span>isToolOnTopAtLaunch</span>
+      <label for="set-toolbar-top"><span class="settings-name">isToolOnTopAtLaunch</span>
+        <span class="settings-desc">Starts the toolbar at the top rather than the bottom. A move made from the toolbar is remembered and wins.</span>
         <select id="set-toolbar-top">
           <option value="true">true</option>
           <option value="false">false</option>
         </select>
       </label>
-      <label for="set-color"><span>colorForHighlight</span>
+      <label for="set-color"><span class="settings-name">colorForHighlight</span>
+        <span class="settings-desc">The colour of a text highlight, an element's outline, and a region's frame alike.</span>
         <input id="set-color" type="color" value="#4e9cf6">
       </label>
-      <label for="set-color-text"><span>colorForTextHighlight</span>
+      <label for="set-color-text"><span class="settings-name">colorForTextHighlight</span>
+        <span class="settings-desc">Overrides it for text highlights. Given alone, it becomes the colour of all three.</span>
         <input id="set-color-text" type="color" value="#4e9cf6">
       </label>
-      <label for="set-color-element"><span>colorForElementHighlight</span>
+      <label for="set-color-element"><span class="settings-name">colorForElementHighlight</span>
+        <span class="settings-desc">Overrides it for an element's outline and its marker. Given alone, it becomes the colour of all three.</span>
         <input id="set-color-element" type="color" value="#4e9cf6">
       </label>
-      <label for="set-mailto"><span>data-mailto</span>
+      <label for="set-mailto"><span class="settings-name">data-mailto</span>
+        <span class="settings-desc">The recipient of the send-by-mail handoff in the export dialog. It fills a draft; it sends nothing.</span>
         <input id="set-mailto" type="email" placeholder="team@example.org">
+      </label>
+      <label for="set-server-url"><span class="settings-name">data-server-url</span>
+        <span class="settings-desc">Keeps the notes on a server instead of this browser. This page takes a loopback address only.</span>
+        <input id="set-server-url" type="url" placeholder="http://localhost:8123">
+      </label>
+      <label for="set-server-api-key"><span class="settings-name">data-server-api-key</span>
+        <span class="settings-desc">Sent as X-Uxnote-Key on every request to that server. It travels in this page's address bar.</span>
+        <input id="set-server-api-key" type="text" placeholder="review-key">
       </label>
     </div>
     <div class="settings-actions">
@@ -187,6 +298,33 @@
     <div>Privacy · Terms · Contact</div>
   </footer>
 
+  <script>
+    // The page theme is the demo's own, light or dark and nothing else. It is
+    // deliberately not tied to the widget's data-theme: pinning the page is
+    // what makes the widget's auto, light, and dark worth looking at.
+    (function () {
+      const root = document.documentElement;
+      const buttons = document.querySelectorAll('[data-page-theme-set]');
+
+      function mark(theme) {
+        buttons.forEach(function (button) {
+          button.setAttribute('aria-pressed', button.dataset.pageThemeSet === theme ? 'true' : 'false');
+        });
+      }
+
+      function apply(theme) {
+        root.setAttribute('data-page-theme', theme);
+        try { localStorage.setItem('uxnote-fork-demo:page-theme', theme); } catch (e) { /* private mode keeps the choice for this load alone */ }
+        mark(theme);
+      }
+
+      buttons.forEach(function (button) {
+        button.addEventListener('click', function () { apply(button.dataset.pageThemeSet); });
+      });
+
+      mark(root.getAttribute('data-page-theme') === 'dark' ? 'dark' : 'light');
+    })();
+  </script>
   <script src="uxnote-tool/snapdom.min.js"></script>
   <script>
     (function () {
@@ -204,15 +342,36 @@
         { key: 'color',           attr: 'colorForHighlight',          kind: 'color',  fallback: '#4e9cf6' },
         { key: 'color-text',      attr: 'colorForTextHighlight',      kind: 'color',  fallback: '#4e9cf6' },
         { key: 'color-element',   attr: 'colorForElementHighlight',   kind: 'color',  fallback: '#4e9cf6' },
-        { key: 'mailto',          attr: 'data-mailto',                kind: 'email',  fallback: '' }
+        { key: 'mailto',          attr: 'data-mailto',                kind: 'email',  fallback: '' },
+        { key: 'server-url',      attr: 'data-server-url',            kind: 'url',    fallback: '' },
+        { key: 'server-api-key',  attr: 'data-server-api-key',        kind: 'key',    fallback: '' }
       ];
-      // This page has no server. A crafted link must not be able to point a
-      // visitor's notes at one, so these are named and refused.
+      // A crafted link must not be able to point a visitor's notes at somebody
+      // else's server. A server on the loopback address is the visitor's own
+      // machine, so that one is allowed and every other is refused. Normalised
+      // (lowercased, letters only), these name a server option that this page
+      // does not read: a misspelling of one, or a bare server or key.
       var REFUSED = ['serverurl', 'serverapikey', 'server', 'apikey'];
       var SOURCE = 'uxnote-tool/uxnote.js';
       // The literal characters that close a script tag would close this block.
       var CLOSE_TAG = '<\/script>';
       var params = new URLSearchParams(location.search);
+
+      // Parsed, never pattern-matched: a string test is what a crafted address
+      // walks past. The parser settles the host first, so 127.1, 0x7f.0.0.1 and
+      // [0:0:0:0:0:0:0:1] all arrive here in the one form this reads.
+      function loopbackUrl(value) {
+        var url;
+        try {
+          url = new URL(value);
+        } catch (err) {
+          return null;
+        }
+        if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
+        var host = url.hostname.toLowerCase();
+        var loopback = host === 'localhost' || host === '[::1]' || /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(host);
+        return loopback ? url.href : null;
+      }
 
       // Anything that does not clean is dropped, so the widget falls through to
       // its own default rather than reading a value it cannot use.
@@ -230,6 +389,12 @@
           if (hex.length === 3) hex = hex.charAt(0) + hex.charAt(0) + hex.charAt(1) + hex.charAt(1) + hex.charAt(2) + hex.charAt(2);
           return '#' + hex.toLowerCase();
         }
+        if (option.kind === 'url') return loopbackUrl(value);
+        if (option.kind === 'key') {
+          // The key is opaque to this page. It only has to be one word that
+          // survives an attribute, a query string, and this snippet.
+          return value.length <= 200 && /^[^\s<>"']+$/.test(value) ? value : null;
+        }
         if (value.length > 254) return null;
         return /^[^\s@<>"']+@[^\s@<>"']+\.[^\s@<>"']+$/.test(value) ? value : null;
       }
@@ -241,6 +406,8 @@
         var value = clean(option, params.get(option.key));
         if (value !== null) chosen[option.key] = value;
       });
+      // On its own the key names nothing, so it goes wherever the url went.
+      if (!('server-url' in chosen)) delete chosen['server-api-key'];
 
       var tag = document.createElement('script');
       tag.src = SOURCE;
@@ -270,6 +437,7 @@
         OPTIONS.forEach(function (option) {
           values[option.key] = clean(option, controlFor(option).value);
         });
+        if (values['server-url'] === null) values['server-api-key'] = null;
         return values;
       }
 
@@ -309,13 +477,23 @@
 
       // Silence would look like the link had worked, so say what was ignored.
       var refused = [];
+      var read = OPTIONS.map(function (option) { return option.key; });
       params.forEach(function (value, key) {
+        // The keys this page does read answer for themselves below.
+        if (read.indexOf(key) !== -1) return;
         var normalized = key.toLowerCase().replace(/[^a-z]/g, '');
         if (REFUSED.indexOf(normalized) !== -1 && refused.indexOf(key) === -1) refused.push(key);
       });
+      var misspelled = refused.length > 0;
+      var urlDropped = params.get('server-url') !== null && !('server-url' in chosen);
+      var keyDropped = params.get('server-api-key') !== null && !('server-api-key' in chosen);
+      if (urlDropped) refused.push('server-url');
+      if (keyDropped) refused.push('server-api-key');
       if (refused.length) {
-        notice.textContent = 'This demo has no server behind it, so it ignored ' + refused.join(', ') +
-          ' from the address bar. The notes stay in this browser.';
+        notice.textContent = 'This page ignored ' + refused.join(', ') + ' from the address bar.' +
+          (urlDropped || misspelled ? ' This demo takes a server on a loopback address only: localhost, anything in 127.0.0.0/8, or [::1].' : '') +
+          (keyDropped && !urlDropped && !('server-url' in chosen) ? ' A key on its own has no server to reach.' : '') +
+          ('server-url' in chosen ? '' : ' The notes stay in this browser.');
         notice.hidden = false;
       }
     })();
