@@ -130,6 +130,29 @@ it, so nothing carries a base64 document to the server.
 `npm run build` writes `snapdom.min.js` into `dist/` beside the minified widget,
 so both URLs above resolve against one directory.
 
+## Export and import
+
+The toolbar offers a JSON export and a JSON import. Both are on by default.
+Turn either one off per site:
+
+```html
+<script src="https://qu4tro.github.io/uxnote-fork/dist/uxnote.min-v1.0.0.js"
+  data-json-export="false"
+  data-json-import="false"></script>
+```
+
+| Attribute | Meaning |
+|---|---|
+| `data-json-export` | `true` by default. `false` removes the export button, its dialog, and the email handoff inside that dialog. |
+| `data-json-import` | `true` by default. `false` removes the import button, its dialog, and its list of imported files. |
+
+`data-mailto` keeps its meaning: it names the recipient of the email handoff.
+It does nothing while `data-json-export` is `false`.
+
+An annotation imported earlier stays in the store when the import is off. Only
+the dialog that lists the imported files is gone. When both options are off,
+the toolbar drops the group between the capture modes and the panel controls.
+
 ## Develop
 
 ```sh
