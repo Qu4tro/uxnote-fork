@@ -629,7 +629,6 @@
         align-items: center;
         gap: 8px;
       }
-      .wn-annot-filters select,
       .wn-annot-filters input[type="search"] {
         height: 34px;
         border-radius: 12px;
@@ -639,42 +638,13 @@
         font-size: 12px;
         color: #342d43;
       }
-      .wn-annot-filter-row select {
-        flex: 1 1 auto;
-        min-width: 0;
-      }
       .wn-annot-filter-row input[type="search"] {
         width: 100%;
       }
-      .wn-annot-filter-clear {
-        border: 1px solid rgba(109, 86, 199, 0.25);
-        background: rgba(109, 86, 199, 0.08);
-        color: #5a5266;
-        width: 26px;
-        height: 26px;
-        border-radius: 50%;
-        display: none;
-        align-items: center;
-        justify-content: center;
-        cursor: pointer;
-        font-size: 12px;
-        line-height: 1;
-        padding: 0;
-      }
-      .wn-annot-filter-clear:hover {
-        background: rgba(109, 86, 199, 0.16);
-      }
-      .wn-annot-filters select:focus,
       .wn-annot-filters input[type="search"]:focus {
         outline: none;
         border-color: rgba(109, 86, 199, 0.6);
         box-shadow: 0 0 0 3px rgba(109, 86, 199, 0.14);
-      }
-      .wn-annot-filters .wn-annot-filter-label {
-        font-size: 12px;
-        color: #5a5266;
-        font-weight: 600;
-        margin-right: 4px;
       }
       .wn-annot-panel .wn-annot-empty {
         color: #7b7588;
@@ -866,29 +836,6 @@
         width: 100%;
         text-align: right;
       }
-      .wn-annot-priority {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        font-size: 12px;
-        font-weight: 700;
-        color: #4b4557;
-        padding: 8px 10px;
-        border-radius: 12px;
-        border: 1px solid rgba(109, 86, 199, 0.2);
-        background: rgba(109, 86, 199, 0.06);
-      }
-      .wn-annot-priority .dot {
-        width: 10px;
-        height: 10px;
-        border-radius: 50%;
-      }
-      .wn-annot-priority.low { border-color: rgba(47,191,113,0.35); background: rgba(47,191,113,0.08); color: #1f7a4c; }
-      .wn-annot-priority.low .dot { background: #2fbf71; }
-      .wn-annot-priority.medium { border-color: rgba(227,178,60,0.35); background: rgba(227,178,60,0.08); color: #8a6b1f; }
-      .wn-annot-priority.medium .dot { background: #e3b23c; }
-      .wn-annot-priority.high { border-color: rgba(224,91,91,0.35); background: rgba(224,91,91,0.1); color: #a03232; }
-      .wn-annot-priority.high .dot { background: #e05b5b; }
       .wn-annot-missing {
         display: inline-flex;
         align-items: center;
@@ -1084,26 +1031,6 @@
         line-height: 1.6;
         color: #3f3852;
       }
-      .wn-annot-name-row {
-        display: flex;
-        flex-direction: column;
-        gap: 6px;
-        margin-top: 4px;
-      }
-      .wn-annot-name-row label {
-        font-size: 13px;
-        color: #4b4557;
-        font-weight: 600;
-      }
-      .wn-annot-name-inputs {
-        display: flex;
-        gap: 8px;
-        align-items: center;
-        flex-wrap: wrap;
-      }
-      .wn-annot-name-select {
-        min-width: 140px;
-      }
       .wn-annot-modal textarea {
         width: 100%;
         min-height: 90px;
@@ -1117,107 +1044,14 @@
         outline: none;
         box-shadow: inset 0 1px 2px rgba(0,0,0,0.05);
       }
-      .wn-annot-modal input[type="text"] {
-        width: 100%;
-        border-radius: 12px;
-        border: 1px solid rgba(109, 86, 199, 0.22);
-        background: #fff;
-        padding: 10px 12px;
-        font-size: 14px;
-        color: #342d43;
-        outline: none;
-        box-shadow: inset 0 1px 2px rgba(0,0,0,0.05);
-      }
       .wn-annot-modal textarea:focus {
         border-color: rgba(109, 86, 199, 0.55);
         box-shadow: 0 0 0 3px rgba(109, 86, 199, 0.15);
       }
-      .wn-annot-modal input[type="text"]:focus {
-        border-color: rgba(109, 86, 199, 0.55);
-        box-shadow: 0 0 0 3px rgba(109, 86, 199, 0.15);
-      }
       @media (max-width: 640px) {
-        .wn-annot-modal textarea,
-        .wn-annot-modal input[type="text"],
-        .wn-annot-modal select {
+        .wn-annot-modal textarea {
           font-size: 16px;
         }
-      }
-      .wn-annot-export-modal {
-        min-width: min(640px, calc(100vw - 40px));
-        max-width: 860px;
-      }
-      .wn-annot-export-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-        gap: 12px;
-      }
-      .wn-annot-export-panel {
-        border: 1px solid rgba(109, 86, 199, 0.12);
-        border-radius: 14px;
-        padding: 12px;
-        background: #fff;
-        display: flex;
-        flex-direction: column;
-        gap: 10px;
-        min-height: 220px;
-      }
-      .wn-annot-export-panel h5 {
-        margin: 0;
-        font-size: 13px;
-        font-weight: 700;
-        color: #3f3852;
-      }
-      .wn-annot-export-panel p {
-        margin: 0;
-        font-size: 12px;
-        color: #5a5266;
-      }
-      .wn-annot-export-list {
-        display: grid;
-        gap: 8px;
-        overflow-y: auto;
-        padding-right: 4px;
-      }
-      .wn-annot-export-item {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        font-size: 14px;
-        font-weight: 600;
-        color: #3f3852;
-      }
-      .wn-annot-export-item input {
-        appearance: none;
-        width: 20px;
-        height: 20px;
-        border-radius: 6px;
-        border: 1.5px solid rgba(109, 86, 199, 0.5);
-        background: #fff;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        position: relative;
-        transition: all 0.2s ease;
-      }
-      .wn-annot-export-item input:checked {
-        background: #6d56c7;
-        border-color: #6d56c7;
-        box-shadow: 0 0 0 3px rgba(109, 86, 199, 0.18);
-      }
-      .wn-annot-export-item input:checked::after {
-        content: '';
-        width: 8px;
-        height: 5px;
-        border-left: 2px solid #fff;
-        border-bottom: 2px solid #fff;
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -55%) rotate(-45deg);
-      }
-      .wn-annot-export-item span {
-        font-size: 14px;
       }
       .wn-annot-import-modal {
         min-width: min(760px, calc(100vw - 40px));
@@ -1261,11 +1095,6 @@
         font-size: 12px;
         color: #5a5266;
         margin-top: 4px;
-      }
-      .wn-annot-import-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-        gap: 12px;
       }
       .wn-annot-import-panel {
         border: 1px solid rgba(109, 86, 199, 0.12);
@@ -1374,31 +1203,6 @@
         justify-content: center;
         cursor: pointer;
       }
-      .wn-annot-import-stats {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
-        gap: 8px;
-      }
-      .wn-annot-import-stat {
-        background: rgba(109, 86, 199, 0.08);
-        border: 1px solid rgba(109, 86, 199, 0.12);
-        border-radius: 12px;
-        padding: 8px;
-        display: flex;
-        flex-direction: column;
-        gap: 4px;
-      }
-      .wn-annot-import-stat span:first-child {
-        font-size: 11px;
-        color: #5a5266;
-        text-transform: uppercase;
-        letter-spacing: 0.12em;
-      }
-      .wn-annot-import-stat span:last-child {
-        font-size: 16px;
-        font-weight: 700;
-        color: #3f3852;
-      }
       .wn-annot-import-empty {
         font-size: 12px;
         color: #5a5266;
@@ -1445,47 +1249,6 @@
       }
       .wn-annot-modal .wn-annot-pill.secondary:hover {
         background: rgba(109, 86, 199, 0.18);
-      }
-      .wn-annot-modal .wn-annot-prio {
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
-      }
-      .wn-annot-modal .wn-annot-prio label {
-        font-size: 13px;
-        color: #4b4557;
-        font-weight: 600;
-      }
-      .wn-annot-modal .wn-annot-prio-options {
-        display: flex;
-        gap: 10px;
-      }
-      .wn-annot-modal .wn-annot-prio-btn {
-        flex: 1 1 0;
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        padding: 10px 12px;
-        border-radius: 12px;
-        border: 1px solid rgba(109, 86, 199, 0.22);
-        background: #fff;
-        cursor: pointer;
-        transition: all 0.15s ease;
-        font-size: 13px;
-        font-weight: 600;
-        color: #3e384a;
-      }
-      .wn-annot-modal .wn-annot-prio-btn .dot {
-        width: 12px;
-        height: 12px;
-        border-radius: 50%;
-      }
-      .wn-annot-modal .wn-annot-prio-btn[data-priority="low"] .dot { background: #2fbf71; }
-      .wn-annot-modal .wn-annot-prio-btn[data-priority="medium"] .dot { background: #e3b23c; }
-      .wn-annot-modal .wn-annot-prio-btn[data-priority="high"] .dot { background: #e05b5b; }
-      .wn-annot-modal .wn-annot-prio-btn.active {
-        border-color: rgba(109, 86, 199, 0.6);
-        box-shadow: 0 0 0 3px rgba(109, 86, 199, 0.16);
       }
       .wn-annot-shot-frame {
         position: absolute;
