@@ -368,6 +368,174 @@ test('the demo page drops a server key that arrives on its own', async ({ page }
   await expect(page.locator('#settings-notice')).toContainText('no server to reach');
 });
 
+test('a mouse still commits a highlight on the release', async ({ page }) => {
+  await page.goto('/');
+  await page.locator('.wn-annot-toolbar button[data-mode="text"]').click();
+  const copy = await page.locator('#hero-copy').boundingBox();
+  await page.mouse.move(copy.x + 4, copy.y + 8);
+  await page.mouse.down();
+  await page.mouse.move(copy.x + 240, copy.y + 8, { steps: 8 });
+  await page.mouse.up();
+  // The selection action bar is a coarse-pointer answer. A mouse has a
+  // release that means what it says, and never builds one.
+  await expect(page.locator('.wn-annot-modal-backdrop.show')).toBeVisible();
+  await expect(page.locator('.wn-annot-selection-bar')).toHaveCount(0);
+});
+
+test('a mouse still previews an element on hover and commits on the click', async ({ page }) => {
+  await page.goto('/');
+  await page.locator('.wn-annot-toolbar button[data-mode="element"]').click();
+  const card = page.locator('.card').first();
+  await card.hover();
+  await expect(page.locator('.wn-annot-outline')).toHaveCSS('display', 'block');
+  await card.click();
+  await expect(page.locator('.wn-annot-modal-backdrop.show')).toBeVisible();
+  // Tap-to-preview is what replaces a hover the pointer does not have.
+  await expect(page.locator('.wn-annot-pick-bar')).toHaveCount(0);
+});
+
+test('a mouse still frames the region it captures', async ({ page }) => {
+  await page.goto('/');
+  await page.locator('.wn-annot-toolbar button[data-mode="screenshot"]').click();
+  // One tap of the camera takes the viewport where there is no drag to make.
+  // Where there is one, the reviewer keeps the frame.
+  await expect(page.locator('.wn-shot-overlay')).toBeVisible();
+  await page.mouse.move(200, 300);
+  await page.mouse.down();
+  await page.mouse.move(420, 440, { steps: 5 });
+  await page.mouse.up();
+  await expect(page.locator('.wn-annot-modal-backdrop.show')).toBeVisible();
+  await page.locator('.wn-annot-modal textarea').fill('a framed corner');
+  await page.locator('.wn-annot-modal .wn-annot-pill.primary').click();
+  await expect
+    .poll(async () => (await page.evaluate(() => JSON.parse(localStorage.getItem(`uxnote:site:${location.origin}`) || '[]')))[0]?.rect, {
+      timeout: 30000
+    })
+    .toEqual({ x: 200, y: 300, w: 220, h: 140 });
+});
+
+// A page with a server behind it, served through a route so the widget starts
+// on a fresh window with `data-server-url` set.
+const SERVER_HOST_PAGE = `<!doctype html>
+<html><head><meta charset="utf-8"><title>sync probe</title></head>
+<body><main><p id="copy">A page with a server behind it.</p></main>
+<script src="/uxnote-tool/uxnote.js" data-server-url="/api"></script></body></html>`;
+
+async function withSyncServer(page) {
+  const puts = [];
+  let refuse = true;
+  await page.route('**/sync-probe.html', (route) =>
+    route.fulfill({ contentType: 'text/html; charset=utf-8', body: SERVER_HOST_PAGE })
+  );
+  await page.route('**/api/annotations?*', (route) =>
+    route.fulfill({ contentType: 'application/json', body: JSON.stringify({ annotations: [] }) })
+  );
+  await page.route('**/api/annotations/*', (route) => {
+    const request = route.request();
+    if (request.method() !== 'PUT') return route.fulfill({ status: 200, body: '{}' });
+    puts.push(JSON.parse(request.postData() || '{}').id);
+    if (refuse) {
+      refuse = false;
+      return route.fulfill({ status: 503, body: 'no' });
+    }
+    return route.fulfill({ status: 200, body: '{}' });
+  });
+  await page.goto('/sync-probe.html');
+  await expect(page.locator('.wn-annot-toolbar')).toBeVisible();
+  return { puts };
+}
+
+async function annotateOnce(page) {
+  await page.locator('.wn-annot-toolbar button[data-mode="element"]').click();
+  await page.locator('#copy').click();
+  await page.locator('.wn-annot-modal textarea').fill('a note the server refused');
+  await page.locator('.wn-annot-modal .wn-annot-pill.primary').click();
+}
+
+test('a hidden tab sends the annotation the server refused', async ({ page }) => {
+  const { puts } = await withSyncServer(page);
+  await annotateOnce(page);
+  await expect.poll(() => puts.length).toBe(1);
+  // A refused upsert leaves the snapshot stale so the next change retries.
+  // On a phone the tab goes to a lock screen and there is no next change.
+  await page.evaluate(() => {
+    Object.defineProperty(document, 'visibilityState', { get: () => 'hidden', configurable: true });
+    document.dispatchEvent(new Event('visibilitychange'));
+  });
+  await expect.poll(() => puts.length).toBe(2);
+  expect(puts[0]).toBe(puts[1]);
+});
+
+test('a page on its way out sends what it still owes', async ({ page }) => {
+  const { puts } = await withSyncServer(page);
+  await annotateOnce(page);
+  await expect.poll(() => puts.length).toBe(1);
+  // `pagehide` and not `beforeunload`, which iOS does not fire reliably.
+  await page.evaluate(() => window.dispatchEvent(new Event('pagehide')));
+  await expect.poll(() => puts.length).toBe(2);
+});
+
+test('a connection coming back sends what the lost one did not', async ({ page }) => {
+  const { puts } = await withSyncServer(page);
+  await annotateOnce(page);
+  await expect.poll(() => puts.length).toBe(1);
+  await page.evaluate(() => window.dispatchEvent(new Event('online')));
+  await expect.poll(() => puts.length).toBe(2);
+  // The second answer was taken, so a third event owes nothing.
+  await page.evaluate(() => window.dispatchEvent(new Event('online')));
+  await page.waitForTimeout(300);
+  expect(puts.length).toBe(2);
+});
+
+test('a render that never answers is not waited on for ever', async ({ page }) => {
+  test.setTimeout(90000);
+  await page.addInitScript(() => {
+    const stall = () => new Promise(() => {});
+    Object.defineProperty(window, 'snapdom', {
+      configurable: true,
+      get: () => ({ toCanvas: stall }),
+      set: () => {}
+    });
+  });
+  await page.goto('/');
+  await page.locator('.wn-annot-toolbar button[data-mode="screenshot"]').click();
+  await page.mouse.move(200, 300);
+  await page.mouse.down();
+  await page.mouse.move(420, 440, { steps: 5 });
+  await page.mouse.up();
+  await page.locator('.wn-annot-modal textarea').fill('a page that will not draw');
+  await page.locator('.wn-annot-modal .wn-annot-pill.primary').click();
+  // snapdom renders the whole document before the crop comes out of it. A long
+  // page on a slow device used to leave the reviewer with a prompt they had
+  // answered and nothing else, for as long as it took.
+  await expect(page.locator('.wn-annot-toast.show')).toHaveText(
+    'Uxnote: the page took too long to capture',
+    { timeout: 40000 }
+  );
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem(`uxnote:site:${location.origin}`) || '[]'))).toEqual([]);
+});
+
+test('a render that fails says so and writes nothing', async ({ page }) => {
+  await page.addInitScript(() => {
+    const fail = () => Promise.reject(new Error('no canvas here'));
+    Object.defineProperty(window, 'snapdom', {
+      configurable: true,
+      get: () => ({ toCanvas: fail }),
+      set: () => {}
+    });
+  });
+  await page.goto('/');
+  await page.locator('.wn-annot-toolbar button[data-mode="screenshot"]').click();
+  await page.mouse.move(200, 300);
+  await page.mouse.down();
+  await page.mouse.move(420, 440, { steps: 5 });
+  await page.mouse.up();
+  await page.locator('.wn-annot-modal textarea').fill('a page that cannot draw');
+  await page.locator('.wn-annot-modal .wn-annot-pill.primary').click();
+  await expect(page.locator('.wn-annot-toast.show')).toHaveText('Uxnote: could not capture that region');
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem(`uxnote:site:${location.origin}`) || '[]'))).toEqual([]);
+});
+
 const CAPTURE_FIXTURE = '/test/fixtures/server-capture.html';
 const ALLOW = { 'Access-Control-Allow-Origin': '*' };
 

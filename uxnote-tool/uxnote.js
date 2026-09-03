@@ -157,6 +157,12 @@
     highlightSpans: {},
     elementTargets: {},
     outlineBox: null,
+    selectionBar: null,
+    selectionTimer: null,
+    selectionRange: null,
+    elementPicker: null,
+    elementTrail: [],
+    elementTrailIndex: 0,
     toolbar: null,
     panel: null,
     visibilityToggle: null,
@@ -279,6 +285,7 @@
       :root[data-wn-theme="dark"] .wn-annot-panel,
       :root[data-wn-theme="dark"] .wn-annot-modal,
       :root[data-wn-theme="dark"] .wn-annot-sheet,
+      :root[data-wn-theme="dark"] .wn-annot-actionbar,
       :root[data-wn-theme="dark"] .wn-shot-lightbox {
         color-scheme: dark;
       }
@@ -1438,6 +1445,66 @@
         height: 22px;
       }
 
+      /* The two bars a finger drives a capture from, both raised just clear of
+         the toolbar and never anchored to the selection: iOS puts its own
+         Copy / Look Up callout directly above one, and that is a fight nobody
+         wins. Neither bar is built where a pointer can hover -- there the
+         release commits a highlight and the hover previews an element. */
+      .wn-annot-actionbar {
+        position: fixed;
+        left: max(10px, env(safe-area-inset-left));
+        right: max(10px, env(safe-area-inset-right));
+        display: none;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 8px;
+        background: var(--wn-surface);
+        color: var(--wn-text);
+        border: 1px solid var(--wn-border);
+        border-radius: 18px;
+        box-shadow: 0 12px 28px var(--wn-shadow);
+        font: 13px/1.4 "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+        /* Above the notes panel, below the comment sheet that answers it. */
+        z-index: 2147483150;
+      }
+      .wn-annot-actionbar.show { display: flex; }
+      .wn-annot-actionbar button {
+        flex: 1 1 auto;
+        min-height: 48px;
+        min-width: 48px;
+        padding: 10px 12px;
+        border: 1px solid var(--wn-border);
+        border-radius: 14px;
+        background: var(--wn-surface-input);
+        color: var(--wn-text);
+        font: inherit;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      .wn-annot-actionbar button.primary {
+        background: var(--wn-accent);
+        border-color: var(--wn-accent);
+        color: #fdfdff;
+      }
+      .wn-annot-actionbar button[disabled] {
+        opacity: 0.4;
+        cursor: default;
+      }
+      /* The name of the element under the finger takes a row of its own: three
+         thumb-sized controls already fill the width of a 320px screen. */
+      .wn-annot-pick-name {
+        flex: 1 0 100%;
+        min-width: 0;
+        text-align: center;
+        font-weight: 600;
+        color: var(--wn-text-muted);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
       /* How much room the layout has. Both arms carry weight: every phone in
          landscape is wider than 640px, so the width arm alone leaves it on the
          desktop layout with a bar that eats a fifth of the screen. */
@@ -1860,6 +1927,7 @@
     positionCommentCard();
     applyPageOffset();
     applySheetInset();
+    positionActionBars();
     syncPageScrollLock();
     refreshMarkers();
   }
@@ -2552,6 +2620,7 @@
     document.addEventListener('mouseup', handleTextSelection);
     document.addEventListener('touchend', handleTextSelection);
     document.addEventListener('pointerup', handleTextSelection);
+    document.addEventListener('selectionchange', handleSelectionChange);
     document.addEventListener('mousemove', handleElementHover);
     document.addEventListener('click', handleElementClick, true);
     window.addEventListener('resize', refreshMarkers);
@@ -2560,7 +2629,9 @@
     window.addEventListener('resize', applySheetInset);
     window.addEventListener('resize', positionTip);
     window.addEventListener('resize', positionVisibilityToggle);
+    window.addEventListener('resize', positionActionBars);
     window.addEventListener('scroll', refreshMarkers, { passive: true });
+    bindSyncFlush();
     watchRouteChanges();
     // A rotation crosses the compact boundary without always firing a resize
     // the layout functions can read, and the bar's button set differs across
@@ -2593,15 +2664,28 @@
       state.mode = null;
       updateToolbarActive();
       hideTip();
+      closeTouchCapture();
       if (!keepOutline) hideOutline();
       return;
     }
     state.mode = nextMode;
     updateToolbarActive();
     showTipForMode(nextMode);
+    closeTouchCapture();
     if (nextMode !== 'element') {
       hideOutline();
     }
+  }
+
+  // Leaving a mode takes its bar with it. Both are built only on a coarse
+  // pointer, so on a mouse this is two null checks.
+  function closeTouchCapture() {
+    if (state.selectionTimer) {
+      clearTimeout(state.selectionTimer);
+      state.selectionTimer = null;
+    }
+    hideSelectionBar();
+    closeElementPicker();
   }
 
   function updateToolbarActive() {
@@ -2617,11 +2701,12 @@
   }
 
   function showTipForMode(mode) {
+    const touch = isTouchInput();
     let text = '';
     if (mode === 'text') {
-      text = 'Select text then release to add a note.';
+      text = touch ? 'Select text, then tap Add note.' : 'Select text then release to add a note.';
     } else if (mode === 'element') {
-      text = 'Hover an element, click to annotate.';
+      text = touch ? 'Tap an element to preview it, then pin it.' : 'Hover an element, click to annotate.';
     }
     if (!text) return hideTip();
     state.tip.textContent = text;
@@ -2900,10 +2985,12 @@
       if (server) persistSnapshot();
     } catch (err) {
       console.warn('Annotator storage save error', err);
-      // Without a server the set was always only here, and upstream has always
-      // failed this quietly. With one, a refused write is the reload promise
-      // breaking, and the reviewer is the only one who can act on it.
-      if (server) warnStorage();
+      // A capture on a coarse pointer is the whole viewport rather than a
+      // hand-framed corner of it, so the store fills faster than it used to,
+      // and it says so now whether or not a server is named. warnStorage says
+      // it once: a refused write repeats for every note after it, and the
+      // reviewer only needs telling that the browser is full.
+      warnStorage();
     }
   }
 
@@ -3136,31 +3223,44 @@
     body.style.paddingLeft = `${next.left}px`;
   }
 
+  function isRangeAnnotatable(range) {
+    return (
+      isAnnotatableTarget(range.commonAncestorContainer) &&
+      isAnnotatableTarget(range.startContainer) &&
+      isAnnotatableTarget(range.endContainer)
+    );
+  }
+
   // Capture a text selection and convert to annotation (text mode)
   async function handleTextSelection() {
     if (state.mode !== 'text') return;
+    // Where a finger is driving, the release is the wrong moment to read the
+    // selection: a long press picks one word and every drag of a handle after
+    // it is another release. The action bar commits there instead.
+    if (isTouchInput()) return;
     const selection = window.getSelection();
     if (!selection || selection.rangeCount === 0 || selection.isCollapsed) return;
     const range = selection.getRangeAt(0);
     if (!range) return;
-    const isAllowed =
-      isAnnotatableTarget(range.commonAncestorContainer) &&
-      isAnnotatableTarget(range.startContainer) &&
-      isAnnotatableTarget(range.endContainer);
-    if (!isAllowed) {
+    if (!isRangeAnnotatable(range)) {
       selection.removeAllRanges();
       showToast('This area is a popup or overlay. It cannot be annotated.');
       return;
     }
     const snippet = selection.toString().trim();
     if (!snippet) return;
+    await commitTextAnnotation(range, snippet);
+  }
+
+  async function commitTextAnnotation(range, snippet) {
     const res = await awaitComment('Comment for this highlight?');
     if (!res) return;
     const { comment } = res;
     const id = generateId();
     const payload = serializeRange(range, snippet);
     const span = applyTextHighlight(range, id);
-    selection.removeAllRanges();
+    const selection = window.getSelection();
+    if (selection) selection.removeAllRanges();
     const annotation = {
       id,
       type: 'text',
@@ -3186,7 +3286,22 @@
       hideOutline();
       return;
     }
-    const rect = el.getBoundingClientRect();
+    outlineElement(el);
+  }
+
+  // The outline is a box in the page's own flow, so one that runs past what a
+  // clipping ancestor actually shows widens the document -- and fixed chrome
+  // is positioned against that width, so the toolbar walks off the screen with
+  // it. Measured on this repo's own demo page: outlining a row of the pricing
+  // table, which sits in a scroller narrower than itself, took the document
+  // from 375px to 459px and carried the bar with it. The visible rect is what
+  // the marker for the same element is placed by.
+  function outlineElement(el) {
+    const rect = getVisibleRect(el);
+    if (!rect) {
+      hideOutline();
+      return;
+    }
     showOutline(rect);
   }
 
@@ -3194,12 +3309,27 @@
   async function handleElementClick(evt) {
     if (state.mode !== 'element') return;
     const el = evt.target;
+    // The widget's own controls are not a target and never were. Saying so
+    // out loud on every tap of the toolbar -- which the picker bar now sits
+    // beside -- is noise, and it named the bar an overlay to its own user.
+    if (isWithinAnnotator(el)) return;
     if (!el || !isAnnotatableTarget(el)) {
       showToast('This area is a popup or overlay. It cannot be annotated.');
       return;
     }
     evt.preventDefault();
     evt.stopPropagation();
+    // Without a hover stream there is no preview at all: the outline that says
+    // what is about to be annotated only ever appeared once the tap had
+    // committed it. The tap previews, and `Pin here` commits.
+    if (isTouchInput()) {
+      openElementPicker(el);
+      return;
+    }
+    await commitElementAnnotation(el);
+  }
+
+  async function commitElementAnnotation(el) {
     const res = await awaitComment('Comment for this element?');
     if (!res) return;
     const { comment } = res;
@@ -3225,6 +3355,249 @@
     applyElementHighlight(el, id);
     renderList();
     setMode(null, { keepOutline: true });
+  }
+
+  // ------------------------------------------------------------------
+  // Capture on a coarse pointer
+  // ------------------------------------------------------------------
+
+  // Long enough that dragging a selection handle from one word to the next
+  // does not raise the bar between them, short enough that letting go of the
+  // handle answers straight away.
+  const SELECTION_SETTLE_MS = 400;
+
+  // Both bars are raised clear of the toolbar, which paints above everything
+  // the widget owns and sits in thumb reach at the bottom of a phone.
+  function positionActionBar(bar) {
+    if (!bar || !state.toolbar || !bar.classList.contains('show')) return;
+    const root = document.documentElement;
+    const rect = state.toolbar.getBoundingClientRect();
+    const gap = 8;
+    if (position === 'top') {
+      bar.style.top = `${Math.round(rect.bottom + gap)}px`;
+      bar.style.bottom = 'auto';
+      return;
+    }
+    bar.style.top = 'auto';
+    bar.style.bottom = `${Math.round(root.clientHeight - rect.top + gap)}px`;
+  }
+
+  function positionActionBars() {
+    positionActionBar(state.selectionBar);
+    const picker = state.elementPicker;
+    if (!picker || !picker.bar.classList.contains('show')) return;
+    // A hover outline is redrawn by the next move. A previewed one is pinned,
+    // so a reflow leaves it on the geometry the element used to have -- and a
+    // box in the page's flow that no longer fits the page widens it.
+    syncElementPicker();
+  }
+
+  function isCommentOpen() {
+    const modalState = state.commentModal;
+    return !!(modalState && modalState.backdrop.classList.contains('show'));
+  }
+
+  // The selection the reviewer has settled on, or nothing. A range that runs
+  // into the widget's own chrome, or into a part of the page the host marked
+  // off, is not one.
+  function settledSelectionRange() {
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0 || selection.isCollapsed) return null;
+    const range = selection.getRangeAt(0);
+    if (!range || !range.toString().trim()) return null;
+    if (!isRangeAnnotatable(range)) return null;
+    return range;
+  }
+
+  // `selectionchange` rather than the release. On a phone the first release
+  // comes with one word selected and every handle drag after it is another
+  // one, so committing on a release commits the first word and clears the
+  // selection out from under the reviewer mid-gesture.
+  function handleSelectionChange() {
+    if (!isTouchInput()) return;
+    if (state.selectionTimer) clearTimeout(state.selectionTimer);
+    state.selectionTimer = null;
+    if (state.mode !== 'text' || isCommentOpen()) {
+      hideSelectionBar();
+      return;
+    }
+    state.selectionTimer = setTimeout(reviewSelection, SELECTION_SETTLE_MS);
+  }
+
+  function reviewSelection() {
+    state.selectionTimer = null;
+    if (state.mode !== 'text' || isCommentOpen()) return hideSelectionBar();
+    const range = settledSelectionRange();
+    if (!range) return hideSelectionBar();
+    // Held as a copy: tapping the bar collapses the live selection before the
+    // click lands, and the range is what the annotation is made from.
+    state.selectionRange = range.cloneRange();
+    showSelectionBar();
+  }
+
+  function ensureSelectionBar() {
+    if (state.selectionBar) return state.selectionBar;
+    const bar = document.createElement('div');
+    bar.className = 'wn-annot-actionbar wn-annot-selection-bar wn-annotator';
+    const add = document.createElement('button');
+    add.type = 'button';
+    add.className = 'primary wn-annotator';
+    add.textContent = 'Add note';
+    add.addEventListener('click', (evt) => {
+      evt.preventDefault();
+      evt.stopPropagation();
+      addNoteForSelection();
+    });
+    bar.appendChild(add);
+    document.body.appendChild(bar);
+    state.selectionBar = bar;
+    return bar;
+  }
+
+  function showSelectionBar() {
+    const bar = ensureSelectionBar();
+    // The mode tip is drawn on the same strip of screen, just clear of the
+    // toolbar. The bar is the instruction while it is up.
+    hideTip();
+    bar.classList.add('show');
+    positionActionBar(bar);
+  }
+
+  function hideSelectionBar() {
+    state.selectionRange = null;
+    const bar = state.selectionBar;
+    if (!bar || !bar.classList.contains('show')) return;
+    bar.classList.remove('show');
+    if (state.mode && !state.hidden) showTipForMode(state.mode);
+  }
+
+  async function addNoteForSelection() {
+    const range = state.selectionRange;
+    hideSelectionBar();
+    if (!range) return;
+    // The page can have moved on while the bar stood there.
+    if (!isNodeConnected(range.startContainer) || !isNodeConnected(range.endContainer)) {
+      showToast('That text is no longer on the page.');
+      return;
+    }
+    const snippet = range.toString().trim();
+    if (!snippet) return;
+    await commitTextAnnotation(range, snippet);
+  }
+
+  // What the chip calls the element under the finger. The full selector runs
+  // four levels deep and does not fit a phone; the last step of it is what
+  // tells a reviewer whether they have the paragraph or the card.
+  function describeElement(el) {
+    if (!el || el.nodeType !== 1) return '';
+    const tag = el.tagName.toLowerCase();
+    if (el.id) return `${tag}#${el.id}`;
+    const classes = Array.from(el.classList || []).filter(
+      (name) => name && !name.startsWith('wn-') && !name.startsWith('uxnote-')
+    );
+    if (!classes.length) return tag;
+    return `${tag}.${classes.slice(0, 2).join('.')}`;
+  }
+
+  function ensureElementPicker() {
+    if (state.elementPicker) return state.elementPicker;
+    const bar = document.createElement('div');
+    bar.className = 'wn-annot-actionbar wn-annot-pick-bar wn-annotator';
+    const name = document.createElement('span');
+    name.className = 'wn-annot-pick-name wn-annotator';
+    const make = (label, className, onTap) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = `${className} wn-annotator`;
+      btn.textContent = label;
+      btn.addEventListener('click', (evt) => {
+        evt.preventDefault();
+        evt.stopPropagation();
+        onTap();
+      });
+      return btn;
+    };
+    // Wider and narrower walk the chain the tap started on, which is also the
+    // answer to a fat finger: start anywhere inside the block and climb to it.
+    const wider = make('Wider', 'wn-annot-pick-wider', () => stepElementPicker(1));
+    const narrower = make('Narrower', 'wn-annot-pick-narrower', () => stepElementPicker(-1));
+    const pin = make('Pin here', 'primary wn-annot-pick-pin', pinElementPicker);
+    bar.appendChild(name);
+    bar.appendChild(narrower);
+    bar.appendChild(wider);
+    bar.appendChild(pin);
+    document.body.appendChild(bar);
+    state.elementPicker = { bar, name, wider, narrower, pin };
+    return state.elementPicker;
+  }
+
+  function openElementPicker(el) {
+    state.elementTrail = [el];
+    state.elementTrailIndex = 0;
+    const picker = ensureElementPicker();
+    hideTip();
+    picker.bar.classList.add('show');
+    syncElementPicker();
+  }
+
+  function pickedElement() {
+    return state.elementTrail[state.elementTrailIndex] || null;
+  }
+
+  function nextWiderElement() {
+    const el = pickedElement();
+    if (state.elementTrailIndex < state.elementTrail.length - 1) {
+      return state.elementTrail[state.elementTrailIndex + 1];
+    }
+    if (!el || el === document.body) return null;
+    const parent = el.parentElement;
+    if (!parent || !isAnnotatableTarget(parent)) return null;
+    return parent;
+  }
+
+  function stepElementPicker(direction) {
+    if (direction > 0) {
+      const wider = nextWiderElement();
+      if (!wider) return;
+      if (state.elementTrailIndex === state.elementTrail.length - 1) {
+        state.elementTrail.push(wider);
+      }
+      state.elementTrailIndex += 1;
+    } else {
+      if (state.elementTrailIndex === 0) return;
+      state.elementTrailIndex -= 1;
+    }
+    syncElementPicker();
+  }
+
+  function syncElementPicker() {
+    const picker = state.elementPicker;
+    const el = pickedElement();
+    if (!picker || !el) return;
+    picker.name.textContent = describeElement(el);
+    picker.narrower.disabled = state.elementTrailIndex === 0;
+    picker.wider.disabled = !nextWiderElement();
+    outlineElement(el);
+    positionActionBar(picker.bar);
+  }
+
+  function closeElementPicker() {
+    state.elementTrail = [];
+    state.elementTrailIndex = 0;
+    const picker = state.elementPicker;
+    if (!picker || !picker.bar.classList.contains('show')) return;
+    picker.bar.classList.remove('show');
+    if (state.mode && !state.hidden) showTipForMode(state.mode);
+  }
+
+  async function pinElementPicker() {
+    const el = pickedElement();
+    closeElementPicker();
+    if (!el || !isNodeConnected(el)) {
+      showToast('That element is no longer on the page.');
+      return;
+    }
+    await commitElementAnnotation(el);
   }
 
   function unwrapHighlightSpan(span) {
@@ -4980,11 +5353,39 @@
     return true;
   }
 
+  // A failed upsert waits for the next change to be retried. On a desktop
+  // there usually is one; on a phone the tab goes to a lock screen or a task
+  // switcher with the note still unsent, and no next change ever comes. These
+  // are the three moments left to spend it in.
+  function bindSyncFlush() {
+    if (!server) return;
+    window.addEventListener('online', () => syncAnnotations());
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') flushSyncNow();
+    });
+    // `pagehide` and not `beforeunload`, which iOS does not fire reliably.
+    window.addEventListener('pagehide', flushSyncNow);
+  }
+
+  // On the way out the queue is bypassed and the requests are marked
+  // `keepalive`: a plain fetch is killed with the page, and anything waiting
+  // behind one in the queue would never be issued at all.
+  function flushSyncNow() {
+    if (!server) return;
+    const next = snapshotOf(state.annotations);
+    next.forEach((body, id) => {
+      if (syncedSnapshot.get(id) !== body) remoteUpsert(id, body, { keepalive: true });
+    });
+    syncedSnapshot.forEach((body, id) => {
+      if (!next.has(id)) remoteDelete(id, { keepalive: true });
+    });
+  }
+
   // A failed request leaves the snapshot stale, so the next change sends it
   // again -- and so does the next pull, and the next probe that finds the
   // server back, and the next load of the page, because the snapshot is in
   // localStorage beside the set it disagrees with.
-  async function remoteUpsert(id, body) {
+  async function remoteUpsert(id, body, options = {}) {
     try {
       const ann = state.annotations.find((one) => one.id === id);
       // The upload rewrites the picture from a base64 document into an
@@ -4999,6 +5400,7 @@
       await syncFetch(annotationUrl(id), {
         method: 'PUT',
         headers: syncHeaders({ 'Content-Type': 'application/json' }),
+        keepalive: !!options.keepalive,
         body
       });
       syncedSnapshot.set(id, digestOf(body));
@@ -5010,9 +5412,13 @@
     }
   }
 
-  async function remoteDelete(id) {
+  async function remoteDelete(id, options = {}) {
     try {
-      await syncFetch(annotationUrl(id), { method: 'DELETE', headers: syncHeaders() });
+      await syncFetch(annotationUrl(id), {
+        method: 'DELETE',
+        headers: syncHeaders(),
+        keepalive: !!options.keepalive
+      });
       syncedSnapshot.delete(id);
       syncWarned = false;
       persistSnapshot();
@@ -5216,6 +5622,34 @@
     return { canvas, w: sw, h: sh };
   }
 
+  // What the camera frames on a coarse pointer: the part of the page that is
+  // on the screen. Scrolling is the framing gesture, so there is nothing to
+  // drag, no precision to find, and no overlay to be trapped in.
+  function viewportCaptureRect() {
+    const root = document.documentElement;
+    return { x: window.scrollX, y: window.scrollY, w: root.clientWidth, h: root.clientHeight };
+  }
+
+  // snapdom renders the whole document before the crop comes out of it, which
+  // is the most expensive thing the widget does -- a long page on a mid
+  // Android can sit on it. The wait is bounded rather than open, and what
+  // happened is said out loud.
+  const CAPTURE_TIMEOUT_MS = 20000;
+
+  function captureWithGuard(rect) {
+    const render = captureRegion(rect).then(
+      (shot) => ({ shot }),
+      (err) => {
+        console.warn('Uxnote screenshot:', err);
+        return { shot: null };
+      }
+    );
+    const guard = new Promise((resolve) => {
+      setTimeout(() => resolve({ shot: null, timedOut: true }), CAPTURE_TIMEOUT_MS);
+    });
+    return Promise.race([render, guard]);
+  }
+
   // The camera is a capture mode like the other two: the reviewer frames a
   // region, comments on it, and the picture is the annotation.
   async function captureRegionAnnotation() {
@@ -5224,20 +5658,22 @@
     // the way it does for a highlight and for an element.
     setMode('screenshot');
     try {
-      const rect = await selectRegion();
+      // The drag is a mouse gesture and the overlay it lived in read nothing
+      // else: a touch drag framed nothing, opened nothing, and left the
+      // reviewer inside an overlay whose only way out named the Escape key.
+      const rect = isTouchInput() ? viewportCaptureRect() : await selectRegion();
       if (!rect) return;
       // The picture is of the page the drag was released on, and it is taken
       // while the comment is being written, so releasing the drag opens the
       // prompt as directly as releasing a selection does.
-      const pending = captureRegion(rect).catch((err) => {
-        console.warn('Uxnote screenshot:', err);
-        return null;
-      });
+      const pending = captureWithGuard(rect);
       const res = await awaitComment('Comment for this region?');
       if (!res) return;
-      const shot = await pending;
+      const { shot, timedOut } = await pending;
       if (!shot) {
-        showToast('Uxnote: could not capture that region');
+        showToast(
+          timedOut ? 'Uxnote: the page took too long to capture' : 'Uxnote: could not capture that region'
+        );
         return;
       }
       const { comment } = res;

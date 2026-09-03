@@ -46,6 +46,16 @@ async function seedAnnotation(page, extra = {}) {
   await page.locator('.wn-annot-toolbar').waitFor();
 }
 
+// The comment prompt is two taps away on a coarse pointer: the first previews
+// the element under the finger, `Pin here` commits it. Committing on the first
+// tap is what left a reviewer learning what they had targeted only after they
+// had targeted it.
+async function pinFirstCard(page) {
+  await page.locator('.wn-annot-toolbar button[data-mode="element"]').click();
+  await page.locator('.card').first().click();
+  await page.locator('.wn-annot-pick-pin').click();
+}
+
 async function openPanel(page) {
   await page.locator('.wn-annot-toolbar button[data-action="toggle-panel"]').click();
   await expect(page.locator('.wn-annot-panel')).toBeVisible();
@@ -198,8 +208,7 @@ test('hiding the widget lets the page go, sheet or no sheet', async ({ page }) =
 
 test('the comment prompt is an opaque sheet with thumb-sized actions', async ({ page }) => {
   await page.goto('/');
-  await page.locator('.wn-annot-toolbar button[data-mode="element"]').click();
-  await page.locator('.card').first().click();
+  await pinFirstCard(page);
   const card = page.locator('.wn-annot-comment-card');
   await expect(card).toBeVisible();
   // Measured at 0.55 on every device before this branch, because the rule that
@@ -257,8 +266,7 @@ test('no sheet runs past the viewport or under the toolbar', async ({ page }) =>
   await fits(page.locator('.wn-annot-modal-backdrop.show .wn-annot-modal'), 'the confirm dialog');
   await page.locator('.wn-annot-modal-backdrop.show .wn-annot-sheet-close').click();
   await page.locator('.wn-annot-panel .wn-annot-sheet-close').click();
-  await page.locator('.wn-annot-toolbar button[data-mode="element"]').click();
-  await page.locator('.card').first().click();
+  await pinFirstCard(page);
   await fits(page.locator('.wn-annot-comment-card'), 'the comment prompt');
 });
 
@@ -352,7 +360,6 @@ test('the sheet surfaces follow the dark theme', async ({ page }) => {
   // render light on dark unless the surface names its scheme.
   await expect(page.locator('.wn-annot-panel')).toHaveCSS('color-scheme', 'dark');
   await page.locator('.wn-annot-panel .wn-annot-sheet-close').click();
-  await page.locator('.wn-annot-toolbar button[data-mode="element"]').click();
-  await page.locator('.card').first().click();
+  await pinFirstCard(page);
   await expect(page.locator('.wn-annot-comment-card')).toHaveCSS('color-scheme', 'dark');
 });
