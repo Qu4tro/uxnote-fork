@@ -109,11 +109,11 @@ page, and the toolbar offers a camera beside the two other capture modes:
 <script src="https://qu4tro.github.io/uxnote-fork/dist/uxnote.min-v1.0.0.js"></script>
 ```
 
-Press the camera and drag to frame a region. Press Enter to capture, or Escape
-to stop. Write a comment and the region becomes an annotation: a numbered marker
-and a frame on the page, a thumbnail on its card. The widget renders the page
-with snapdom and hides its own interface, so the picture carries no toolbar, no
-panel, and no marker.
+Press the camera and drag to frame a region. Release the button and the widget
+captures the frame. Escape stops. Write a comment and the region becomes an
+annotation: a numbered marker and a frame on the page, a thumbnail on its card.
+The widget renders the page with snapdom and hides its own interface, so the
+picture carries no toolbar, no panel, and no marker.
 
 With a server the picture travels to it as a PNG, and the annotation keeps the
 address the server answers with. A refused upload creates nothing and says so
