@@ -20,6 +20,14 @@ The page carries its own **Page theme** switch, light or dark, in the note at
 the top of it. It is the page's colours alone and it never follows the system,
 so the widget's own `data-theme` can be read against either background.
 
+The page carries the widget's options in its query string, and the **Widget
+settings** section below the pricing table writes it: pick a set, press Apply
+and reload, and the page comes back with the widget holding it. The section also
+shows the matching script tag to copy. The options are the ones in the table
+below, less `data-server-url` and `data-server-api-key`: the demo has no server
+behind it and refuses both, so a link cannot point a visitor's notes elsewhere.
+Annotations already taken survive the reload.
+
 Locally:
 
 ```sh

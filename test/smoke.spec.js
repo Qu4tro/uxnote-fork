@@ -115,6 +115,29 @@ test('the page theme switch sits inside the subtree the widget ignores', async (
   expect(ignored).toBe(true);
 });
 
+test('the query string sets the widget options', async ({ page }) => {
+  await page.goto('/?json-export=false&theme=dark&color=%23e04f5f');
+  await expect(page.locator('.wn-annot-toolbar button[data-action="export"]')).toHaveCount(0);
+  // Only the requested option changed; the import button is untouched.
+  await expect(page.locator('.wn-annot-toolbar button[data-action="import"]')).toBeVisible();
+  await expect(page.locator('html')).toHaveAttribute('data-wn-theme', 'dark');
+  const highlight = await page.evaluate(() =>
+    getComputedStyle(document.documentElement).getPropertyValue('--wn-text-highlight').trim()
+  );
+  expect(highlight).toBe('#e04f5f');
+});
+
+test('the demo page refuses the server options from the query string', async ({ page }) => {
+  await page.goto('/?server-url=https://example.invalid&server-api-key=k');
+  const carried = await page.evaluate(() =>
+    Array.from(document.querySelectorAll('script')).some(
+      (s) => s.hasAttribute('data-server-url') || s.hasAttribute('data-server-api-key')
+    )
+  );
+  expect(carried).toBe(false);
+  await expect(page.locator('#settings-notice')).toBeVisible();
+});
+
 const CAPTURE_FIXTURE = '/test/fixtures/server-capture.html';
 const ALLOW = { 'Access-Control-Allow-Origin': '*' };
 
