@@ -336,6 +336,24 @@
                   </select>
                 </div>
               </div>
+              <div class="builder-card" id="builder-card-theme">
+                <div class="card-head">
+                  <label class="builder-include" for="builder-theme-enabled">
+                    <input type="checkbox" id="builder-theme-enabled">
+                    <span class="sr-only" data-i18n="builder_include">Include</span>
+                  </label>
+                  <span class="builder-help" data-i18n-title="install_opt_theme_body" aria-label="?">?</span>
+                </div>
+                <div class="builder-name-row"><span class="builder-name">data-theme</span></div>
+                <p class="builder-desc" data-i18n="builder_theme_desc">Theme of the toolbar, panel, and dialogs. auto follows the system.</p>
+                <div class="builder-field">
+                  <select id="builder-theme-value" aria-label="data-theme">
+                    <option value="auto">auto</option>
+                    <option value="light">light</option>
+                    <option value="dark" selected>dark</option>
+                  </select>
+                </div>
+              </div>
               <div class="builder-card" id="builder-card-server">
                 <div class="card-head">
                   <label class="builder-include" for="builder-server-enabled">
@@ -624,6 +642,8 @@
       const serverUrl = byId('builder-server-url');
       const serverApiKey = byId('builder-server-api-key');
       const serverEnabled = byId('builder-server-enabled');
+      const themeEnabled = byId('builder-theme-enabled');
+      const themeValue = byId('builder-theme-value');
       const jsonExportEnabled = byId('builder-json-export-enabled');
       const jsonExportValue = byId('builder-json-export-value');
       const jsonImportEnabled = byId('builder-json-import-enabled');
@@ -738,6 +758,12 @@
           'data-mail-export',
           mailExportValue ? mailExportValue.value : 'false'
         );
+        setDisabled([themeValue], !(themeEnabled && themeEnabled.checked));
+        addAttr(
+          themeEnabled && themeEnabled.checked,
+          'data-theme',
+          themeValue ? themeValue.value : 'auto'
+        );
         const serverOn = !!(serverEnabled && serverEnabled.checked);
         addAttr(serverOn, 'data-server-url', (serverUrl.value || '').trim());
         addAttr(serverOn, 'data-server-api-key', (serverApiKey.value || '').trim());
@@ -773,6 +799,8 @@
         jsonImportValue,
         mailExportEnabled,
         mailExportValue,
+        themeEnabled,
+        themeValue,
         serverUrl,
         serverApiKey,
         serverEnabled
@@ -862,6 +890,7 @@
       highlightCard(byId('builder-json-export-enabled'), byId('builder-card-json-export'));
       highlightCard(byId('builder-json-import-enabled'), byId('builder-card-json-import'));
       highlightCard(byId('builder-mail-export-enabled'), byId('builder-card-mail-export'));
+      highlightCard(byId('builder-theme-enabled'), byId('builder-card-theme'));
       highlightCard(byId('builder-server-enabled'), byId('builder-card-server'));
 
       if (i18n && typeof i18n.onChange === 'function') {
