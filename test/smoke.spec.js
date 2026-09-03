@@ -131,12 +131,38 @@ test('the panel keeps its side rail and draws no sheet chrome', async ({ page })
   expect(await page.evaluate(() => document.documentElement.style.overflow)).toBe('');
 });
 
-test('the export modal keeps its three answers on a laptop screen', async ({ page }) => {
+test('a confirm dialog keeps its answers in a row on a laptop screen', async ({ page }) => {
   await page.goto('/');
-  await page.locator('.wn-annot-toolbar button[data-action="export"]').click();
-  const modal = page.locator('.wn-annot-modal-backdrop.show');
+  // One annotation, written straight to storage: what is under test is the
+  // shape of the dialog, not how the annotation was made.
+  await page.evaluate(() => {
+    localStorage.setItem(
+      `uxnote:site:${location.origin}`,
+      JSON.stringify([
+        {
+          id: 'dialog-probe',
+          type: 'element',
+          comment: 'a note to delete',
+          color: '#4e9cf6',
+          createdAt: new Date().toISOString(),
+          pageUrl: location.href,
+          pageKey: location.origin + location.pathname,
+          target: { xpath: '/html/body/header', selector: 'header' }
+        }
+      ])
+    );
+  });
+  await page.reload();
+  await page.locator('.wn-annot-toolbar button[data-action="toggle-panel"]').click();
+  await page.locator('.wn-annot-delete-all').click();
+  const modal = page.locator('.wn-annot-modal-backdrop.show .wn-annot-modal');
   await expect(modal).toBeVisible();
-  await expect(modal.locator('.wn-annot-pill')).toHaveText(['Cancel', 'Send by mail', 'Export file']);
+  await expect(modal.locator('.wn-annot-pill')).toHaveCount(2);
+  // A dialog here and not a sheet: the grip is built but never drawn.
+  await expect(modal.locator('.wn-annot-sheet-grip')).toBeHidden();
+  const view = await page.evaluate(() => document.documentElement.clientWidth);
+  const box = await modal.boundingBox();
+  expect(box.width).toBeLessThan(view);
 });
 
 test('the comment card is still parked and translucent where there is hover', async ({ page }) => {
