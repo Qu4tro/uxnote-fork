@@ -2476,7 +2476,6 @@
       refreshMarkers();
       positionPanel();
       positionTip();
-      // BMC widget intentionally left independent of visibility toggle
     }
     document.dispatchEvent(new CustomEvent('uxnote:visibility', { detail: { hidden } }));
   }
