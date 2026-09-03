@@ -159,7 +159,6 @@
     commentModal: null,
     dialogModal: null,
     importModal: null,
-    exportModal: null,
     markerLayer: null,
     colors: colorPalette,
     customPosition: false,
@@ -1572,7 +1571,7 @@
     if (panelExportBtn) {
       panelExportBtn.addEventListener('click', (evt) => {
         evt.stopPropagation();
-        openExportModal();
+        if (jsonExport) exportAnnotations();
       });
     }
 
@@ -1766,69 +1765,6 @@
     const val = await askForComment(label);
     if (!val) return null;
     return val;
-  }
-
-  function ensureExportModal() {
-    if (state.exportModal) return state.exportModal;
-    const backdrop = document.createElement('div');
-    backdrop.className = 'wn-annot-modal-backdrop wn-annotator';
-    const modal = document.createElement('div');
-    modal.className = 'wn-annot-modal wn-annotator';
-
-    const title = document.createElement('h4');
-    title.textContent = 'Export annotations';
-
-    const message = document.createElement('div');
-    message.className = 'wn-annot-dialog-message wn-annotator';
-    message.textContent = 'The export holds every annotation of this site, on every page.';
-
-    const actions = document.createElement('div');
-    actions.className = 'wn-annot-actions wn-annotator';
-    const cancelBtn = document.createElement('button');
-    cancelBtn.type = 'button';
-    cancelBtn.className = 'wn-annot-pill cancel wn-annotator';
-    cancelBtn.textContent = 'Cancel';
-    const exportBtn = document.createElement('button');
-    exportBtn.type = 'button';
-    exportBtn.className = 'wn-annot-pill primary wn-annotator';
-    exportBtn.textContent = 'Export file';
-    actions.appendChild(cancelBtn);
-    actions.appendChild(exportBtn);
-
-    modal.appendChild(title);
-    modal.appendChild(message);
-    modal.appendChild(actions);
-    backdrop.appendChild(modal);
-    document.body.appendChild(backdrop);
-
-    const close = () => {
-      backdrop.classList.remove('show');
-      document.removeEventListener('keydown', onKey);
-    };
-    const onKey = (evt) => {
-      if (evt.key === 'Escape') close();
-    };
-    const onBackdrop = (evt) => {
-      if (evt.target === backdrop) close();
-    };
-
-    cancelBtn.addEventListener('click', close);
-    backdrop.addEventListener('click', onBackdrop);
-
-    exportBtn.addEventListener('click', () => {
-      exportAnnotations();
-      close();
-    });
-
-    state.exportModal = { backdrop, onKey };
-    return state.exportModal;
-  }
-
-  function openExportModal() {
-    if (!jsonExport) return;
-    const modalState = ensureExportModal();
-    modalState.backdrop.classList.add('show');
-    document.addEventListener('keydown', modalState.onKey);
   }
 
   function ensureImportModal() {
@@ -2587,7 +2523,9 @@
       return;
     }
     if (action === 'export') {
-      openExportModal();
+      // Nothing to ask: the file holds every annotation of the site either
+      // way, so the press is the answer.
+      if (jsonExport) exportAnnotations();
       return;
     }
     if (action === 'import') {
