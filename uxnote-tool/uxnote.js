@@ -1,10 +1,10 @@
 /*
  * Uxnote
  * Author: ninefortyonestudio (https://github.com/ninefortyonestudio)
- * Repository: https://github.com/ninefortyonestudio/uxnote
- * Version: v1.0.0
+ * Fork: https://github.com/Qu4tro/uxnote-fork
+ * Upstream: https://github.com/ninefortyonestudio/uxnote
+ * Version: v2.0.0
  * License: MIT (see LICENSE)
- * Built with Codex 5.2
  *
  * This fork stores the annotations on the server named by data-server-url,
  * over the wire protocol of PROTOCOL.md. With no server named it stores them
