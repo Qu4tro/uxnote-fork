@@ -87,6 +87,8 @@
   // A named server is the annotation store; no name at all means localStorage.
   const serverUrl = ((script && script.dataset.serverUrl) || '').trim().replace(/\/+$/, '');
   const server = serverUrl ? { url: serverUrl, apiKey: (script && script.dataset.serverApiKey) || '' } : null;
+  const jsonExport = parseBoolAttr(script && script.dataset.jsonExport, true);
+  const jsonImport = parseBoolAttr(script && script.dataset.jsonImport, true);
   const dimConfigAttr =
     getScriptAttr('isBackdropVisible') ||
     getScriptAttr('isbackdropvisible') ||
@@ -171,7 +173,7 @@
         : parseBoolAttr(startHiddenAttr, false);
     state.annotatorName = loadAnnotatorName();
     state.annotatorNames = loadAnnotatorNames();
-    state.importFiles = loadImportFiles();
+    if (jsonImport) state.importFiles = loadImportFiles();
     captureBasePadding();
     applyColorTheme();
     injectStyles();
@@ -1613,10 +1615,9 @@
     if (captureAvailable()) {
       editButtons.push({ action: 'mode', mode: 'screenshot', tip: 'Capture a region', icon: iconCamera() });
     }
-    const exportButtons = [
-      { action: 'import', tip: 'Import JSON', icon: iconUpload() },
-      { action: 'export', tip: 'Export JSON', icon: iconDownload() }
-    ];
+    const exportButtons = [];
+    if (jsonImport) exportButtons.push({ action: 'import', tip: 'Import JSON', icon: iconUpload() });
+    if (jsonExport) exportButtons.push({ action: 'export', tip: 'Export JSON', icon: iconDownload() });
     const controlButtons = [
       { action: 'toggle-pos', tip: 'Toolbar top / bottom', icon: iconSwap() },
       { action: 'toggle-panel', tip: 'Show / hide annotations', icon: iconPanel() }
@@ -1624,8 +1625,10 @@
 
     frag.appendChild(makeSpacer());
     frag.appendChild(makeGroup(editButtons));
-    frag.appendChild(makeSpacer());
-    frag.appendChild(makeGroup(exportButtons));
+    if (exportButtons.length) {
+      frag.appendChild(makeSpacer());
+      frag.appendChild(makeGroup(exportButtons));
+    }
     frag.appendChild(makeSpacer());
     frag.appendChild(makeGroup(controlButtons));
 
@@ -2034,6 +2037,7 @@
   }
 
   function openExportModal() {
+    if (!jsonExport) return;
     const modalState = ensureExportModal();
     renderExportModal();
     modalState.backdrop.classList.add('show');
@@ -2273,6 +2277,7 @@
   }
 
   function openImportModal() {
+    if (!jsonImport) return;
     const modalState = ensureImportModal();
     renderImportModal();
     modalState.backdrop.classList.add('show');
