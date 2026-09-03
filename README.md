@@ -118,9 +118,14 @@ interface: it carries no toolbar, no panel and no marker, and nothing on the pag
 moves while it is taken.
 
 With a server the picture travels to it as a PNG, and the annotation keeps the
-address the server answers with. A refused upload creates nothing and says so
-with a toast. With no server the picture rides on the annotation itself, and the
-JSON export carries it.
+address the server answers with. With no server the picture rides on the
+annotation itself, and the JSON export carries it.
+
+A server that does not answer does not cost you the capture. The picture stays
+on the annotation, the toast says so, and the note behaves like every other
+one written while the server is away: it is held and sent again. The picture
+goes up as a PNG on that later attempt, before the annotation that points at
+it, so nothing carries a base64 document to the server.
 
 `npm run build` writes `snapdom.min.js` into `dist/` beside the minified widget,
 so both URLs above resolve against one directory.
