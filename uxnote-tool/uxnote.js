@@ -94,6 +94,36 @@
   // Both of these read the system preference, so both follow it as it changes.
   const followsSystem = theme === 'auto' || theme === 'reverse-auto';
   const darkQuery = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
+  // Two axes, read separately. The kind of input decides behaviour: with no
+  // hover there is no preview stream and no tooltip, and a finger needs a
+  // bigger target than a pointer. The room decides layout density: which
+  // controls the bar carries, how wide the panel runs. Width alone answers
+  // neither question -- every phone in landscape is wider than 640px, and a
+  // narrow desktop window is not a phone.
+  // `any-pointer` is deliberately not used: it is true on any laptop with a
+  // touchscreen, mouse attached or not, which would strip those machines of
+  // the hover preview they can use.
+  const touchQuery = window.matchMedia ? window.matchMedia('(pointer: coarse) and (hover: none)') : null;
+  const compactQuery = window.matchMedia
+    ? window.matchMedia('(max-width: 640px), (max-height: 480px)')
+    : null;
+
+  function isTouchInput() {
+    if (touchQuery) return touchQuery.matches;
+    return 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+  }
+
+  function isCompactLayout() {
+    if (compactQuery) return compactQuery.matches;
+    return window.innerWidth <= 640 || window.innerHeight <= 480;
+  }
+
+  function subscribeMedia(query, handler) {
+    if (!query) return;
+    if (query.addEventListener) query.addEventListener('change', handler);
+    else if (query.addListener) query.addListener(handler);
+  }
+
   const dimConfigAttr =
     getScriptAttr('isBackdropVisible') ||
     getScriptAttr('isbackdropvisible') ||
@@ -112,7 +142,10 @@
         script.dataset.dimlevel ||
         script.dataset.dimstrength));
   const defaultDimOpacity = 0.2;
-  const dimEnabled = parseBoolAttr(dimConfigAttr, true);
+  // On a desktop the dimmer frames the tool against the page. On a phone the
+  // bar is a strip and the page is the whole screen, so it only costs
+  // contrast; a page that asks for it by name still gets it.
+  const dimEnabled = parseBoolAttr(dimConfigAttr, !isTouchInput());
   const dimOpacity = dimEnabled ? defaultDimOpacity : 0;
 
   // Central state (positions, annotations, DOM elements, filters...)
@@ -149,12 +182,6 @@
     toast: null,
     toastTimer: null
   };
-  const mobileQuery = window.matchMedia ? window.matchMedia('(max-width: 640px)') : null;
-
-  function isMobileLayout() {
-    if (mobileQuery) return mobileQuery.matches;
-    return window.innerWidth <= 640;
-  }
 
   // Entry point: load config, build UI, restore data
   function init() {
@@ -277,7 +304,11 @@
            room. It asks for the width of its row instead, and gives that up
            only against the edges of the viewport. */
         width: max-content;
-        max-width: calc(100vw - 28px);
+        /* Percent, not vw. A fixed box is positioned against the initial
+           containing block, and on a host page that overflows horizontally
+           that block is wider than 100vw -- so a bar sized in vw and centred
+           on it is not centred on the screen. */
+        max-width: calc(100% - 28px);
         box-shadow: 0 8px 24px var(--wn-shadow);
         border-radius: 999px;
         border: 1px solid var(--wn-border);
@@ -309,8 +340,8 @@
       }
       .wn-annot-visibility-btn {
         position: fixed;
-        left: 12px;
-        bottom: 18px;
+        left: max(12px, env(safe-area-inset-left));
+        bottom: max(18px, env(safe-area-inset-bottom));
         --wn-btn-size: 55px;
         width: var(--wn-btn-size);
         height: var(--wn-btn-size);
@@ -329,27 +360,31 @@
         padding: 0;
         position: fixed;
       }
-      .wn-annot-visibility-btn::after {
-        content: attr(data-tip);
-        position: absolute;
-        left: 2px;
-        bottom: calc(100% + 10px);
-        background: rgba(35, 31, 74, 0.92);
-        color: #fff;
-        padding: 6px 8px;
-        border-radius: 8px;
-        font-size: 11px;
-        white-space: nowrap;
-        opacity: 0;
-        pointer-events: none;
-        transform: translateY(2px);
-        transition: opacity 0.12s ease, transform 0.12s ease;
+      /* Without a hover stream the tooltip never opens, so on touch it is only
+         a box the layout has to carry. It is drawn where hover exists. */
+      @media (hover: hover) {
+        .wn-annot-visibility-btn::after {
+          content: attr(data-tip);
+          position: absolute;
+          left: 2px;
+          bottom: calc(100% + 10px);
+          background: rgba(35, 31, 74, 0.92);
+          color: #fff;
+          padding: 6px 8px;
+          border-radius: 8px;
+          font-size: 11px;
+          white-space: nowrap;
+          opacity: 0;
+          pointer-events: none;
+          transform: translateY(2px);
+          transition: opacity 0.12s ease, transform 0.12s ease;
+        }
+        .wn-annot-visibility-btn:hover::after { opacity: 1; transform: translateY(0); }
       }
       .wn-annot-visibility-btn:hover {
         background: rgba(109, 86, 199, 0.12);
         color: var(--wn-text);
       }
-      .wn-annot-visibility-btn:hover::after { opacity: 1; transform: translateY(0); }
       .wn-annot-visibility-btn:active {
         background: rgba(109, 86, 199, 0.18);
       }
@@ -381,62 +416,6 @@
         width: 94px;
         height: auto;
         fill: currentColor;
-      }
-      @media (max-width: 640px) {
-        .wn-annot-toolbar {
-          gap: 4px;
-          padding: 6px 8px;
-          flex-wrap: nowrap;
-          left: 8px;
-          right: 8px;
-          transform: none;
-          width: calc(100vw - 16px);
-          max-width: calc(100vw - 16px);
-          overflow-x: auto;
-          -webkit-overflow-scrolling: touch;
-        }
-        .wn-annot-toolbar button {
-          --wn-btn-size: clamp(30px, 9vw, 36px);
-        }
-        .wn-annot-group {
-          gap: 4px;
-        }
-        .wn-annot-spacer {
-          display: block;
-          flex: 1 1 auto;
-          width: auto;
-          min-width: clamp(8px, 4vw, 22px);
-        }
-        body:not(.wn-annot-hidden) .wn-annot-toolbar .wn-annot-visibility-btn {
-          position: static;
-          top: auto;
-          bottom: auto;
-          left: auto;
-          right: auto;
-          --wn-btn-size: clamp(30px, 9vw, 36px);
-          width: var(--wn-btn-size);
-          height: var(--wn-btn-size);
-          min-width: var(--wn-btn-size);
-          max-width: var(--wn-btn-size);
-          min-height: var(--wn-btn-size);
-          max-height: var(--wn-btn-size);
-          flex: 0 0 var(--wn-btn-size);
-          border: none;
-          background: transparent;
-          box-shadow: none;
-        }
-        body:not(.wn-annot-hidden) .wn-annot-toolbar .wn-annot-visibility-btn::after {
-          display: none;
-        }
-        body.wn-annot-hidden .wn-annot-visibility-btn {
-          opacity: 0.7;
-          background: var(--wn-surface);
-          border-color: var(--wn-border);
-          box-shadow: 0 6px 16px var(--wn-shadow);
-        }
-        .wn-annot-logo {
-          display: none;
-        }
       }
       .wn-annot-toolbar button:hover {
         background: rgba(109, 86, 199, 0.12);
@@ -491,31 +470,33 @@
       .wn-annot-btn {
         position: relative;
       }
-      .wn-annot-btn::after {
-        content: attr(data-tip);
-        position: absolute;
-        left: 50%;
-        background: rgba(35, 31, 74, 0.92);
-        color: #fff;
-        padding: 6px 8px;
-        border-radius: 8px;
-        font-size: 11px;
-        white-space: nowrap;
-        opacity: 0;
-        pointer-events: none;
-        transition: opacity 0.12s ease, transform 0.12s ease;
-      }
-      .wn-annot-toolbar.wn-pos-bottom .wn-annot-btn::after {
-        bottom: calc(100% + 10px);
-        transform: translateX(-50%) translateY(2px);
-      }
-      .wn-annot-toolbar.wn-pos-top .wn-annot-btn::after {
-        top: calc(100% + 10px);
-        transform: translateX(-50%) translateY(-2px);
-      }
-      .wn-annot-btn:hover::after {
-        opacity: 1;
-        transform: translateX(-50%) translateY(0);
+      @media (hover: hover) {
+        .wn-annot-btn::after {
+          content: attr(data-tip);
+          position: absolute;
+          left: 50%;
+          background: rgba(35, 31, 74, 0.92);
+          color: #fff;
+          padding: 6px 8px;
+          border-radius: 8px;
+          font-size: 11px;
+          white-space: nowrap;
+          opacity: 0;
+          pointer-events: none;
+          transition: opacity 0.12s ease, transform 0.12s ease;
+        }
+        .wn-annot-toolbar.wn-pos-bottom .wn-annot-btn::after {
+          bottom: calc(100% + 10px);
+          transform: translateX(-50%) translateY(2px);
+        }
+        .wn-annot-toolbar.wn-pos-top .wn-annot-btn::after {
+          top: calc(100% + 10px);
+          transform: translateX(-50%) translateY(-2px);
+        }
+        .wn-annot-btn:hover::after {
+          opacity: 1;
+          transform: translateX(-50%) translateY(0);
+        }
       }
       .wn-annot-sync-dot {
         position: relative;
@@ -616,8 +597,11 @@
         top: 18px;
         right: 18px;
         bottom: 18px;
-        width: min(360px, calc(100vw - 36px));
+        width: min(360px, calc(100% - 36px));
         max-height: calc(100vh - 36px);
+        /* On iOS Safari 100vh is the tall viewport, so a panel measured in it
+           runs under the browser's own bottom bar. dvh is the one on screen. */
+        max-height: calc(100dvh - 36px);
         background: var(--wn-surface-raised);
         color: var(--wn-text);
         border: 1px solid var(--wn-border);
@@ -685,6 +669,38 @@
         border: 1px dashed var(--wn-border);
         border-radius: 12px;
         text-align: center;
+      }
+      .wn-annot-panel-tools {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+      }
+      /* The bar has no room for export on compact, so the panel carries it
+         there, beside the delete-all it already holds. */
+      .wn-annot-panel-export {
+        display: none;
+        align-items: center;
+        gap: 6px;
+        background: rgba(109, 86, 199, 0.12);
+        border: 1px solid var(--wn-border);
+        color: var(--wn-text-muted);
+        padding: 6px 10px;
+        border-radius: 10px;
+        font-weight: 700;
+        font-size: 12px;
+        cursor: pointer;
+        transition: all 0.12s ease;
+      }
+      .wn-annot-panel-export:hover {
+        background: rgba(109, 86, 199, 0.18);
+        color: var(--wn-text);
+      }
+      .wn-annot-panel-export:active {
+        transform: translateY(1px);
+      }
+      .wn-annot-panel-export svg {
+        width: 16px;
+        height: 16px;
       }
       .wn-annot-delete-all {
         display: inline-flex;
@@ -1021,7 +1037,7 @@
         border-radius: 16px;
         box-shadow: 0 16px 38px var(--wn-shadow);
         padding: 18px;
-        min-width: min(440px, calc(100vw - 40px));
+        min-width: min(440px, 100%);
         max-width: 520px;
         display: flex;
         flex-direction: column;
@@ -1039,7 +1055,7 @@
         left: 50%;
         transform: translateX(-50%);
         min-width: 0;
-        width: min(420px, calc(100vw - 36px));
+        width: min(420px, calc(100% - 36px));
         max-width: 420px;
         opacity: 0.55;
         transition: opacity 0.15s ease;
@@ -1070,13 +1086,8 @@
         border-color: rgba(109, 86, 199, 0.55);
         box-shadow: 0 0 0 3px rgba(109, 86, 199, 0.15);
       }
-      @media (max-width: 640px) {
-        .wn-annot-modal textarea {
-          font-size: 16px;
-        }
-      }
       .wn-annot-import-modal {
-        min-width: min(760px, calc(100vw - 40px));
+        min-width: min(760px, 100%);
         max-width: 960px;
       }
       .wn-annot-import-body {
@@ -1343,19 +1354,148 @@
         z-index: 2147483653;
       }
       .wn-shot-lightbox img {
-        max-width: 92vw;
+        max-width: 92%;
         max-height: 92vh;
+        max-height: 92dvh;
         border-radius: 8px;
         box-shadow: 0 18px 48px rgba(0, 0, 0, 0.5);
+      }
+
+      /* How much room the layout has. Both arms carry weight: every phone in
+         landscape is wider than 640px, so the width arm alone leaves it on the
+         desktop layout with a bar that eats a fifth of the screen. */
+      @media (max-width: 640px), (max-height: 480px) {
+        /* A media query adds no specificity, so a rule naming the toolbar
+           class alone loses to the two-class .wn-pos-* rules above and the bar
+           stays centre-anchored. These name the position classes and come last
+           on purpose; keep this block at the end of the sheet. */
+        .wn-annot-toolbar.wn-pos-bottom,
+        .wn-annot-toolbar.wn-pos-top,
+        .wn-annot-toolbar.wn-pos-left,
+        .wn-annot-toolbar.wn-pos-right {
+          /* Insets, never a width in vw: on a host page that overflows
+             horizontally the containing block is wider than the screen, and a
+             bar sized in vw and centred on it walks off one edge. */
+          left: max(8px, env(safe-area-inset-left));
+          right: max(8px, env(safe-area-inset-right));
+          transform: none;
+          width: auto;
+          max-width: none;
+          gap: 4px;
+          padding: 6px 8px;
+          flex-wrap: nowrap;
+          overflow: visible;
+          border-radius: 32px;
+        }
+        .wn-annot-toolbar.wn-pos-bottom,
+        .wn-annot-toolbar.wn-pos-left,
+        .wn-annot-toolbar.wn-pos-right {
+          top: auto;
+          bottom: max(12px, env(safe-area-inset-bottom));
+        }
+        .wn-annot-toolbar.wn-pos-top {
+          bottom: auto;
+          top: max(12px, env(safe-area-inset-top));
+        }
+        .wn-annot-toolbar button {
+          --wn-btn-size: 48px;
+        }
+        .wn-annot-group {
+          gap: 4px;
+        }
+        /* The spacers do the spreading, so five controls sit evenly across the
+           bar and give up their room first when there is little of it. */
+        .wn-annot-spacer {
+          display: block;
+          flex: 1 1 auto;
+          width: auto;
+          min-width: 4px;
+        }
+        .wn-annot-logo {
+          display: none;
+        }
+        body:not(.wn-annot-hidden) .wn-annot-toolbar .wn-annot-visibility-btn {
+          position: static;
+          top: auto;
+          bottom: auto;
+          left: auto;
+          right: auto;
+          border: none;
+          background: transparent;
+          box-shadow: none;
+        }
+        body.wn-annot-hidden .wn-annot-visibility-btn {
+          opacity: 0.7;
+          background: var(--wn-surface);
+          border-color: var(--wn-border);
+          box-shadow: 0 6px 16px var(--wn-shadow);
+        }
+        .wn-annot-panel-export {
+          display: inline-flex;
+        }
+      }
+
+      /* What kind of input is driving the widget. A finger has the same reach
+         on a tablet as on a phone, and a mouse in a narrow window keeps its
+         precision, so this is not a question of width. */
+      @media (pointer: coarse) and (hover: none) {
+        .wn-annot-marker {
+          width: 44px;
+          height: 44px;
+          font-size: 15px;
+        }
+        .wn-annot-edit,
+        .wn-annot-delete {
+          width: 44px;
+          height: 44px;
+        }
+        .wn-annot-edit svg,
+        .wn-annot-delete svg {
+          width: 18px;
+          height: 18px;
+        }
+        .wn-annot-delete-all,
+        .wn-annot-panel-export {
+          min-height: 44px;
+          padding: 8px 14px;
+          font-size: 13px;
+        }
+        .wn-annot-modal .wn-annot-pill {
+          min-height: 44px;
+          padding: 12px 18px;
+        }
+        .wn-shot-hint button {
+          min-height: 44px;
+          padding: 10px 18px;
+        }
+        /* Under 16px iOS Safari zooms the page in when the field takes focus,
+           and does not zoom back out when it loses it. Every field, at every
+           width, because the trigger is the keyboard and not the room. */
+        .wn-annot-panel input,
+        .wn-annot-panel select,
+        .wn-annot-panel textarea,
+        .wn-annot-modal input,
+        .wn-annot-modal select,
+        .wn-annot-modal textarea {
+          font-size: 16px;
+        }
+        .wn-annot-filters input[type="search"] {
+          height: 44px;
+          border-radius: 14px;
+          padding: 8px 12px;
+          font-size: 16px;
+        }
       }
     `;
     document.head.appendChild(style);
   }
 
-  function createShell() {
-    // Build toolbar, panel, and annotation layers
-    const toolbar = document.createElement('div');
-    toolbar.className = `wn-annot-toolbar wn-annotator wn-pos-${position}`;
+  // The bar carries a different set of controls on a compact layout, so it is
+  // filled by a function that can run again when the form factor changes.
+  function buildToolbar() {
+    const toolbar = state.toolbar;
+    if (!toolbar) return;
+    const compact = isCompactLayout();
 
     const makeButton = (btn) => {
       const b = document.createElement('button');
@@ -1380,7 +1520,13 @@
       return s;
     };
 
-  const frag = document.createDocumentFragment();
+    // The visibility button belongs to state and is mounted inside the bar on
+    // compact, so it comes out before the rebuild and is remounted after.
+    const toggle = state.visibilityToggle;
+    if (toggle && toggle.parentNode === toolbar) toolbar.removeChild(toggle);
+    toolbar.innerHTML = '';
+
+    const frag = document.createDocumentFragment();
 
     const logo = document.createElement('div');
     logo.className = 'wn-annot-logo wn-annotator';
@@ -1398,21 +1544,27 @@
       applySyncStatus();
     }
 
-  const editButtons = [
+    const editButtons = [
       { action: 'mode', mode: 'text', tip: 'Highlight text', icon: iconPen() },
       { action: 'mode', mode: 'element', tip: 'Annotate an element', icon: iconTarget() }
     ];
     if (captureAvailable()) {
       editButtons.push({ action: 'mode', mode: 'screenshot', tip: 'Capture a region', icon: iconCamera() });
     }
+    // Compact keeps five controls -- hide, highlight, element, camera, notes --
+    // so each is a thumb-sized target and none of them scrolls out of reach.
+    // Import needs the file on the device and is unusable at this size, the
+    // position toggle has no second answer where the bar belongs in thumb
+    // reach, and export moves to the panel head. The mail button goes with
+    // them: on a phone the export path already opens the system share sheet,
+    // which is where a handoff to mail belongs.
     const exportButtons = [];
-    if (jsonImport) exportButtons.push({ action: 'import', tip: 'Import JSON', icon: iconUpload() });
-    if (jsonExport) exportButtons.push({ action: 'export', tip: 'Export JSON', icon: iconDownload() });
-    if (mailExport) exportButtons.push({ action: 'mail', tip: 'Send by mail', icon: iconMail() });
-    const controlButtons = [
-      { action: 'toggle-pos', tip: 'Toolbar top / bottom', icon: iconSwap() },
-      { action: 'toggle-panel', tip: 'Show / hide annotations', icon: iconPanel() }
-    ];
+    if (jsonImport && !compact) exportButtons.push({ action: 'import', tip: 'Import JSON', icon: iconUpload() });
+    if (jsonExport && !compact) exportButtons.push({ action: 'export', tip: 'Export JSON', icon: iconDownload() });
+    if (mailExport && !compact) exportButtons.push({ action: 'mail', tip: 'Send by mail', icon: iconMail() });
+    const controlButtons = [];
+    if (!compact) controlButtons.push({ action: 'toggle-pos', tip: 'Toolbar top / bottom', icon: iconSwap() });
+    controlButtons.push({ action: 'toggle-panel', tip: 'Show / hide annotations', icon: iconPanel() });
 
     frag.appendChild(makeSpacer());
     frag.appendChild(makeGroup(editButtons));
@@ -1424,8 +1576,31 @@
     frag.appendChild(makeGroup(controlButtons));
 
     toolbar.appendChild(frag);
+    updatePositionIcon();
+    updateToolbarActive();
+    updateToggleActive();
+    mountVisibilityToggle();
+  }
+
+  // One entry point for a change of form factor. The bar's button set differs
+  // between the two, so a rotation has to rebuild it, not merely reposition it.
+  function applyFormFactor() {
+    buildToolbar();
+    positionVisibilityToggle();
+    positionPanel();
+    positionTip();
+    positionCommentCard();
+    applyPageOffset();
+    refreshMarkers();
+  }
+
+  function createShell() {
+    // Build toolbar, panel, and annotation layers
+    const toolbar = document.createElement('div');
+    toolbar.className = `wn-annot-toolbar wn-annotator wn-pos-${position}`;
     document.body.appendChild(toolbar);
     state.toolbar = toolbar;
+    buildToolbar();
 
     const panel = document.createElement('div');
     panel.className = 'wn-annot-panel wn-annotator';
@@ -1433,9 +1608,16 @@
       <div class="wn-annot-panel-head wn-annotator">
         <div class="wn-annot-panel-top wn-annotator">
           <h3>Annotations (0)</h3>
-          <button class="wn-annot-delete-all wn-annotator" type="button">
-            ${iconTrash()}<span>All</span>
-          </button>
+          <div class="wn-annot-panel-tools wn-annotator">
+            ${
+              jsonExport
+                ? `<button class="wn-annot-panel-export wn-annotator" type="button">${iconDownload()}<span>Export</span></button>`
+                : ''
+            }
+            <button class="wn-annot-delete-all wn-annotator" type="button">
+              ${iconTrash()}<span>All</span>
+            </button>
+          </div>
         </div>
         <div class="wn-annot-filters wn-annotator">
           <div class="wn-annot-filter-row wn-annotator">
@@ -1457,6 +1639,13 @@
       deleteAllBtn.addEventListener('click', async (evt) => {
         evt.stopPropagation();
         await deleteAllAnnotations();
+      });
+    }
+    const panelExportBtn = panel.querySelector('.wn-annot-panel-export');
+    if (panelExportBtn) {
+      panelExportBtn.addEventListener('click', (evt) => {
+        evt.stopPropagation();
+        openExportModal();
       });
     }
 
@@ -1511,7 +1700,7 @@
   function mountVisibilityToggle() {
     if (!state.visibilityToggle) return;
     const btn = state.visibilityToggle;
-    const inlineTarget = isMobileLayout() && state.toolbar && !state.hidden;
+    const inlineTarget = isCompactLayout() && state.toolbar && !state.hidden;
     const target = inlineTarget ? state.toolbar : document.body;
     if (btn.parentNode !== target) {
       if (btn.parentNode) {
@@ -1531,8 +1720,8 @@
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'wn-annot-visibility-btn wn-annotator';
-    btn.setAttribute('aria-label', 'Masquer Uxnote');
-    btn.setAttribute('data-tip', 'Masquer Uxnote');
+    btn.setAttribute('aria-label', 'Hide Uxnote');
+    btn.setAttribute('data-tip', 'Hide Uxnote');
     btn.innerHTML = iconEyeOpen();
     btn.addEventListener('click', toggleAnnotatorVisibility);
     state.visibilityToggle = btn;
@@ -2066,10 +2255,12 @@
     window.addEventListener('resize', positionVisibilityToggle);
     window.addEventListener('scroll', refreshMarkers, { passive: true });
     watchRouteChanges();
-    if (followsSystem && darkQuery) {
-      if (darkQuery.addEventListener) darkQuery.addEventListener('change', applyTheme);
-      else if (darkQuery.addListener) darkQuery.addListener(applyTheme);
-    }
+    // A rotation crosses the compact boundary without always firing a resize
+    // the layout functions can read, and the bar's button set differs across
+    // it, so both queries are subscribed rather than polled.
+    subscribeMedia(touchQuery, applyFormFactor);
+    subscribeMedia(compactQuery, applyFormFactor);
+    if (followsSystem) subscribeMedia(darkQuery, applyTheme);
   }
 
   function initFilters() {
@@ -2495,10 +2686,11 @@
     if (!btn) return;
     mountVisibilityToggle();
     const inset = 18;
-    if (isMobileLayout()) {
+    if (isCompactLayout()) {
       if (state.hidden) {
-        btn.style.bottom = `${inset}px`;
-        btn.style.left = `${inset}px`;
+        // Clear of the home indicator and of the curve of the screen.
+        btn.style.bottom = `max(${inset}px, env(safe-area-inset-bottom))`;
+        btn.style.left = `max(${inset}px, env(safe-area-inset-left))`;
         btn.style.top = '';
         btn.style.right = '';
       } else {
@@ -2534,26 +2726,37 @@
     const inset = 18;
     const barRect = state.toolbar.getBoundingClientRect();
 
-    if (isMobileLayout()) {
-      p.style.width = '100vw';
-      p.style.maxHeight = '100vh';
-      p.style.height = '100vh';
+    if (isCompactLayout()) {
+      // Four insets and no width of its own: the box is the viewport, without
+      // a 100vw that a horizontally overflowing host page makes wrong, and
+      // without a 100vh that iOS Safari measures past its own bottom bar.
+      p.style.width = 'auto';
+      p.style.height = 'auto';
+      p.style.maxHeight = 'none';
       p.style.left = '0';
       p.style.right = '0';
       p.style.top = '0';
       p.style.bottom = '0';
       p.style.borderRadius = '0';
+      // Otherwise the heading sits under the status bar and the notch.
+      p.style.paddingTop = `max(${inset}px, env(safe-area-inset-top))`;
+      p.style.paddingBottom = `max(${inset}px, env(safe-area-inset-bottom))`;
       return;
     }
 
-    p.style.width = `min(360px, calc(100vw - ${inset * 2}px))`;
+    p.style.width = `min(360px, calc(100% - ${inset * 2}px))`;
     p.style.maxHeight = `calc(100vh - ${inset * 2}px)`;
+    // Where dvh is understood it replaces the line above; where it is not, the
+    // assignment is dropped and the vh value stands.
+    p.style.maxHeight = `calc(100dvh - ${inset * 2}px)`;
     p.style.left = 'auto';
     p.style.right = `${inset}px`;
     p.style.top = `${inset}px`;
     p.style.bottom = `${inset}px`;
     p.style.height = '';
     p.style.borderRadius = '';
+    p.style.paddingTop = '';
+    p.style.paddingBottom = '';
 
     if (position === 'left') {
       p.style.left = `${barRect.width + inset}px`;
@@ -3516,7 +3719,17 @@
     const parentDocY = parentRect.y + window.scrollY;
     const targetDocX = rect.x + window.scrollX;
     const targetDocY = rect.y + window.scrollY;
-    marker.style.left = `${targetDocX - parentDocX + rect.w + offset.x + 4}px`;
+    const left = targetDocX - parentDocX + rect.w + offset.x + 4;
+    // The marker is centred on `left`, so it parks half its width past the
+    // right edge of its target. On a block that runs the full width of the
+    // screen that half hangs outside the document, which widens the document
+    // -- and a wider document moves every fixed element on the page, the
+    // toolbar included. It is a touch-sized marker that makes this bite.
+    const bound = isGlobalMarkerHost(offsetParent)
+      ? document.documentElement.clientWidth
+      : offsetParent.clientWidth;
+    const half = (marker.offsetWidth || 25) / 2;
+    marker.style.left = `${bound ? Math.min(left, bound - half - 2) : left}px`;
     marker.style.top = `${targetDocY - parentDocY + offset.y - 4}px`;
   }
 
@@ -3799,7 +4012,7 @@
       item.appendChild(showMore);
       item.addEventListener('click', () => {
         focusAnnotation(ann.id, true, ann.pageUrl, ann.pageKey);
-        if (isMobileLayout() && state.panel) {
+        if (isCompactLayout() && state.panel) {
           state.panel.style.display = 'none';
           updateToggleActive();
         }
