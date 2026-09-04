@@ -464,11 +464,23 @@
         return value === null || value === option.fallback;
       }
 
+      // A seeded field is a suggestion until somebody acts on it. The widget on
+      // this load was handed no server, so the snippet must not print one: a
+      // value that is in the form only because it was seeded stays out of the
+      // set until the query carries it or the visitor edits it. Apply reads the
+      // controls, not this, so the seeded pair still travels on the first press.
+      var touched = {};
+      function seededOnly(option, value) {
+        if (!('seed' in option) || option.key in chosen || touched[option.key]) return false;
+        return value === clean(option, option.seed);
+      }
+
       function render() {
         var values = currentValues();
         var text = '<script src="' + SOURCE + '"';
         OPTIONS.forEach(function (option) {
           if (isDefault(option, values[option.key])) return;
+          if (seededOnly(option, values[option.key])) return;
           text += '\n  ' + option.attr + '="' + values[option.key] + '"';
         });
         snippet.textContent = text + '>' + CLOSE_TAG;
@@ -490,8 +502,13 @@
         location.assign(location.pathname);
       });
 
-      section.addEventListener('input', render);
-      section.addEventListener('change', render);
+      function onEdit(event) {
+        var id = event.target && event.target.id;
+        if (id && id.indexOf('set-') === 0) touched[id.slice(4)] = true;
+        render();
+      }
+      section.addEventListener('input', onEdit);
+      section.addEventListener('change', onEdit);
       render();
 
       // Silence would look like the link had worked, so say what was ignored.
