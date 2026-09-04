@@ -55,44 +55,29 @@ test('the toolbar holds one row on a laptop screen', async ({ page }) => {
   }
 });
 
-test('the bar a mouse drives keeps to one short row', async ({ page }) => {
+test('the bar carries one row of controls and little else', async ({ page }) => {
   await page.goto('/');
   const bar = await page.locator('.wn-annot-toolbar').boundingBox();
   const btn = await page.locator('.wn-annot-toolbar button[data-mode="text"]').boundingBox();
   // Every pixel of this bar's height is a pixel of the host page a reviewer
-  // cannot see, so the bar a mouse drives carries one row of controls and
-  // little else. The 44px a finger needs instead is held in mobile.spec.js.
-  expect(bar.height).toBeLessThanOrEqual(46);
-  expect(bar.height - btn.height).toBeLessThanOrEqual(12);
-  // Smaller, and still over the 24px a pointer target is asked to keep.
-  expect(btn.height).toBeGreaterThanOrEqual(24);
-  // The eye is one of the bar's controls, parked beside it where a wide window
-  // has the room for it. It is drawn at the size the ones inside the bar are.
-  const eye = await page.locator('.wn-annot-visibility-btn').boundingBox();
-  expect(eye.height).toBe(btn.height);
-  expect(eye.width).toBe(btn.width);
+  // cannot see, and the only part of it the bar can give back is the room
+  // around its controls.
+  expect(bar.height - btn.height).toBeLessThanOrEqual(6);
 });
 
-test('the density setting hands the bar back the size a finger is given', async ({ page }) => {
+test('a shorter bar costs no control any of the box it is hit on', async ({ page }) => {
   await page.goto('/');
-  await expect(page.locator('html')).toHaveAttribute('data-wn-toolbar-density', 'compact');
-  const compact = await page.locator('.wn-annot-toolbar').boundingBox();
-
-  await page.goto('/?toolbar-density=normal');
-  await expect(page.locator('html')).toHaveAttribute('data-wn-toolbar-density', 'normal');
-  const bar = await page.locator('.wn-annot-toolbar').boundingBox();
-  const btn = await page.locator('.wn-annot-toolbar button[data-mode="text"]').boundingBox();
-  const eye = await page.locator('.wn-annot-visibility-btn').boundingBox();
-  expect(bar.height).toBeGreaterThan(compact.height);
-  expect(btn.height).toBeGreaterThanOrEqual(44);
-  expect(eye.height).toBeGreaterThan(btn.height);
-
-  // The form shows the value the widget was handed, and the snippet prints the
-  // attribute that would carry it. Neither says so at the default.
-  await expect(page.locator('#set-toolbar-density')).toHaveValue('normal');
-  await expect(page.locator('#settings-snippet')).toContainText('data-toolbar-density="normal"');
-  await page.goto('/');
-  await expect(page.locator('#settings-snippet')).not.toContainText('data-toolbar-density');
+  // The bar gets shorter by giving up padding, never by giving up target. The
+  // same 44px is asserted on the phone viewports in mobile.spec.js; it is the
+  // floor here too, the floating eye included.
+  const controls = await page.locator('.wn-annot-toolbar button, .wn-annot-visibility-btn').all();
+  expect(controls.length).toBeGreaterThan(0);
+  for (const control of controls) {
+    const name = await control.evaluate((el) => el.getAttribute('data-action') || 'visibility');
+    const box = await control.boundingBox();
+    expect(box.width, `${name} is ${box.width}px wide`).toBeGreaterThanOrEqual(44);
+    expect(box.height, `${name} is ${box.height}px tall`).toBeGreaterThanOrEqual(44);
+  }
 });
 
 test('the toolbar offers the mail handoff on its own button', async ({ page }) => {
