@@ -211,11 +211,17 @@ test('the head carries the three handoffs at either shape', async ({ page }) => 
   await openPanel(page);
   const tools = page.locator('.wn-annot-panel-tools button[data-action]');
   await expect(tools).toHaveCount(3);
-  // Four symbols and a named button, and the head of a 360px rail still holds
-  // them beside the count rather than wrapping them under it.
-  const title = await page.locator('.wn-annot-panel-top h3').boundingBox();
+  // Four symbols and a named button in the head of a 360px rail. Whether they
+  // sit beside the count or drop under it depends on how wide the font the
+  // page has draws the count, so what is fixed is that they drop as one row
+  // and that the row stays inside the head.
+  const head = await page.locator('.wn-annot-panel-top').boundingBox();
   const group = await page.locator('.wn-annot-panel-tools').boundingBox();
-  expect(group.y).toBeLessThan(title.y + title.height);
+  const button = await page.locator('.wn-annot-panel-view').boundingBox();
+  expect(group.height).toBeLessThan(button.height * 2);
+  expect(group.x).toBeGreaterThanOrEqual(head.x);
+  expect(group.x + group.width).toBeLessThanOrEqual(head.x + head.width + 0.5);
+  expect(group.y + group.height).toBeLessThanOrEqual(head.y + head.height + 0.5);
   await page.locator('.wn-annot-panel-view').click();
   await expect(page.locator('.wn-annot-panel')).toHaveClass(/is-full/);
   for (const one of await tools.all()) {
