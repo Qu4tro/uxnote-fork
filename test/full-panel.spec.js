@@ -187,6 +187,25 @@ test('a band head owns the width of the grid and counts what is under it', async
   await expect(page.locator('.wn-annot-band').first().locator('.wn-annot-band-count')).toHaveText('2');
 });
 
+test('picking a way to mark puts the panel away', async ({ page }) => {
+  await page.goto('/');
+  const panel = page.locator('.wn-annot-panel');
+  // Marking is done on the page, and the panel is over the page: a rail of it
+  // in the side view and the whole of it in the full-size one.
+  for (const mode of ['text', 'element']) {
+    await openPanel(page);
+    await page.locator(`.wn-annot-toolbar button[data-mode="${mode}"]`).click();
+    await expect(panel).toBeHidden();
+    await page.keyboard.press('Escape');
+  }
+  await openFull(page);
+  await page.locator('.wn-annot-toolbar button[data-mode="screenshot"]').click();
+  await expect(panel).toBeHidden();
+  // The region overlay takes the page it was opened over, with no part of
+  // the panel standing on it.
+  await expect(page.locator('.wn-shot-overlay')).toBeVisible();
+});
+
 test('the head carries the three handoffs at either shape', async ({ page }) => {
   await page.goto('/?mailto=team%40example.org');
   await openPanel(page);

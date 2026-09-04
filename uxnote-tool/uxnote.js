@@ -3615,6 +3615,11 @@
     if (!action) return;
     if (action === 'mode') {
       const mode = btn.getAttribute('data-mode');
+      // Marking is done on the page, and the panel is over the page: a rail
+      // of it in the side view and the whole of it in the full-size one. So
+      // picking a way to mark puts the panel away first, whichever way it is
+      // pointing and whichever of the three was picked.
+      setPanelOpen(false);
       if (mode === 'screenshot') {
         await captureRegionAnnotation();
         return;
