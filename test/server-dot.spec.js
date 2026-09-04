@@ -9,8 +9,15 @@ function dotOf(page) {
   return page.locator('.wn-annot-toolbar .wn-annot-sync-dot');
 }
 
+// The probe at load answers the same way the read does, so each test names one
+// state and the dot cannot be left reading the other request's answer.
+async function answer(page, handler) {
+  await page.route('**/health*', handler);
+  await page.route('**/annotations*', handler);
+}
+
 test('the dot reads green while the server answers', async ({ page }) => {
-  await page.route('**/annotations*', (route) =>
+  await answer(page, (route) =>
     route.fulfill({ status: 200, headers: { ...CORS, 'Content-Type': 'application/json' }, body: '{"annotations":[]}' })
   );
   await page.goto(SERVER_FIXTURE);
@@ -19,7 +26,7 @@ test('the dot reads green while the server answers', async ({ page }) => {
 });
 
 test('the dot reads yellow when the server refuses the request', async ({ page }) => {
-  await page.route('**/annotations*', (route) => route.fulfill({ status: 403, headers: CORS, body: 'no' }));
+  await answer(page, (route) => route.fulfill({ status: 403, headers: CORS, body: 'no' }));
   await page.goto(SERVER_FIXTURE);
   await expect(dotOf(page)).toHaveAttribute('data-sync-status', 'refused');
   // The address answered, so the reviewer is sent to the key and the path
@@ -28,7 +35,7 @@ test('the dot reads yellow when the server refuses the request', async ({ page }
 });
 
 test('the dot reads yellow when the address answers as something else', async ({ page }) => {
-  await page.route('**/annotations*', (route) =>
+  await answer(page, (route) =>
     route.fulfill({ status: 200, headers: { ...CORS, 'Content-Type': 'text/html' }, body: '<!doctype html><p>a website' })
   );
   await page.goto(SERVER_FIXTURE);
@@ -36,10 +43,10 @@ test('the dot reads yellow when the address answers as something else', async ({
 });
 
 test('the dot reads red when nothing answers at all', async ({ page }) => {
-  await page.route('**/annotations*', (route) => route.abort());
+  await answer(page, (route) => route.abort());
   await page.goto(SERVER_FIXTURE);
   await expect(dotOf(page)).toHaveAttribute('data-sync-status', 'unreachable');
-  await expect(dotOf(page)).toHaveAttribute('data-tip', /notes stay in this browser/);
+  await expect(dotOf(page)).toHaveAttribute('data-tip', /held here until it answers/);
 });
 
 test('the three states do not share one tooltip', async ({ page }) => {
@@ -50,7 +57,7 @@ test('the three states do not share one tooltip', async ({ page }) => {
     ['unreachable', (route) => route.abort()]
   ]) {
     await page.unrouteAll();
-    await page.route('**/annotations*', handler);
+    await answer(page, handler);
     await page.goto(SERVER_FIXTURE);
     await expect(dotOf(page)).toHaveAttribute('data-sync-status', name);
     tips.push(await dotOf(page).getAttribute('data-tip'));

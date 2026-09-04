@@ -10,6 +10,7 @@ the page under review runs on the same origin with one command:
 
 Routes, under --prefix (empty by default):
 
+    GET    /health                      is the server there, and is the key right
     GET    /annotations?site=...        read the annotation set of a site
     PUT    /annotations/<id>?site=...   write one annotation
     DELETE /annotations/<id>?site=...   delete one annotation
@@ -120,6 +121,11 @@ class UxnoteHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         parsed = urlparse(self.path)
         path = unquote(parsed.path)
+
+        if path == f"{self.prefix}/health":
+            if not self._authorized():
+                return self._error(401, "the api key does not match")
+            return self._json(200, {"status": "ok", "version": 1})
 
         if path == f"{self.prefix}/annotations":
             if not self._authorized():

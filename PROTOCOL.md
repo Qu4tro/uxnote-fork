@@ -3,9 +3,9 @@
 This is the contract between the UxNote widget and a server that stores its
 annotations. Set `data-server-url` on the script tag and the widget speaks it.
 
-The protocol is small on purpose: one resource, four requests. Any stack can
-implement it. `server/server.py` is a reference implementation in the Python
-standard library.
+The protocol is small on purpose: one resource, four requests, and one optional
+probe. Any stack can implement it. `server/server.py` is a reference
+implementation in the Python standard library.
 
 ## Terms
 
@@ -20,7 +20,10 @@ standard library.
   matches `^[A-Za-z0-9_-]{1,64}$` and is unique inside a site, and `type`, which
   is `text` or `element`. Past those two the annotation is opaque: the server
   stores it and returns it byte-faithfully, and it strips no property and
-  re-keys nothing.
+  re-keys nothing. Re-keying is not cosmetic here: the widget decides whether a
+  note changed under it by hashing the JSON, so a server that reorders the keys
+  costs a `PUT` per note per load. The widget writes uuids, but the pattern is
+  the contract and a server must take any id that matches it.
 
 ## Requests
 
@@ -30,6 +33,7 @@ standard library.
 | `PUT` | `{base}/annotations/{id}?site={site}` | the annotation, JSON | `{"ok":true}` |
 | `DELETE` | `{base}/annotations/{id}?site={site}` | — | `{"ok":true}` |
 | `DELETE` | `{base}/annotations?site={site}` | — | `{"ok":true}` |
+| `GET` | `{base}/health` | — | `{"status":"ok","version":1}` |
 
 ### Read the set
 
@@ -45,8 +49,9 @@ The answer is `200`, `application/json`:
 
 A site key the server never saw answers `200` with an empty array, not `404`.
 
-The widget reads the set once, at load. What the server answers replaces
-whatever the widget held.
+The widget reads the set at load, and again whenever the probe finds a server
+that was not answering and now is. What the server answers does not replace
+what the widget held: the two are reconciled, under **How the widget writes**.
 
 ### Write one annotation
 
@@ -90,9 +95,64 @@ the stored file, changed between two changes in this browser. There is no
 locking and no merge: per annotation, the last write wins. That is enough for a
 small review team, and it is the whole of the guarantee.
 
-When the server is set, the server is the only store. A failed request raises
-one toast and leaves the snapshot stale, so the next change sends it again. A
-note written while the server is down is lost when the page reloads.
+### What a browser keeps
+
+The server is the shared store, and each browser keeps a copy of the set it has
+and the digests of the set the server agreed to, both in `localStorage`. A
+failed request raises one toast and leaves the digest stale, so the note is sent
+again by the next change, by the next pull, by the probe finding the server
+back, and by the next load of the page. Nothing written while a server was down
+is lost to a reload.
+
+A browser that has no stored digests has never synced this site. The set beside
+them was then written before a server was named, and it is that reviewer's
+alone: the first pull adopts the server's set rather than pushing private notes
+onto a shared one.
+
+### Settling two sets
+
+A pull compares three things per id — the set here, the digests, and the set the
+server answered with:
+
+| Here | Agreed | On the server | Outcome |
+|---|---|---|---|
+| yes | absent | either | written here while away: kept, and `PUT` |
+| yes | differs | either | edited here while away: kept, and `PUT` |
+| yes | matches | yes | nobody here touched it: the server's copy wins |
+| yes | matches | no | another reviewer deleted it: dropped |
+| no | present | yes | deleted here while away: stays deleted, and `DELETE` |
+| no | present | no | deleted at both ends: nothing to send |
+| no | absent | yes | new to this browser: taken |
+
+The digests are what separate the second row from the third: without them a
+browser cannot tell a note it changed from a note it merely holds.
+
+One case reads badly and is left as it reads. A note deleted here while the
+server was away, which another reviewer re-created in the meantime, is deleted
+again. Last write wins, and the delete is the later write from this browser's
+side. There is no way to tell that from an ordinary stale delete without
+per-note versions, which this protocol does not carry.
+
+### Is the server there
+
+```
+GET {base}/health
+```
+
+The answer is `200` and a JSON body, of any shape. The widget reads the status
+code and that the body parses: a `200` of HTML is a website at that address, not
+this API, and a probe that took the status alone would paint the dot green over
+a read that is failing on the same address. The route takes the api key like
+every other, so a wrong key shows on the dot at load rather than at the first
+write.
+
+**This route is optional.** A server that answers `404` to it says so, and the
+widget probes with `GET {base}/annotations` for the rest of that page's life. A
+server written against this protocol before the probe existed needs no change.
+
+The widget probes at load, then every five minutes while the server answers.
+When it does not, the probe backs off from ten seconds, doubling to a ceiling
+of the same five minutes, and resets on the first answer.
 
 ## The api key
 
