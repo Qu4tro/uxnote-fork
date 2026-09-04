@@ -21,12 +21,12 @@ module.exports = defineConfig({
   projects: [
     {
       name: 'desktop',
-      testIgnore: /mobile\.spec\.js/,
+      testIgnore: /mobile[\w-]*\.spec\.js/,
       use: { viewport: { width: 1280, height: 800 } }
     },
     ...phones.map(([name, device, viewport]) => ({
       name,
-      testMatch: /mobile\.spec\.js/,
+      testMatch: /mobile[\w-]*\.spec\.js/,
       use: { ...devices[device], viewport }
     }))
   ],

@@ -277,7 +277,9 @@
       }
       /* Native controls inside the chrome follow the theme; the page keeps its own. */
       :root[data-wn-theme="dark"] .wn-annot-panel,
-      :root[data-wn-theme="dark"] .wn-annot-modal {
+      :root[data-wn-theme="dark"] .wn-annot-modal,
+      :root[data-wn-theme="dark"] .wn-annot-sheet,
+      :root[data-wn-theme="dark"] .wn-shot-lightbox {
         color-scheme: dark;
       }
       .wn-annot-toolbar {
@@ -591,6 +593,51 @@
         flex-direction: row;
         justify-content: center;
         border-radius: 32px;
+      }
+      /* One shell for every surface that is a panel or a dialog on a compact
+         layout. Everything here is inert on a desktop: the rules that make it
+         a sheet live in the compact media query at the end of this sheet, so
+         a wide window keeps its side panel and its centred modals. */
+      .wn-annot-sheet-grip {
+        display: none;
+        position: relative;
+        flex: 0 0 auto;
+        align-items: center;
+        justify-content: center;
+        height: 44px;
+        /* The gesture is ours; without this the browser pans the page instead. */
+        touch-action: none;
+      }
+      .wn-annot-sheet-handle {
+        display: block;
+        width: 44px;
+        height: 5px;
+        border-radius: 999px;
+        background: var(--wn-border);
+      }
+      .wn-annot-sheet-close {
+        position: absolute;
+        top: 0;
+        right: 0;
+        width: 44px;
+        height: 44px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0;
+        border: none;
+        border-radius: 999px;
+        background: transparent;
+        color: var(--wn-text-muted);
+        cursor: pointer;
+      }
+      .wn-annot-sheet-close:hover {
+        background: rgba(109, 86, 199, 0.12);
+        color: var(--wn-text);
+      }
+      .wn-annot-sheet-close svg {
+        width: 20px;
+        height: 20px;
       }
       .wn-annot-panel {
         position: fixed;
@@ -1057,12 +1104,20 @@
         min-width: 0;
         width: min(420px, calc(100% - 36px));
         max-width: 420px;
-        opacity: 0.55;
-        transition: opacity 0.15s ease;
       }
-      /* Hover alone: the textarea holds focus for the whole life of the card. */
-      .wn-annot-comment-card:hover {
-        opacity: 1;
+      /* The card is parked over the page it is about, so it is translucent
+         until it is pointed at -- hover alone, because the textarea holds
+         focus for the whole life of the card. Both halves want a pointer that
+         can hover. Without one the card never came back, and the page read
+         straight through the comment being written. */
+      @media (hover: hover) {
+        .wn-annot-comment-card {
+          opacity: 0.55;
+          transition: opacity 0.15s ease;
+        }
+        .wn-annot-comment-card:hover {
+          opacity: 1;
+        }
       }
       .wn-annot-dialog-message {
         font-size: 13px;
@@ -1360,6 +1415,28 @@
         border-radius: 8px;
         box-shadow: 0 18px 48px rgba(0, 0, 0, 0.5);
       }
+      /* Escape closed this and nothing else did. There is no Escape on a
+         phone, and a full-screen image gives no clue that it is dismissable. */
+      .wn-shot-lightbox-close {
+        position: absolute;
+        top: max(12px, env(safe-area-inset-top));
+        right: max(12px, env(safe-area-inset-right));
+        width: 44px;
+        height: 44px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0;
+        border: 1px solid var(--wn-border);
+        border-radius: 999px;
+        background: var(--wn-surface);
+        color: var(--wn-text);
+        cursor: pointer;
+      }
+      .wn-shot-lightbox-close svg {
+        width: 22px;
+        height: 22px;
+      }
 
       /* How much room the layout has. Both arms carry weight: every phone in
          landscape is wider than 640px, so the width arm alone leaves it on the
@@ -1433,6 +1510,60 @@
         .wn-annot-panel-export {
           display: inline-flex;
         }
+
+        /* The sheet. Insets rather than a width, because a host page that
+           overflows horizontally makes the containing block wider than the
+           screen. The bottom clears the toolbar, which paints above every one
+           of these and used to sit on the panel's own footer with no way to
+           move either. */
+        .wn-annot-sheet {
+          position: fixed;
+          left: 0;
+          right: 0;
+          top: auto;
+          bottom: var(--wn-sheet-bottom, 0px);
+          width: auto;
+          min-width: 0;
+          max-width: none;
+          height: auto;
+          transform: none;
+          opacity: 1;
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
+          border-radius: 18px 18px 0 0;
+          border-bottom: none;
+          overflow: hidden;
+          overscroll-behavior: contain;
+          padding-top: 8px;
+          padding-left: max(16px, env(safe-area-inset-left));
+          padding-right: max(16px, env(safe-area-inset-right));
+          padding-bottom: max(18px, env(safe-area-inset-bottom));
+          /* 85% of the viewport, and never more room than the toolbar leaves.
+             dvh is the viewport that is on the screen; where it is not
+             understood the declaration above it stands. */
+          max-height: min(85vh, calc(100vh - var(--wn-sheet-bottom, 0px) - var(--wn-sheet-top-guard, 0px)));
+          max-height: min(85dvh, calc(100dvh - var(--wn-sheet-bottom, 0px) - var(--wn-sheet-top-guard, 0px)));
+        }
+        .wn-annot-sheet-grip {
+          display: flex;
+        }
+        /* The sheet holds its own edges and the list scrolls inside it. */
+        .wn-annot-panel.wn-annot-sheet .wn-annot-list {
+          overflow-y: auto;
+          overscroll-behavior: contain;
+          -webkit-overflow-scrolling: touch;
+        }
+        .wn-annot-modal.wn-annot-sheet .wn-annot-actions {
+          justify-content: stretch;
+        }
+        .wn-annot-modal.wn-annot-sheet .wn-annot-pill {
+          flex: 1 1 0;
+          min-height: 48px;
+        }
+        .wn-annot-modal.wn-annot-sheet textarea {
+          flex: 0 1 auto;
+        }
       }
 
       /* What kind of input is driving the widget. A finger has the same reach
@@ -1488,6 +1619,143 @@
       }
     `;
     document.head.appendChild(style);
+  }
+
+  // The surfaces that become sheets. A sheet is a panel or a dialog anchored
+  // to the bottom edge on a compact layout; the class is carried at all times
+  // and the compact media query is what turns it into one.
+  const sheetModals = ['commentModal', 'dialogModal'];
+
+  // The handle and the close button a sheet needs. The notes panel had no way
+  // to dismiss itself at all -- the only exit was the toolbar button it was
+  // painted over.
+  function buildSheetGrip(label, onClose) {
+    const grip = document.createElement('div');
+    grip.className = 'wn-annot-sheet-grip wn-annotator';
+    const handle = document.createElement('span');
+    handle.className = 'wn-annot-sheet-handle wn-annotator';
+    handle.setAttribute('aria-hidden', 'true');
+    const close = document.createElement('button');
+    close.type = 'button';
+    close.className = 'wn-annot-sheet-close wn-annotator';
+    close.setAttribute('aria-label', label);
+    close.innerHTML = iconClose();
+    close.addEventListener('click', (evt) => {
+      evt.stopPropagation();
+      onClose();
+    });
+    grip.appendChild(handle);
+    grip.appendChild(close);
+    bindSheetDrag(grip, onClose);
+    return grip;
+  }
+
+  // A handle that only looks draggable is a lie, so it drags. Past a third of
+  // its own height, or on a quick flick, the sheet goes; anything shorter
+  // springs back. Pointer events rather than touch ones, because this shell is
+  // a sheet in a narrow desktop window too.
+  function bindSheetDrag(grip, onClose) {
+    let sheet = null;
+    let startY = 0;
+    let startedAt = 0;
+    let travel = 0;
+
+    const onMove = (evt) => {
+      if (!sheet) return;
+      travel = Math.max(0, evt.clientY - startY);
+      sheet.style.transform = `translateY(${travel}px)`;
+    };
+    const onEnd = () => {
+      if (!sheet) return;
+      grip.removeEventListener('pointermove', onMove);
+      grip.removeEventListener('pointerup', onEnd);
+      grip.removeEventListener('pointercancel', onEnd);
+      const height = sheet.getBoundingClientRect().height || 1;
+      const speed = travel / Math.max(1, Date.now() - startedAt);
+      sheet.style.transform = '';
+      sheet.style.transition = '';
+      sheet = null;
+      if (travel > height / 3 || (travel > 40 && speed > 0.5)) onClose();
+    };
+
+    grip.addEventListener('pointerdown', (evt) => {
+      // Capturing the pointer sends the click that follows to the grip rather
+      // than to whatever was pressed, which swallowed the close button whole.
+      // Nobody drags a sheet by its close button anyway.
+      if (evt.target.closest('.wn-annot-sheet-close')) return;
+      sheet = grip.closest('.wn-annot-sheet');
+      if (!sheet) return;
+      startY = evt.clientY;
+      startedAt = Date.now();
+      travel = 0;
+      sheet.style.transition = 'none';
+      if (grip.setPointerCapture) grip.setPointerCapture(evt.pointerId);
+      grip.addEventListener('pointermove', onMove);
+      grip.addEventListener('pointerup', onEnd);
+      grip.addEventListener('pointercancel', onEnd);
+    });
+  }
+
+  function isSheetOpen() {
+    // Hiding the widget takes every surface off the screen with a display
+    // rule, and a page held still for a sheet nobody can see is a page that
+    // cannot be scrolled at all.
+    if (state.hidden || !isCompactLayout()) return false;
+    if (state.panel && state.panel.style.display !== 'none') return true;
+    return sheetModals.some((key) => {
+      const modalState = state[key];
+      return modalState && modalState.backdrop.classList.contains('show');
+    });
+  }
+
+  // Hold the page still under a sheet. Nothing did this before, so a flick
+  // that ran off the end of the notes list carried on into the host page.
+  // Hiding the root's overflow leaves programmatic scrolling alone -- measured
+  // -- so focusing an annotation from the list still moves the page to it.
+  // On iOS Safari this is weaker than it looks; `overscroll-behavior` on the
+  // sheet itself is what stops the chaining there.
+  function syncPageScrollLock() {
+    const locked = isSheetOpen();
+    if (locked === !!state.scrollLocked) return;
+    const root = document.documentElement;
+    state.scrollLocked = locked;
+    if (locked) {
+      state.scrollLockPrev = root.style.overflow;
+      root.style.overflow = 'hidden';
+    } else {
+      root.style.overflow = state.scrollLockPrev || '';
+      state.scrollLockPrev = '';
+    }
+  }
+
+  // How much room at each end a sheet has to give up. The toolbar paints above
+  // every one of them, and on a phone it used to cover the bottom 50px of the
+  // notes panel -- its footer, and the only control that could close it.
+  function applySheetInset() {
+    const root = document.documentElement;
+    const setInsets = (bottom, top) => {
+      root.style.setProperty('--wn-sheet-bottom', `${bottom}px`);
+      root.style.setProperty('--wn-sheet-top-guard', `${top}px`);
+    };
+    if (!state.toolbar || !isCompactLayout() || state.hidden) {
+      setInsets(0, 0);
+      return;
+    }
+    const rect = state.toolbar.getBoundingClientRect();
+    const gap = 8;
+    const height = root.clientHeight;
+    if (position === 'top') {
+      setInsets(0, Math.max(0, Math.round(rect.bottom + gap)));
+      return;
+    }
+    setInsets(Math.max(0, Math.round(height - rect.top + gap)), 0);
+  }
+
+  function setPanelOpen(open) {
+    if (!state.panel) return;
+    state.panel.style.display = open ? '' : 'none';
+    updateToggleActive();
+    syncPageScrollLock();
   }
 
   // The bar carries a different set of controls on a compact layout, so it is
@@ -1591,6 +1859,8 @@
     positionTip();
     positionCommentCard();
     applyPageOffset();
+    applySheetInset();
+    syncPageScrollLock();
     refreshMarkers();
   }
 
@@ -1603,7 +1873,7 @@
     buildToolbar();
 
     const panel = document.createElement('div');
-    panel.className = 'wn-annot-panel wn-annotator';
+    panel.className = 'wn-annot-panel wn-annot-sheet wn-annotator';
     panel.innerHTML = `
       <div class="wn-annot-panel-head wn-annotator">
         <div class="wn-annot-panel-top wn-annotator">
@@ -1641,11 +1911,18 @@
         await deleteAllAnnotations();
       });
     }
+    const panelHead = panel.querySelector('.wn-annot-panel-head');
+    if (panelHead) {
+      panelHead.insertBefore(
+        buildSheetGrip('Close the annotations', () => setPanelOpen(false)),
+        panelHead.firstChild
+      );
+    }
     const panelExportBtn = panel.querySelector('.wn-annot-panel-export');
     if (panelExportBtn) {
       panelExportBtn.addEventListener('click', (evt) => {
         evt.stopPropagation();
-        if (jsonExport) exportAnnotations();
+        requestExport();
       });
     }
 
@@ -1669,6 +1946,7 @@
     toolbar.addEventListener('click', onToolbarClick);
     renderList();
     applyPageOffset();
+    applySheetInset();
     positionPanel();
     positionTip();
     updateToggleActive();
@@ -1735,7 +2013,7 @@
     const backdrop = document.createElement('div');
     backdrop.className = 'wn-annot-modal-backdrop wn-annotator';
     const modal = document.createElement('div');
-    modal.className = 'wn-annot-modal wn-annot-comment-card wn-annotator';
+    modal.className = 'wn-annot-modal wn-annot-comment-card wn-annot-sheet wn-annotator';
 
     const title = document.createElement('h4');
     title.textContent = 'Add a comment';
@@ -1757,6 +2035,7 @@
 
     actions.appendChild(cancelBtn);
     actions.appendChild(okBtn);
+    modal.appendChild(buildSheetGrip('Discard this comment', () => cancelBtn.click()));
     modal.appendChild(title);
     modal.appendChild(textarea);
     modal.appendChild(actions);
@@ -1781,6 +2060,14 @@
     if (!modalState || !state.toolbar) return;
     if (!modalState.backdrop.classList.contains('show')) return;
     const card = modalState.modal;
+    if (isCompactLayout()) {
+      // The sheet is placed against the viewport edges by the stylesheet, and
+      // an inline left and bottom from the parked-card path would beat it.
+      card.style.left = '';
+      card.style.top = '';
+      card.style.bottom = '';
+      return;
+    }
     const barRect = state.toolbar.getBoundingClientRect();
     const gap = 0.75 * (parseFloat(getComputedStyle(card).fontSize) || 16);
     card.style.left = `${barRect.left + barRect.width / 2}px`;
@@ -1803,11 +2090,13 @@
 
       backdrop.classList.add('show');
       positionCommentCard();
+      syncPageScrollLock();
       textarea.focus();
       textarea.select();
 
       const close = (val) => {
         backdrop.classList.remove('show');
+        syncPageScrollLock();
         okBtn.removeEventListener('click', onOk);
         cancelBtn.removeEventListener('click', onCancel);
         document.removeEventListener('keydown', onKey);
@@ -1839,6 +2128,20 @@
     const val = await askForComment(label);
     if (!val) return null;
     return val;
+  }
+
+  // One action wherever it is pressed. On a compact layout the file goes to
+  // the share sheet, which is how a phone hands a file to another
+  // application; on a desktop it goes to the download anchor the widget has
+  // always used. Neither asks anything first -- the file holds every
+  // annotation of the site either way.
+  function requestExport() {
+    if (!jsonExport) return;
+    if (isCompactLayout()) {
+      shareAnnotations();
+      return;
+    }
+    exportAnnotations();
   }
 
   function ensureImportModal() {
@@ -2168,7 +2471,7 @@
     const backdrop = document.createElement('div');
     backdrop.className = 'wn-annot-modal-backdrop wn-annotator';
     const modal = document.createElement('div');
-    modal.className = 'wn-annot-modal wn-annotator';
+    modal.className = 'wn-annot-modal wn-annot-sheet wn-annotator';
     const title = document.createElement('h4');
     title.className = 'wn-annotator';
     const message = document.createElement('div');
@@ -2184,6 +2487,7 @@
 
     actions.appendChild(cancelBtn);
     actions.appendChild(okBtn);
+    modal.appendChild(buildSheetGrip('Dismiss', () => cancelBtn.click()));
     modal.appendChild(title);
     modal.appendChild(message);
     modal.appendChild(actions);
@@ -2206,6 +2510,7 @@
 
       const close = (val) => {
         backdrop.classList.remove('show');
+        syncPageScrollLock();
         okBtn.removeEventListener('click', onOk);
         cancelBtn.removeEventListener('click', onCancel);
         backdrop.removeEventListener('click', onBackdrop);
@@ -2229,6 +2534,7 @@
       backdrop.addEventListener('click', onBackdrop);
       document.addEventListener('keydown', onKey);
       backdrop.classList.add('show');
+      syncPageScrollLock();
       okBtn.focus();
     });
   }
@@ -2251,6 +2557,7 @@
     window.addEventListener('resize', refreshMarkers);
     window.addEventListener('resize', applyPageOffset);
     window.addEventListener('resize', positionPanel);
+    window.addEventListener('resize', applySheetInset);
     window.addEventListener('resize', positionTip);
     window.addEventListener('resize', positionVisibilityToggle);
     window.addEventListener('scroll', refreshMarkers, { passive: true });
@@ -2615,9 +2922,7 @@
       return;
     }
     if (action === 'export') {
-      // Nothing to ask: the file holds every annotation of the site either
-      // way, so the press is the answer.
-      if (jsonExport) exportAnnotations();
+      requestExport();
       return;
     }
     if (action === 'import') {
@@ -2640,10 +2945,8 @@
   }
 
   function togglePanel() {
-    const isHidden = state.panel.style.display === 'none';
     // Restore default flex layout when re-opening so the footer stays pinned
-    state.panel.style.display = isHidden ? '' : 'none';
-    updateToggleActive();
+    setPanelOpen(state.panel.style.display === 'none');
   }
 
   function toggleAnnotatorVisibility() {
@@ -2663,6 +2966,8 @@
     updateDimmer();
     positionVisibilityToggle();
     applyPageOffset();
+    applySheetInset();
+    syncPageScrollLock();
     if (!hidden) {
       refreshMarkers();
       positionPanel();
@@ -2727,20 +3032,20 @@
     const barRect = state.toolbar.getBoundingClientRect();
 
     if (isCompactLayout()) {
-      // Four insets and no width of its own: the box is the viewport, without
-      // a 100vw that a horizontally overflowing host page makes wrong, and
-      // without a 100vh that iOS Safari measures past its own bottom bar.
-      p.style.width = 'auto';
-      p.style.height = 'auto';
-      p.style.maxHeight = 'none';
-      p.style.left = '0';
-      p.style.right = '0';
-      p.style.top = '0';
-      p.style.bottom = '0';
-      p.style.borderRadius = '0';
-      // Otherwise the heading sits under the status bar and the notch.
-      p.style.paddingTop = `max(${inset}px, env(safe-area-inset-top))`;
-      p.style.paddingBottom = `max(${inset}px, env(safe-area-inset-bottom))`;
+      // The sheet is placed by the stylesheet, against the viewport edges and
+      // clear of the toolbar. Every inline value the desktop branch leaves
+      // behind would beat those rules, so they come off here.
+      p.style.width = '';
+      p.style.height = '';
+      p.style.maxHeight = '';
+      p.style.left = '';
+      p.style.right = '';
+      p.style.top = '';
+      p.style.bottom = '';
+      p.style.borderRadius = '';
+      p.style.paddingTop = '';
+      p.style.paddingBottom = '';
+      applySheetInset();
       return;
     }
 
@@ -2785,6 +3090,7 @@
     positionCommentCard();
     positionPanel();
     applyPageOffset();
+    applySheetInset();
   }
 
   function updatePositionIcon() {
@@ -3777,11 +4083,7 @@
 
   function ensurePanelVisible() {
     if (!state.panel) return;
-    const isHidden = state.panel.style.display === 'none';
-    if (isHidden) {
-      state.panel.style.display = '';
-      updateToggleActive();
-    }
+    if (state.panel.style.display === 'none') setPanelOpen(true);
   }
 
   function focusListItem(id) {
@@ -4012,10 +4314,8 @@
       item.appendChild(showMore);
       item.addEventListener('click', () => {
         focusAnnotation(ann.id, true, ann.pageUrl, ann.pageKey);
-        if (isCompactLayout() && state.panel) {
-          state.panel.style.display = 'none';
-          updateToggleActive();
-        }
+        // The sheet covers the page it is pointing at, so it steps aside.
+        if (isCompactLayout()) setPanelOpen(false);
       });
       list.appendChild(item);
     });
@@ -4069,6 +4369,27 @@
     a.download = buildFilename();
     a.click();
     URL.revokeObjectURL(url);
+  }
+
+  // The share sheet is how a phone hands a file to another application. Where
+  // there is none -- or where it refuses files, or fails -- this is the same
+  // download anchor the desktop has always used.
+  async function shareAnnotations() {
+    const name = buildFilename();
+    const data = JSON.stringify(buildAnnotationsPayload(), null, 2);
+    if (navigator.share && navigator.canShare && typeof File === 'function') {
+      const file = new File([data], name, { type: 'application/json' });
+      try {
+        if (navigator.canShare({ files: [file] })) {
+          await navigator.share({ files: [file], title: name });
+          return;
+        }
+      } catch (err) {
+        // A dismissed share sheet is an answer, not a failure.
+        if (err && err.name === 'AbortError') return;
+      }
+    }
+    exportAnnotations();
   }
 
   function buildAnnotationsPayload(annotations = state.annotations) {
@@ -4216,6 +4537,12 @@
         />
       </svg>
     `;
+  }
+  function iconClose() {
+    return iconSvg(`
+      <path d="M6 6l12 12" />
+      <path d="M18 6l-12 12" />
+    `);
   }
   function iconPanel() {
     return iconSvg(`
@@ -4994,6 +5321,12 @@
     img.src = src;
     img.alt = 'The screenshot of this annotation';
     box.appendChild(img);
+    const closeBtn = document.createElement('button');
+    closeBtn.type = 'button';
+    closeBtn.className = 'wn-shot-lightbox-close wn-annotator';
+    closeBtn.setAttribute('aria-label', 'Close the screenshot');
+    closeBtn.innerHTML = iconClose();
+    box.appendChild(closeBtn);
     const close = () => {
       document.removeEventListener('keydown', onKey, true);
       box.remove();
@@ -5004,6 +5337,7 @@
         close();
       }
     };
+    closeBtn.addEventListener('click', close);
     box.addEventListener('click', close);
     document.addEventListener('keydown', onKey, true);
     document.body.appendChild(box);
