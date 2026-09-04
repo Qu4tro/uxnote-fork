@@ -2643,6 +2643,7 @@
     document.addEventListener('selectionchange', handleSelectionChange);
     document.addEventListener('mousemove', handleElementHover);
     document.addEventListener('click', handleElementClick, true);
+    window.addEventListener('keydown', handleModeEscape);
     window.addEventListener('resize', refreshMarkers);
     window.addEventListener('resize', applyPageOffset);
     window.addEventListener('resize', positionPanel);
@@ -2695,6 +2696,18 @@
     if (nextMode !== 'element') {
       hideOutline();
     }
+  }
+
+  // Escape leaves whatever mode is up, whichever one it is. It is bound on the
+  // window and not on the document, so every overlay that reads the key -- the
+  // comment card, the dialogs, the import modal, the region drag, the
+  // lightbox -- gets it first and marks it handled; this is what is left. With
+  // no mode on, the key is the host page's and the widget does not touch it.
+  function handleModeEscape(evt) {
+    if (evt.key !== 'Escape' || evt.defaultPrevented) return;
+    if (!state.mode) return;
+    evt.preventDefault();
+    setMode(null);
   }
 
   // Leaving a mode takes its bar with it. Both are built only on a coarse
