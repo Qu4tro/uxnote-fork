@@ -1234,6 +1234,14 @@
         grid-column: 1 / -1;
         margin: 4px 0 -4px;
       }
+      /* An empty list in a full-size view is mostly room. The one thing it
+         has to say belongs in the middle of it, not in a corner. */
+      .wn-annot-panel.is-full .wn-annot-empty {
+        grid-column: 1 / -1;
+        max-width: 460px;
+        margin: 48px auto 0;
+        padding: 26px 20px;
+      }
       .wn-annot-panel.is-full .wn-annot-list {
         display: grid;
         grid-template-columns: repeat(auto-fill, minmax(330px, 1fr));
@@ -5108,13 +5116,15 @@
   // The page a note belongs to, as the part of the address that distinguishes
   // it. A set can span pages; the panel never used to say which one.
   function describeAnnotationPage(ann) {
-    const href = (ann && (ann.pageUrl || ann.pageKey)) || '';
+    // The page key, not the address: the widget files a note under the origin
+    // and the path, so two addresses that differ only in their query string
+    // are one page here and the label says the same.
+    const href = (ann && (ann.pageKey || ann.pageUrl)) || '';
     if (!href) return '';
     if (pageLabels.has(href)) return pageLabels.get(href);
     let label;
     try {
-      const url = new URL(href, window.location.href);
-      label = truncateText(`${url.pathname || '/'}${url.search || ''}`, 60);
+      label = truncateText(new URL(href, window.location.href).pathname || '/', 60);
     } catch (err) {
       label = truncateText(href, 60);
     }
