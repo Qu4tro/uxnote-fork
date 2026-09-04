@@ -44,7 +44,7 @@ test('escape leaves the region mode and takes its overlay with it', async ({ pag
 test('escape cancels the comment card and the mode stands', async ({ page }) => {
   await page.goto('/');
   await modeButton(page, 'element').click();
-  await page.locator('#copy').click();
+  await page.locator('#hero-title').click();
   await expect(page.locator('.wn-annot-modal textarea')).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(page.locator('.wn-annot-modal textarea')).toBeHidden();
