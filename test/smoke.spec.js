@@ -78,6 +78,21 @@ test('the export button writes the file without asking first', async ({ page }) 
   await expect(page.locator('.wn-annot-modal-backdrop.show')).toHaveCount(0);
 });
 
+test('the widget writes the resolved theme on the html element', async ({ page }) => {
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await page.goto('/demo/');
+  await expect(page.locator('html')).toHaveAttribute('data-wn-theme', 'dark');
+});
+
+test('reverse-auto wears the side of the system theme the page does not', async ({ page }) => {
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await page.goto('/test/fixtures/theme-reverse-auto.html');
+  await expect(page.locator('html')).toHaveAttribute('data-wn-theme', 'light');
+  // It reads the preference rather than a fixed side, so it keeps following it.
+  await page.emulateMedia({ colorScheme: 'light' });
+  await expect(page.locator('html')).toHaveAttribute('data-wn-theme', 'dark');
+});
+
 const CAPTURE_FIXTURE = '/test/fixtures/server-capture.html';
 const ALLOW = { 'Access-Control-Allow-Origin': '*' };
 
