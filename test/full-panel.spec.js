@@ -102,6 +102,18 @@ test('the full-size view shows the detail the rail has no room for', async ({ pa
   await expect(page.locator('.wn-annot-facts')).toBeVisible();
 });
 
+test('See more lifts the clamp the full-size card puts on a long comment', async ({ page }) => {
+  await page.goto('/');
+  await seed(page, [{ comment: 'A sentence about a spacing problem. '.repeat(20) }]);
+  await openFull(page);
+  const comment = page.locator('.wn-annot-comment');
+  const clamped = (await comment.boundingBox()).height;
+  await page.locator('.wn-annot-showmore').click();
+  // The rule that clamps a comment in the full-size view is the more specific
+  // of the two, so the rule that lifts the clamp has to name the view as well.
+  expect((await comment.boundingBox()).height).toBeGreaterThan(clamped);
+});
+
 test('a filtered card carries the number its marker carries', async ({ page }) => {
   await page.goto('/');
   await seed(page, [{}, {}, { comment: 'the third one, on its own' }]);

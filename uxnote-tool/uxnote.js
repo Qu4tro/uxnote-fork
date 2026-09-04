@@ -1293,6 +1293,9 @@
         padding: 0;
         -webkit-line-clamp: 5;
       }
+      .wn-annot-panel.is-full .wn-annot-comment.expanded {
+        -webkit-line-clamp: unset;
+      }
       .wn-annot-panel.is-full .wn-annot-detail {
         display: flex;
         flex-direction: column;
