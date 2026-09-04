@@ -2187,7 +2187,10 @@
       };
       const onCancel = () => close(null);
       const onKey = (evt) => {
-        if (evt.key === 'Escape') close(null);
+        if (evt.key === 'Escape') {
+          evt.preventDefault();
+          close(null);
+        }
         if (evt.key === 'Enter' && !(evt.shiftKey || evt.altKey)) {
           evt.preventDefault();
           onOk();
@@ -2295,7 +2298,10 @@
       document.removeEventListener('keydown', onKey);
     };
     const onKey = (evt) => {
-      if (evt.key === 'Escape') close();
+      if (evt.key === 'Escape') {
+        evt.preventDefault();
+        close();
+      }
     };
     const onBackdrop = (evt) => {
       if (evt.target === backdrop) close();
@@ -2604,7 +2610,10 @@
         }
       };
       const onKey = (evt) => {
-        if (evt.key === 'Escape') close(false);
+        if (evt.key === 'Escape') {
+          evt.preventDefault();
+          close(false);
+        }
         if ((evt.metaKey || evt.ctrlKey) && evt.key === 'Enter') onOk();
       };
 
