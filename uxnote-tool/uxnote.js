@@ -211,7 +211,10 @@
     layoutObserver: null,
     layoutTimer: null,
     toast: null,
-    toastTimer: null
+    toastTimer: null,
+    note: null,
+    noteAnchor: null,
+    noteTimer: null
   };
 
   // Entry point: load config, build UI, restore data
@@ -1365,6 +1368,98 @@
         background: var(--wn-element-highlight-soft, rgba(139,92,246,0.1));
         pointer-events: none;
         z-index: 2147482800;
+      }
+      /* A mark on the page says where a note is. This says what it says, and
+         opens it for editing, without a trip to the panel. It takes the
+         pointer, so the pointer can travel from the mark into it. */
+      .wn-annot-note {
+        position: fixed;
+        left: 0;
+        top: 0;
+        z-index: 2147483090;
+        display: none;
+        flex-direction: column;
+        gap: 8px;
+        width: max-content;
+        max-width: 320px;
+        padding: 10px 12px;
+        border-radius: 12px;
+        border: 1px solid var(--wn-border);
+        background: var(--wn-surface);
+        color: var(--wn-text);
+        box-shadow: 0 12px 28px var(--wn-shadow);
+        font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+        font-size: 12px;
+        line-height: 1.5;
+      }
+      .wn-annot-note.show {
+        display: flex;
+      }
+      .wn-annot-note-top {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 6px;
+      }
+      .wn-annot-note-kind {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 10px;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--wn-item-accent-strong, var(--wn-text-muted));
+      }
+      .wn-annot-note-kind svg {
+        width: 13px;
+        height: 13px;
+      }
+      .wn-annot-note-number {
+        font-size: 11px;
+        font-weight: 800;
+        color: var(--wn-text-muted);
+        background: var(--wn-item-number-bg, rgba(109, 86, 199, 0.1));
+        border: 1px solid var(--wn-item-number-border, transparent);
+        border-radius: 999px;
+        padding: 1px 7px;
+      }
+      .wn-annot-note-edit {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        margin-left: auto;
+        width: 26px;
+        height: 26px;
+        padding: 0;
+        border-radius: 8px;
+        border: 1px solid var(--wn-border);
+        background: rgba(109, 86, 199, 0.08);
+        color: var(--wn-text-muted);
+        cursor: pointer;
+        transition: all 0.12s ease;
+      }
+      .wn-annot-note-edit:hover {
+        background: rgba(109, 86, 199, 0.18);
+        color: var(--wn-text);
+      }
+      .wn-annot-note-edit svg {
+        width: 14px;
+        height: 14px;
+      }
+      /* A comment is whatever was typed, newlines and long words included,
+         and a very long one scrolls inside the bubble rather than growing it
+         past the screen. */
+      .wn-annot-note-text {
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        max-height: 180px;
+        overflow-y: auto;
+        color: var(--wn-text);
+      }
+      .wn-annot-note-text.is-empty {
+        color: var(--wn-text-faint);
+        font-style: italic;
       }
       .wn-annot-toast {
         position: fixed;
@@ -3014,6 +3109,7 @@
     document.addEventListener('pointerup', handleTextSelection);
     document.addEventListener('selectionchange', handleSelectionChange);
     document.addEventListener('mousemove', handleElementHover);
+    document.addEventListener('mouseover', handleNoteHover);
     document.addEventListener('click', handleElementClick, true);
     window.addEventListener('keydown', handleModeEscape);
     window.addEventListener('resize', refreshMarkers);
@@ -3079,6 +3175,7 @@
       return;
     }
     state.mode = nextMode;
+    hideNoteBubble();
     updateToolbarActive();
     showTipForMode(nextMode);
     closeTouchCapture();
@@ -3523,6 +3620,7 @@
       setMode(null);
       hideTip();
       hideOutline();
+      hideNoteBubble();
     }
     syncVisibilityButton();
     updateDimmer();
@@ -4955,6 +5053,7 @@
       positionMarker(entry.el, rect, ann);
       applyMarkerPalette(entry.el, getAnnotationColors(ann));
     });
+    positionNoteBubble();
   }
 
   function ensurePanelVisible() {
@@ -5050,6 +5149,180 @@
     setTimeout(() => {
       el.style.boxShadow = prev;
     }, 800);
+  }
+
+  // ------------------------------------------------------------------
+  // The bubble on a mark
+  // ------------------------------------------------------------------
+
+  // Every annotation leaves something on the page -- a highlight over the
+  // words, a border around the element, a frame where the region was, and a
+  // numbered badge beside each of them. Resting on one of those opens what
+  // the note says and a button that edits it, so reading a mark does not mean
+  // finding its card in the panel.
+  //
+  // It is a hover surface and only a hover surface. A finger has no hover to
+  // give and a keyboard has no pointer, and both already reach the same
+  // comment and the same edit button on the card in the panel, so nothing is
+  // out of reach for want of this.
+
+  function noteBubbleAllowed() {
+    // A capture mode owns the pointer: element mode draws its own preview
+    // under it, and a bubble in the way would be one more thing to click
+    // through. A hidden widget draws nothing at all.
+    return !isTouchInput() && !state.hidden && !state.mode;
+  }
+
+  // What the pointer is resting on, and the note that mark stands for.
+  //
+  // The two marks the widget draws for itself: the numbered badge, which
+  // every annotation has and which sits on the border of what was picked,
+  // and the highlight over the words, which is that border. The border of a
+  // pinned element is drawn on the page's own element, and a pin on
+  // something the size of the screen would then open the bubble anywhere on
+  // it; the badge in its corner is the border there.
+  //
+  // A badge stands for one note. An element carrying several is drawn one
+  // badge per note, offset along the same edge, so the answer is always one.
+  function noteTargetOf(node) {
+    if (!node || !node.closest) return null;
+    const marker = node.closest('.wn-annot-marker[data-wn-annot-id]');
+    if (marker) return { anchor: marker, id: marker.dataset.wnAnnotId };
+    const span = node.closest('.uxnote-textmark[data-uxnote-id]');
+    if (span) return { anchor: span, id: span.dataset.uxnoteId };
+    return null;
+  }
+
+  function ensureNoteBubble() {
+    if (state.note) return state.note;
+    const note = document.createElement('div');
+    note.className = 'wn-annot-note wn-annotator';
+    note.addEventListener('mouseleave', queueNoteClose);
+    document.body.appendChild(note);
+    state.note = note;
+    return note;
+  }
+
+  function buildNoteBody(ann, number) {
+    const frag = document.createDocumentFragment();
+    const top = document.createElement('div');
+    top.className = 'wn-annot-note-top';
+    const kind = document.createElement('span');
+    kind.className = 'wn-annot-note-kind';
+    kind.appendChild(iconNode(kindIcon(ann.type)));
+    const kindName = document.createElement('span');
+    kindName.textContent = KIND_LABELS[ann.type] || KIND_LABELS.element;
+    kind.appendChild(kindName);
+    top.appendChild(kind);
+
+    const numberEl = document.createElement('span');
+    numberEl.className = 'wn-annot-note-number';
+    numberEl.textContent = `#${number}`;
+    top.appendChild(numberEl);
+
+    const edit = document.createElement('button');
+    edit.type = 'button';
+    edit.className = 'wn-annot-note-edit wn-annotator';
+    edit.setAttribute('aria-label', 'Edit this annotation');
+    edit.appendChild(iconNode(iconEdit()));
+    edit.addEventListener('click', async (evt) => {
+      evt.stopPropagation();
+      hideNoteBubble();
+      await editAnnotation(ann.id);
+    });
+    top.appendChild(edit);
+    frag.appendChild(top);
+
+    const text = document.createElement('div');
+    const comment = (ann.comment || '').trim();
+    text.className = comment ? 'wn-annot-note-text' : 'wn-annot-note-text is-empty';
+    text.textContent = comment || 'Nothing written on this one yet.';
+    frag.appendChild(text);
+    return frag;
+  }
+
+  function showNoteBubble(anchor, id) {
+    if (!noteBubbleAllowed()) return hideNoteBubble();
+    const index = state.annotations.findIndex((one) => one.id === id);
+    if (index === -1) return hideNoteBubble();
+    // The number is the one the badge carries, and both count from the order
+    // the notes were made in.
+    const ann = state.annotations[index];
+    const number = index + 1;
+    cancelNoteClose();
+    const note = ensureNoteBubble();
+    // The same mark under the pointer redraws nothing. An edit moves the
+    // stamp, which is what tells the two apart without comparing the text.
+    const key = `${ann.id}:${number}:${ann.updatedAt || ''}`;
+    if (state.noteAnchor !== anchor || note.dataset.key !== key) {
+      note.dataset.key = key;
+      note.innerHTML = '';
+      applyItemAccent(note, getAnnotationColors(ann));
+      note.appendChild(buildNoteBody(ann, number));
+      state.noteAnchor = anchor;
+    }
+    note.classList.add('show');
+    positionNoteBubble();
+  }
+
+  // Above the mark by preference, below it where there is no room above, and
+  // never past either side of the screen.
+  function positionNoteBubble() {
+    const note = state.note;
+    const anchor = state.noteAnchor;
+    if (!note || !anchor || !note.classList.contains('show')) return;
+    if (!anchor.isConnected) return hideNoteBubble();
+    const rect = anchor.getBoundingClientRect();
+    if (!rect.width && !rect.height) return hideNoteBubble();
+    const box = note.getBoundingClientRect();
+    const view = document.documentElement;
+    const margin = 8;
+    const gap = 10;
+    const left = Math.max(
+      margin,
+      Math.min(rect.left + rect.width / 2 - box.width / 2, view.clientWidth - box.width - margin)
+    );
+    const above = rect.top - box.height - gap;
+    const top = above >= margin ? above : Math.min(rect.bottom + gap, view.clientHeight - box.height - margin);
+    note.style.left = `${Math.round(left)}px`;
+    note.style.top = `${Math.round(Math.max(margin, top))}px`;
+  }
+
+  // The bubble stands off the mark, so the pointer crosses the page on its
+  // way to the edit button. It waits out that crossing rather than closing
+  // under the pointer halfway there.
+  function queueNoteClose() {
+    cancelNoteClose();
+    state.noteTimer = setTimeout(hideNoteBubble, 180);
+  }
+
+  function cancelNoteClose() {
+    if (!state.noteTimer) return;
+    clearTimeout(state.noteTimer);
+    state.noteTimer = null;
+  }
+
+  function hideNoteBubble() {
+    cancelNoteClose();
+    state.noteAnchor = null;
+    if (state.note) state.note.classList.remove('show');
+  }
+
+  // One listener for the whole page rather than one per mark, so a note added
+  // or resolved late is covered without anything being bound to it.
+  function handleNoteHover(evt) {
+    if (!noteBubbleAllowed()) return;
+    const target = evt.target;
+    if (state.note && state.note.contains(target)) {
+      cancelNoteClose();
+      return;
+    }
+    const found = noteTargetOf(target);
+    if (found) {
+      showNoteBubble(found.anchor, found.id);
+      return;
+    }
+    queueNoteClose();
   }
 
   function ensureFooter() {
@@ -5599,6 +5872,7 @@
     const idx = state.annotations.findIndex((a) => a.id === id);
     if (idx === -1) return;
     state.annotations.splice(idx, 1);
+    hideNoteBubble();
     saveAnnotations();
     removeRenderedAnnotation(id);
     renderList();
@@ -5623,6 +5897,7 @@
     const confirmDelete = await confirmDialog('Delete all annotations?', 'Delete');
     if (!confirmDelete) return;
     state.annotations = [];
+    hideNoteBubble();
     // The snapshot keeps every id until the server takes the delete, so a
     // reload before it does still owes the server the same request.
     persistAnnotations();
