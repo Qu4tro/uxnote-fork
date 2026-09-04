@@ -5183,7 +5183,12 @@
   async function remoteUpsert(id, body) {
     try {
       const ann = state.annotations.find((one) => one.id === id);
-      if (ann && ann.screenshot && ann.screenshot.dataUrl) {
+      // The upload rewrites the picture from a base64 document into an
+      // address, so unlike every other request this one changes the set and
+      // not only the snapshot. Writing the snapshot alone would leave the
+      // browser holding the inline copy it just replaced.
+      const uploaded = ann && ann.screenshot && ann.screenshot.dataUrl;
+      if (uploaded) {
         await uploadInlineScreenshot(ann);
         body = JSON.stringify(ann);
       }
@@ -5194,7 +5199,8 @@
       });
       syncedSnapshot.set(id, digestOf(body));
       syncWarned = false;
-      persistSnapshot();
+      if (uploaded) persistAnnotations();
+      else persistSnapshot();
     } catch (err) {
       warnSync('Uxnote: could not save this annotation on the server', err);
     }

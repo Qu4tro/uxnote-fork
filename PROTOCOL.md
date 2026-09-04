@@ -147,6 +147,14 @@ them was then written before a server was named, and it is that reviewer's
 alone: the first pull adopts the server's set rather than pushing private notes
 onto a shared one.
 
+A capture taken while the server was down has no address to point at yet, so
+the browser keeps the PNG inline, in the set, in `localStorage`. Pictures are
+what fill that store: a few tens of them can pass what a browser gives an
+origin. The widget does not drop them to make room. The write fails, one toast
+says the browser has no room left, and what is on the screen is then no better
+protected against a reload than it was before this section existed. Export, or
+delete what is finished, or bring the server back.
+
 ### Settling two sets
 
 A pull compares three things per id — the set here, the digests, and the set the
