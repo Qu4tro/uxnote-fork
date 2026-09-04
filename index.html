@@ -243,13 +243,6 @@
           <option value="false">false</option>
         </select>
       </label>
-      <label for="set-mail-export"><span class="settings-name">data-mail-export</span>
-        <span class="settings-desc">The send-by-mail button and the draft it opens. Independent of data-json-export.</span>
-        <select id="set-mail-export">
-          <option value="true">true</option>
-          <option value="false">false</option>
-        </select>
-      </label>
       <label for="set-backdrop"><span class="settings-name">isBackdropVisible</span>
         <span class="settings-desc">Dims the page behind the widget for as long as the toolbar is on screen.</span>
         <select id="set-backdrop">
@@ -284,7 +277,7 @@
         <input id="set-color-region" type="color" value="#f59f00">
       </label>
       <label for="set-mailto"><span class="settings-name">data-mailto</span>
-        <span class="settings-desc">The recipient of the send-by-mail button's draft. It does nothing while data-mail-export is false.</span>
+        <span class="settings-desc">The recipient of the send-by-mail button's draft. An address here is what puts the button in the toolbar; leave it empty and there is none.</span>
         <input id="set-mailto" type="email" placeholder="team@example.org">
       </label>
       <label for="set-server-url"><span class="settings-name">data-server-url</span>
@@ -348,7 +341,6 @@
         { key: 'theme',           attr: 'data-theme',                 kind: 'choice', values: ['auto', 'reverse-auto', 'light', 'dark'], fallback: 'auto' },
         { key: 'json-export',     attr: 'data-json-export',           kind: 'choice', values: BOOLS, fallback: 'true' },
         { key: 'json-import',     attr: 'data-json-import',           kind: 'choice', values: BOOLS, fallback: 'true' },
-        { key: 'mail-export',     attr: 'data-mail-export',           kind: 'choice', values: BOOLS, fallback: 'true' },
         { key: 'backdrop',        attr: 'isBackdropVisible',          kind: 'choice', values: BOOLS, fallback: 'true' },
         { key: 'toolbar-visible', attr: 'isToolVisibleAtFirstLaunch', kind: 'choice', values: BOOLS, fallback: 'true' },
         { key: 'toolbar-top',     attr: 'isToolOnTopAtLaunch',        kind: 'choice', values: BOOLS, fallback: 'false' },
