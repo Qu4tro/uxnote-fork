@@ -192,8 +192,14 @@ The widget follows the system theme. Hold one theme per site:
 | Value | Meaning |
 |---|---|
 | `auto` | The default. The widget reads `prefers-color-scheme` and follows it when it changes. |
+| `reverse-auto` | The other side of `prefers-color-scheme`, followed as it changes. |
 | `light` | The light theme, whatever the system says. |
 | `dark` | The dark theme, whatever the system says. |
+
+A site that follows the system theme leaves the widget dressed like the page it
+annotates, on either setting. `reverse-auto` reads the same preference and takes
+the other side of it, which is a contrast a fixed `light` or `dark` only gets on
+one of the two.
 
 The theme covers the toolbar, the panel, the cards, the dialogs, the comment
 card, the capture overlay, and the toasts. The highlight colours do not change:

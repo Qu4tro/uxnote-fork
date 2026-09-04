@@ -89,7 +89,10 @@
   const jsonImport = parseBoolAttr(script && script.dataset.jsonImport, true);
   const mailExport = parseBoolAttr(script && script.dataset.mailExport, true);
   const themeAttr = ((script && script.dataset.theme) || '').trim().toLowerCase();
-  const theme = themeAttr === 'light' || themeAttr === 'dark' ? themeAttr : 'auto';
+  const theme =
+    themeAttr === 'light' || themeAttr === 'dark' || themeAttr === 'reverse-auto' ? themeAttr : 'auto';
+  // Both of these read the system preference, so both follow it as it changes.
+  const followsSystem = theme === 'auto' || theme === 'reverse-auto';
   const darkQuery = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
   const dimConfigAttr =
     getScriptAttr('isBackdropVisible') ||
@@ -2067,7 +2070,7 @@
     window.addEventListener('resize', positionVisibilityToggle);
     window.addEventListener('scroll', refreshMarkers, { passive: true });
     watchRouteChanges();
-    if (theme === 'auto' && darkQuery) {
+    if (followsSystem && darkQuery) {
       if (darkQuery.addEventListener) darkQuery.addEventListener('change', applyTheme);
       else if (darkQuery.addListener) darkQuery.addListener(applyTheme);
     }
@@ -2188,7 +2191,15 @@
   }
 
   function applyTheme() {
-    const dark = theme === 'dark' || (theme === 'auto' && !!(darkQuery && darkQuery.matches));
+    const systemDark = !!(darkQuery && darkQuery.matches);
+    // A site that is itself on auto leaves the widget wearing the same theme as
+    // the page it annotates. 'reverse-auto' reads the same preference and takes
+    // the other side of it, so the two stay apart on either setting rather than
+    // holding one fixed side that collides on one of them.
+    const dark =
+      theme === 'dark' ||
+      (theme === 'auto' && systemDark) ||
+      (theme === 'reverse-auto' && !systemDark);
     document.documentElement.setAttribute('data-wn-theme', dark ? 'dark' : 'light');
   }
 
