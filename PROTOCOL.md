@@ -250,11 +250,13 @@ snippet     an excerpt of the annotated content
 pageUrl     the full URL the annotation was written on
 pageKey     origin and pathname; annotations are stored per site, drawn per page
 createdAt   epoch milliseconds
+updatedAt   epoch milliseconds, present once the comment has been edited
 status      "active"
 ```
 
 An annotation can carry more properties than these, such as the `author` and
-`priority` of an upstream export. The widget keeps them and reads none of them.
+`priority` of an upstream export. The widget keeps them and writes neither; the
+full-size panel draws them where a record arrived carrying them.
 
 `type: "text"` adds `target`, a serialized text range. `type: "element"` adds
 `target` as `{ xpath, css, tag }` and `rect` as `{ x, y, w, h }` in page

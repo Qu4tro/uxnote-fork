@@ -7,6 +7,13 @@ function sha256(buffer) {
   return crypto.createHash('sha256').update(buffer).digest('hex');
 }
 
+// The three handoffs are in the head of the panel, so reaching them means
+// opening it.
+async function openPanel(page) {
+  await page.locator('.wn-annot-toolbar button[data-action="toggle-panel"]').click();
+  await expect(page.locator('.wn-annot-panel')).toBeVisible();
+}
+
 test('the server under test is serving this working copy', async ({ request }) => {
   const response = await request.get('/uxnote-tool/uxnote.js');
   expect(response.ok()).toBe(true);
@@ -55,11 +62,40 @@ test('the toolbar holds one row on a laptop screen', async ({ page }) => {
   }
 });
 
-test('the toolbar offers the mail handoff on its own button', async ({ page }) => {
+test('the bar carries one row of controls and little else', async ({ page }) => {
+  await page.goto('/');
+  const bar = await page.locator('.wn-annot-toolbar').boundingBox();
+  const btn = await page.locator('.wn-annot-toolbar button[data-mode="text"]').boundingBox();
+  // Every pixel of this bar's height is a pixel of the host page a reviewer
+  // cannot see, and the only part of it the bar can give back is the room
+  // around its controls.
+  expect(bar.height - btn.height).toBeLessThanOrEqual(6);
+});
+
+test('a shorter bar costs no control any of the box it is hit on', async ({ page }) => {
+  await page.goto('/');
+  // The bar gets shorter by giving up padding, never by giving up target. The
+  // same 44px is asserted on the phone viewports in mobile.spec.js; it is the
+  // floor here too, the floating eye included.
+  const controls = await page.locator('.wn-annot-toolbar button, .wn-annot-visibility-btn').all();
+  expect(controls.length).toBeGreaterThan(0);
+  for (const control of controls) {
+    const name = await control.evaluate((el) => el.getAttribute('data-action') || 'visibility');
+    const box = await control.boundingBox();
+    expect(box.width, `${name} is ${box.width}px wide`).toBeGreaterThanOrEqual(44);
+    expect(box.height, `${name} is ${box.height}px tall`).toBeGreaterThanOrEqual(44);
+  }
+});
+
+test('the mail handoff is a button in the head of the panel', async ({ page }) => {
   await page.goto('/?mailto=team%40example.org');
-  const mail = page.locator('.wn-annot-toolbar button[data-action="mail"]');
+  await openPanel(page);
+  const mail = page.locator('.wn-annot-panel button[data-action="mail"]');
   await expect(mail).toBeVisible();
+  // Passing the notes on acts on what the panel holds, so it is offered where
+  // the reviewer can see what is being passed on. The bar keeps the marking.
   await expect(mail).toHaveAttribute('data-tip', 'Send by mail');
+  await expect(page.locator('.wn-annot-toolbar button[data-action="mail"]')).toHaveCount(0);
 });
 
 test('the mail handoff survives a page with the JSON export off', async ({ page }) => {
@@ -67,12 +103,13 @@ test('the mail handoff survives a page with the JSON export off', async ({ page 
   page.on('pageerror', (error) => errors.push(error.message));
   await page.goto('/test/fixtures/mail-without-json-export.html');
   await expect(page.locator('.wn-annot-toolbar')).toBeVisible();
-  await expect(page.locator('.wn-annot-toolbar button[data-action="export"]')).toHaveCount(0);
-  await expect(page.locator('.wn-annot-toolbar button[data-action="import"]')).toHaveCount(0);
+  await openPanel(page);
+  await expect(page.locator('.wn-annot-panel button[data-action="export"]')).toHaveCount(0);
+  await expect(page.locator('.wn-annot-panel button[data-action="import"]')).toHaveCount(0);
   // The mail button answers to the address alone, so taking the JSON export
   // away leaves the reviewer a way to hand the annotations over.
-  await expect(page.locator('.wn-annot-toolbar button[data-action="mail"]')).toBeVisible();
-  await page.locator('.wn-annot-toolbar button[data-action="mail"]').click();
+  await expect(page.locator('.wn-annot-panel button[data-action="mail"]')).toBeVisible();
+  await page.locator('.wn-annot-panel button[data-action="mail"]').click();
   // The handoff goes straight to the mail client; it opens nothing on the page.
   await expect(page.locator('.wn-annot-modal-backdrop.show')).toHaveCount(0);
   expect(errors).toEqual([]);
@@ -80,16 +117,18 @@ test('the mail handoff survives a page with the JSON export off', async ({ page 
 
 test('the JSON export survives a page that names no address', async ({ page }) => {
   await page.goto('/test/fixtures/json-export-without-mail.html');
-  await expect(page.locator('.wn-annot-toolbar button[data-action="mail"]')).toHaveCount(0);
+  await openPanel(page);
+  await expect(page.locator('.wn-annot-panel button[data-action="mail"]')).toHaveCount(0);
   const download = page.waitForEvent('download');
-  await page.locator('.wn-annot-toolbar button[data-action="export"]').click();
+  await page.locator('.wn-annot-panel button[data-action="export"]').click();
   expect((await download).suggestedFilename()).toMatch(/\.json$/);
 });
 
 test('the export button writes the file without asking first', async ({ page }) => {
   await page.goto('/');
+  await openPanel(page);
   const download = page.waitForEvent('download');
-  await page.locator('.wn-annot-toolbar button[data-action="export"]').click();
+  await page.locator('.wn-annot-panel button[data-action="export"]').click();
   expect((await download).suggestedFilename()).toMatch(/\.json$/);
   // The file holds every annotation of the site whatever is answered, so
   // nothing stands between the press and it.
@@ -97,14 +136,21 @@ test('the export button writes the file without asking first', async ({ page }) 
 });
 
 test('the toolbar keeps its full set on a laptop screen', async ({ page }) => {
-  // The mail button is the one control that has to be asked for: it is there
-  // when the page names an address to send to, and this is the full set.
   await page.goto('/?mailto=team%40example.org');
   const names = await page.locator('.wn-annot-toolbar button').evaluateAll((els) =>
     els.map((el) => el.getAttribute('data-mode') || el.getAttribute('data-action'))
   );
-  // The compact bar trims this set; a mouse and a wide window keep all of it.
-  expect(names).toEqual(['text', 'element', 'screenshot', 'import', 'export', 'mail', 'toggle-pos', 'toggle-panel']);
+  // The bar is for marking the page and for saying where the widget sits.
+  // The three ways of handing the whole set of notes on are in the panel.
+  expect(names).toEqual(['text', 'element', 'screenshot', 'toggle-pos', 'toggle-panel']);
+  await openPanel(page);
+  const tools = await page.locator('.wn-annot-panel-tools button[data-action]').evaluateAll((els) =>
+    els.map((el) => el.getAttribute('data-action'))
+  );
+  // Mail is the one that has to be asked for: it is there when the page names
+  // an address to send to, and this is the full set.
+  expect(tools).toEqual(['import', 'export', 'mail']);
+  await page.locator('.wn-annot-toolbar button[data-action="toggle-panel"]').click();
   await expect(page.locator('.wn-annot-logo')).toBeVisible();
   await expect(page.locator('.wn-annot-visibility-btn')).toBeVisible();
   const floating = await page
@@ -128,7 +174,6 @@ test('the panel keeps its side rail and draws no sheet chrome', async ({ page })
   expect(box.x + box.width).toBeLessThanOrEqual(view.width - 17);
   await expect(panel).toHaveCSS('border-bottom-left-radius', '18px');
   await expect(page.locator('.wn-annot-panel .wn-annot-sheet-grip')).toBeHidden();
-  await expect(page.locator('.wn-annot-panel-export')).toBeHidden();
   // Nothing holds the page still here; the panel never covered it.
   expect(await page.evaluate(() => document.documentElement.style.overflow)).toBe('');
 });
@@ -241,9 +286,10 @@ test('the page theme switch sits inside the subtree the widget ignores', async (
 
 test('the query string sets the widget options', async ({ page }) => {
   await page.goto('/?json-export=false&theme=dark&color-text=%23e04f5f');
-  await expect(page.locator('.wn-annot-toolbar button[data-action="export"]')).toHaveCount(0);
+  await openPanel(page);
+  await expect(page.locator('.wn-annot-panel button[data-action="export"]')).toHaveCount(0);
   // Only the requested option changed; the import button is untouched.
-  await expect(page.locator('.wn-annot-toolbar button[data-action="import"]')).toBeVisible();
+  await expect(page.locator('.wn-annot-panel button[data-action="import"]')).toBeVisible();
   await expect(page.locator('html')).toHaveAttribute('data-wn-theme', 'dark');
   const highlight = await page.evaluate(() =>
     getComputedStyle(document.documentElement).getPropertyValue('--wn-text-highlight').trim()
@@ -253,18 +299,21 @@ test('the query string sets the widget options', async ({ page }) => {
 
 test('the mail button follows the address on the demo page too', async ({ page }) => {
   await page.goto('/');
-  await expect(page.locator('.wn-annot-toolbar button[data-action="mail"]')).toHaveCount(0);
+  await openPanel(page);
+  await expect(page.locator('.wn-annot-panel button[data-action="mail"]')).toHaveCount(0);
   // The JSON export answers to a different attribute and is here either way.
-  await expect(page.locator('.wn-annot-toolbar button[data-action="export"]')).toBeVisible();
+  await expect(page.locator('.wn-annot-panel button[data-action="export"]')).toBeVisible();
   await page.goto('/?mailto=team%40example.org');
-  await expect(page.locator('.wn-annot-toolbar button[data-action="mail"]')).toBeVisible();
+  await openPanel(page);
+  await expect(page.locator('.wn-annot-panel button[data-action="mail"]')).toBeVisible();
   await expect(page.locator('#settings-snippet')).toContainText('data-mailto="team@example.org"');
 });
 
 test('an address the widget cannot use buys no button', async ({ page }) => {
   await page.goto('/test/fixtures/mailto-not-an-address.html');
   await expect(page.locator('.wn-annot-toolbar')).toBeVisible();
-  await expect(page.locator('.wn-annot-toolbar button[data-action="mail"]')).toHaveCount(0);
+  await openPanel(page);
+  await expect(page.locator('.wn-annot-panel button[data-action="mail"]')).toHaveCount(0);
 });
 
 test('the demo page carries the reversed theme through to the widget', async ({ page }) => {
@@ -579,8 +628,10 @@ test('a capture survives a server that is not answering', async ({ page }) => {
   await page.locator('.wn-annot-toolbar button[data-action="toggle-panel"]').click();
   // The picture is on the annotation, so the card can still draw it with the
   // server unreachable.
-  const src = await page.locator('.wn-annot-shot img').getAttribute('src');
-  expect(src.startsWith('data:image/png;base64,')).toBe(true);
+  // Asked for when the card comes on screen, which is a frame after the panel
+  // opens, so this is the assertion that waits for it rather than the read
+  // that raced it.
+  await expect(page.locator('.wn-annot-shot img')).toHaveAttribute('src', /^data:image\/png;base64,/);
 });
 
 test('the picture goes up as a PNG once the server answers', async ({ page }) => {
