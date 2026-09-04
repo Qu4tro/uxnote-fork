@@ -2,28 +2,23 @@
 
 # uxnote-fork
 
-A fork of [UxNote](https://github.com/ninefortyonestudio/uxnote), the single-script annotation bar for mockups and websites. Drop one `<script>` tag on a page and reviewers highlight text, pin elements, and leave numbered comments in the browser.
+A fork of [UxNote](https://github.com/ninefortyonestudio/uxnote) by
+ninefortyonestudio, v1.0.0, MIT: a single-script annotation bar for mockups and
+websites. One script tag on a page, and reviewers highlight text, pin elements,
+drag out regions, and leave numbered comments in the browser. The notes stay in
+the browser, or they live on a server you name, so a client, a product team, or
+a small review team reads the same set.
 
-![UxNote on a demo page: a text highlight, an element pin, and the annotation panel](assets/readme/annotating.png)
+![The demo page under review: a text highlight, an element pin, a framed region, and the open panel listing the three notes](assets/readme/annotating.png)
 
-## What it forks
+## Demo
 
-[ninefortyonestudio/uxnote](https://github.com/ninefortyonestudio/uxnote) v1.0.0, MIT. Upstream keeps annotations in `localStorage` and hands them off as a JSON file or an email. This fork keeps the widget, its landing page, and its build. Upstream asks for a reviewer name and a priority with every note. This fork asks for the comment alone. A note that carries both fields, from an upstream export, keeps them, and the widget shows neither.
+<https://qu4tro.github.io/uxnote-fork/> is a demo page with the widget live on
+it. The notes stay in the visitor's browser.
 
-## What it adds
-
-- **Server sync.** Set a server URL and an API key, and annotations persist on that server per site, with a copy in `localStorage` that carries them across a reload the server was down for. Leave the server unset and the widget stores them in `localStorage` only, as upstream does.
-- **Region screenshots.** A note can be a picture of a region of the page, framed by the reviewer.
-- **Settings.** `jsonExport`, `jsonImport`, and `server` are script-tag attributes, and cards in the landing-page builder.
-- **Dark mode.** The toolbar, panel, and dialogs follow the page's color scheme.
-- **Comment-first notes.** A note is one comment, written on a card beside the toolbar so the annotated area stays visible. The panel starts closed.
-- **Single-page apps.** A route change without a page load re-renders the annotations of the new page.
-- **CI/CD.** Every pull request gets a live preview of the landing page and the demo. A version tag publishes a release with the minified script.
-
-## Try it
-
-- Landing page: https://qu4tro.github.io/uxnote-fork/
-- Demo page: https://qu4tro.github.io/uxnote-fork/demo/
+The page carries its own **Page theme** switch, light or dark, in the note at
+the top of it. It is the page's colours alone and it never follows the system,
+so the widget's own `data-theme` can be read against either background.
 
 Locally:
 
@@ -32,46 +27,111 @@ npm install
 npm start
 ```
 
-Then open http://localhost:4173/demo/.
+Then open <http://localhost:4173/>.
+
+## Features
+
+- **Text highlights and element pins.** Select text or click an element, write
+  a comment, and the page carries a numbered marker.
+- **Region screenshots.** Drag a frame around part of the page and the note
+  carries a picture of it. Load snapdom for this.
+- **Server sync.** Name a server and the annotations live on it, one set per
+  site, shared by every reviewer who opens the page. The browser keeps a copy,
+  so a note written while the server is down survives a reload and goes up when
+  the server comes back.
+- **JSON export and import.** Both are on by default, and each one switches
+  off per site.
+- **A dark theme.** `auto` by default, following the system.
+- **Comment-first notes.** A note is one comment, written on a card parked
+  beside the toolbar. The panel starts closed.
+- **Single-page apps.** The widget follows `pushState`, so a route change
+  without a document load draws the annotations of the route you reached.
+- **Fenced areas.** `data-uxnote-ignore` keeps the widget out of an area;
+  `data-uxnote-allow` lets it into an element it would otherwise refuse.
+
+![The toolbar: the uxnote-fork logo, the two highlight modes, the camera, the import and export buttons, and the panel toggle](assets/readme/toolbar.png)
 
 ## Install
 
+One tag:
+
 ```html
-<script src="https://qu4tro.github.io/uxnote-fork/dist/uxnote.min-v1.0.0.js"></script>
+<script src="https://github.com/Qu4tro/uxnote-fork/releases/download/v2.0.0/uxnote.min-v2.0.0.js"></script>
 ```
 
-The landing page builder generates the tag with the options you pick.
-
-## Server sync
-
-Name a server and the annotations live on it, one set per site, shared by every
-reviewer who opens the page:
+Two tags for the region screenshots, snapdom first:
 
 ```html
-<script src="https://qu4tro.github.io/uxnote-fork/dist/uxnote.min-v1.0.0.js"
+<script src="https://github.com/Qu4tro/uxnote-fork/releases/download/v2.0.0/snapdom.min.js"></script>
+<script src="https://github.com/Qu4tro/uxnote-fork/releases/download/v2.0.0/uxnote.min-v2.0.0.js"></script>
+```
+
+Both files are assets of the `v2.0.0` release, and every release carries both.
+
+The three `is*` names and the three `colorFor*` names are plain attributes; the
+rest are `data-` attributes. Every option at once:
+
+```html
+<script src="https://github.com/Qu4tro/uxnote-fork/releases/download/v2.0.0/uxnote.min-v2.0.0.js"
+  colorForHighlight="#4e9cf6"
+  isBackdropVisible="true"
+  isToolVisibleAtFirstLaunch="true"
+  isToolOnTopAtLaunch="false"
+  data-mailto="team@example.com"
+  data-json-export="true"
+  data-json-import="true"
+  data-mail-export="true"
   data-server-url="http://localhost:8123"
-  data-server-api-key="review-key"></script>
+  data-server-api-key="review-key"
+  data-theme="auto"></script>
 ```
 
-| Attribute | Meaning |
-|---|---|
-| `data-server-url` | The base URL of the server. Leave it out and the widget stores the annotations in `localStorage`. |
-| `data-server-api-key` | A key the widget sends as `X-Uxnote-Key` on every request. An empty key sends no header. |
+### Options
 
-A named server is the shared store, and your browser keeps a copy. The widget
-draws that copy at once, reads the set from the server, settles the two, and
-sends one request per annotation you write, edit, or delete. **A note written
-while the server is down survives a reload**, and goes up when the server comes
-back.
+| Attribute | Default | Meaning |
+|---|---|---|
+| `colorForHighlight` | `#4e9cf6` | One colour for text and element highlights, and the region frame. |
+| `colorForTextHighlight` | the base colour | The text highlight. Set without `colorForHighlight` it becomes the base too, so the region frame follows it, and so does the element outline unless that has its own. |
+| `colorForElementHighlight` | the base colour | The element outline. Set without `colorForHighlight` it becomes the base too, so the region frame follows it, and so does the text highlight unless that has its own. |
+| `isBackdropVisible` | `true` | Dims the page behind the annotations. |
+| `isToolVisibleAtFirstLaunch` | `true` | Shows the toolbar on the first visit. |
+| `isToolOnTopAtLaunch` | `false` | Starts the toolbar at the top instead of the bottom. |
+| `data-mailto` | empty | The recipient of the mail handoff. It does nothing while `data-mail-export` is `false`. |
+| `data-json-export` | `true` | `false` removes the export button. The export writes every annotation of the site and asks nothing first. |
+| `data-json-import` | `true` | `false` removes the import button, its dialog, and its list of imported files. |
+| `data-mail-export` | `true` | `false` removes the mail button and the handoff behind it. Independent of `data-json-export`. |
+| `data-server-url` | unset | The base URL of the server that stores the annotations. Unset means `localStorage`. |
+| `data-server-api-key` | empty | Sent as `X-Uxnote-Key` on every request. Empty sends no header. |
+| `data-theme` | `auto` | `auto` follows the system theme and changes with it, `reverse-auto` takes the other side of it, and `light` and `dark` hold one. |
 
-It asks the server whether it is there at load and every five minutes after,
-backing off from ten seconds while it is not. So a server that comes back finds
-its notes without anybody having to reload the page or write another one.
+The page has a say too. The widget does not annotate inside a `<dialog>`, an
+element with `popover`, or an element with `role="dialog"`, `role="menu"`,
+`role="tooltip"`, or `aria-modal="true"`, and it says so with a toast.
+`data-uxnote-allow` on such an element lets the widget in.
+`data-uxnote-ignore` on any element keeps the widget out of it and of
+everything it contains.
 
-Two reviewers on one page settle per note, last write wins. A note you did not
-touch takes the server's copy; a note you wrote or edited while the server was
-away is yours and goes up; a note another reviewer deleted goes. `PROTOCOL.md`
-has the table.
+## Storage and the server
+
+With no server named, the annotations sit in `localStorage`: one set per
+origin, drawn on the page that carries them.
+
+Name a server and that server is the shared store, and the browser keeps a copy
+beside it. The widget draws the copy at once, reads the set from the server at
+load and on each route change, settles the two, and sends one request per
+annotation written, edited, or deleted. Last write wins, per annotation. **A
+note written while the server is down survives a reload**, and the widget says
+the request failed with a toast at the moment it does.
+
+The widget asks the server whether it is there at load and every five minutes
+after, backing off from ten seconds while it is not. A server that comes back
+therefore finds the notes it missed without anybody reloading the page or
+writing another one.
+
+Two reviewers on one page settle per note. A note you did not touch takes the
+server's copy; a note you wrote or edited while the server was away is yours
+and goes up; a note another reviewer deleted goes. `PROTOCOL.md` has the
+table.
 
 **A dot beside the wordmark carries the answer to the last request**, so the
 state of the server is on the screen rather than in a toast that has gone. It
@@ -89,27 +149,29 @@ script tag, so anybody who can read the page can read the key. It stops a
 passer-by from writing to a review server. It is not access control. Put the
 server behind a network boundary if the notes matter.
 
+**Import writes to the shared set.** An import sends every imported annotation
+to the server, and "remove" on an imported file deletes those annotations from
+the server, for every reviewer. The list of imported files lives in the
+importing browser alone. An annotation imported earlier stays in the store
+while the import is off; only the dialog that lists the files is gone.
+
 `PROTOCOL.md` holds the contract: six routes, an optional health probe, and one
-JSON shape. Any stack can implement it. `server/server.py` does, in the Python 3.9 standard library, and
-it serves the repository too, so the page under review runs on the same origin:
+JSON shape. Any stack can implement it. `server/server.py` does, in the Python
+3.9 standard library, and it serves the repository too, so the page under review
+runs on the same origin:
 
 ```sh
 python3 server/server.py --port 8123 --root . --api-key review-key
 ```
 
-Then open http://localhost:8123/server/demo.html and annotate it. The
+Then open <http://localhost:8123/server/demo.html> and annotate it. The
 annotations land in `uxnote-data/`.
 
 ## Region screenshots
 
 A note can be a picture of a region of the page. Load
 [snapdom](https://github.com/zumerlab/snapdom) before the widget, on the same
-page, and the toolbar offers a camera beside the two other capture modes:
-
-```html
-<script src="https://qu4tro.github.io/uxnote-fork/dist/snapdom.min.js"></script>
-<script src="https://qu4tro.github.io/uxnote-fork/dist/uxnote.min-v1.0.0.js"></script>
-```
+page, and the toolbar offers a camera beside the two other capture modes.
 
 Press the camera and drag to frame a region. Release the button and the comment
 prompt opens, the way it does for a highlight or an element. Escape stops. Write
@@ -129,44 +191,40 @@ one written while the server is away: it is held and sent again. The picture
 goes up as a PNG on that later attempt, before the annotation that points at
 it, so nothing carries a base64 document to the server.
 
-`npm run build` writes `snapdom.min.js` into `dist/` beside the minified widget,
-so both URLs above resolve against one directory.
+![A panel card for a region note: the number, the comment, and the thumbnail of the framed region](assets/readme/screenshot-card.png)
 
-## Export, import and mail
+## A note is a comment
 
-The toolbar offers a JSON export, a JSON import and a handoff to the mail
-client. Each one is a button of its own, each one is on by default, and each one
-has its own attribute. Turn any of them off per site:
+The card asks for the comment alone. It parks beside the toolbar, so the area
+under review stays visible, and it is translucent until the pointer is over it.
+Enter saves, Shift+Enter breaks a line, Escape cancels, and a click on the page
+keeps the text.
 
-```html
-<script src="https://qu4tro.github.io/uxnote-fork/dist/uxnote.min-v1.0.0.js"
-  data-json-export="false"
-  data-json-import="false"
-  data-mail-export="false"></script>
-```
+The panel starts closed. The toolbar button opens it, and so does a marker on
+the page or a card.
 
-| Attribute | Meaning |
-|---|---|
-| `data-json-export` | `true` by default. `false` removes the export button. |
-| `data-json-import` | `true` by default. `false` removes the import button, its dialog, and its list of imported files. |
-| `data-mail-export` | `true` by default. `false` removes the mail button and the handoff behind it. |
+An annotation written by an earlier release keeps its `author` and its
+`priority`. The widget shows neither.
 
-The three are independent. A site that wants the mail handoff and no JSON file
-sets `data-json-export="false"` and leaves the mail button alone; a site that
-wants the JSON file and no mail sets `data-mail-export="false"` and keeps the
-export button.
+![The comment card beside the toolbar, with a comment typed and the Cancel and Save buttons](assets/readme/comment-card.png)
 
-`data-mailto` keeps its meaning: it names the recipient of the mail handoff.
-It does nothing while `data-mail-export` is `false`.
+## Theme
 
-Neither button asks anything first. Both carry every annotation of the site:
-the export writes the file on the press, and the mail button hands the same set
-to the mail client.
+The widget follows `prefers-color-scheme` and changes with it. Hold one theme
+per site with `data-theme="light"` or `data-theme="dark"`.
 
-An annotation imported earlier stays in the store when the import is off. Only
-the dialog that lists the imported files is gone. When all three options are
-off, the toolbar drops the group between the capture modes and the panel
-controls.
+A site that follows the system theme leaves the widget dressed like the page it
+annotates, on either setting. `data-theme="reverse-auto"` reads the same
+preference and takes the other side of it, so the two stay apart however the
+system is set — a contrast a fixed `light` or `dark` only gets on one of them.
+
+The theme covers the toolbar, the panel, the cards, the dialogs, the comment
+card, the capture overlay, and the toasts. The highlight colours do not change:
+`colorForHighlight` and its two per-type forms choose them. The widget writes
+the resolved theme on `<html>` as `data-wn-theme="light"` or
+`data-wn-theme="dark"`, so a page can style its own elements to match.
+
+![The dark widget on the light demo page: a dark toolbar and a dark annotation panel](assets/readme/annotating-dark.png)
 
 ## Single-page apps
 
@@ -182,46 +240,36 @@ A page is its origin plus its pathname. A change of the query string or of the
 hash alone is not a route change, so a router that keeps its routes in the
 hash shows every route's annotations on every route.
 
-## Theme
-
-The widget follows the system theme. Hold one theme per site:
-
-```html
-<script src="https://qu4tro.github.io/uxnote-fork/dist/uxnote.min-v1.0.0.js"
-  data-theme="dark"></script>
-```
-
-| Value | Meaning |
-|---|---|
-| `auto` | The default. The widget reads `prefers-color-scheme` and follows it when it changes. |
-| `reverse-auto` | The other side of `prefers-color-scheme`, followed as it changes. |
-| `light` | The light theme, whatever the system says. |
-| `dark` | The dark theme, whatever the system says. |
-
-A site that follows the system theme leaves the widget dressed like the page it
-annotates, on either setting. `reverse-auto` reads the same preference and takes
-the other side of it, which is a contrast a fixed `light` or `dark` only gets on
-one of the two.
-
-The theme covers the toolbar, the panel, the cards, the dialogs, the comment
-card, the capture overlay, and the toasts. The highlight colours do not change:
-`colorForHighlight` and its two per-type forms choose them. The widget writes
-the resolved theme on `<html>` as `data-wn-theme="light"` or
-`data-wn-theme="dark"`, so a page can style its own elements to match.
-
-The landing page follows the system theme too.
-
 ## Develop
 
 ```sh
-npm test         # Playwright smoke test against demo/
+npm test         # Playwright smoke test against the demo page at /
 npm run build    # minified script in dist/
+npm start        # the repository on http://localhost:4173/
 ```
 
-CI runs the syntax check, the build, and the smoke test on every pull request and on `main`. A preview of the site is deployed for every pull request, and its URL is posted as a comment. Pushes to `main` deploy the landing page. A `v*` tag, matching the version in `package.json`, publishes a GitHub release with the built script.
+CI runs the syntax check, the build, and the smoke test on every pull request
+and on `main`. Every pull request gets a preview of the site, and its URL is
+posted as a comment. A push to `main` deploys the demo page to
+<https://qu4tro.github.io/uxnote-fork/>. A `v*` tag that matches the version in
+`package.json` publishes a GitHub release with the contents of `dist/`: the
+minified widget, its source map, and `snapdom.min.js`.
+
+## Project layout
+
+- `index.html` — the demo page, and the root of the site. The smoke test and
+  the README screenshots run against it.
+- `uxnote-tool/` — the widget, snapdom, and snapdom's licence.
+- `server/` — the reference server and its own demo page. Not published.
+- `assets/` — the logo and the README screenshots.
+- `scripts/` — build, serve, and site.
+- `test/` — the smoke test.
+- `PROTOCOL.md` — the server contract.
+- `dist/` — build output. Not committed.
 
 ## License
 
-MIT. The widget is © ninefortyonestudio; see `LICENSE`. `uxnote-tool/snapdom.min.js`
-is SnapDOM, MIT © Juan Martin Muda, vendored unmodified; see
-`uxnote-tool/LICENSE-snapdom.txt`.
+MIT. Copyright ninefortyonestudio and Qu4tro; see `LICENSE`. `uxnote-fork`
+forks [ninefortyonestudio/uxnote](https://github.com/ninefortyonestudio/uxnote)
+v1.0.0 under that licence. `uxnote-tool/snapdom.min.js` is SnapDOM, MIT ©
+Juan Martin Muda, vendored unmodified; see `uxnote-tool/LICENSE-snapdom.txt`.

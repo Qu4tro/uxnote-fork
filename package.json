@@ -1,6 +1,6 @@
 {
-  "name": "uxnote",
-  "version": "1.0.0",
+  "name": "uxnote-fork",
+  "version": "2.0.0",
   "private": true,
   "scripts": {
     "start": "node scripts/serve.js",

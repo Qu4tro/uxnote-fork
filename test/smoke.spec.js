@@ -3,19 +3,19 @@ const { test, expect } = require('@playwright/test');
 test('the widget mounts on the demo page without errors', async ({ page }) => {
   const errors = [];
   page.on('pageerror', (error) => errors.push(error.message));
-  await page.goto('/demo/');
+  await page.goto('/');
   await expect(page.locator('.wn-annot-toolbar')).toBeVisible();
   await expect(page.locator('.wn-annot-panel')).toBeAttached();
   expect(errors).toEqual([]);
 });
 
 test('the toolbar offers a capture button', async ({ page }) => {
-  await page.goto('/demo/');
+  await page.goto('/');
   await expect(page.locator('.wn-annot-toolbar button[data-mode="screenshot"]')).toBeVisible();
 });
 
 test('the capture leaves the interface on the page', async ({ page }) => {
-  await page.goto('/demo/');
+  await page.goto('/');
   await page.locator('.wn-annot-toolbar button[data-mode="screenshot"]').click();
   await expect(page.locator('.wn-shot-overlay')).toBeVisible();
   await page.mouse.move(200, 300);
@@ -29,7 +29,7 @@ test('the capture leaves the interface on the page', async ({ page }) => {
 });
 
 test('the toolbar holds one row on a laptop screen', async ({ page }) => {
-  await page.goto('/demo/');
+  await page.goto('/');
   for (const width of [1280, 1366, 1440]) {
     await page.setViewportSize({ width, height: 768 });
     const box = await page.locator('.wn-annot-toolbar').boundingBox();
@@ -38,7 +38,7 @@ test('the toolbar holds one row on a laptop screen', async ({ page }) => {
 });
 
 test('the toolbar offers the mail handoff on its own button', async ({ page }) => {
-  await page.goto('/demo/');
+  await page.goto('/');
   const mail = page.locator('.wn-annot-toolbar button[data-action="mail"]');
   await expect(mail).toBeVisible();
   await expect(mail).toHaveAttribute('data-tip', 'Send by mail');
@@ -69,7 +69,7 @@ test('the JSON export survives a page with the mail off', async ({ page }) => {
 });
 
 test('the export button writes the file without asking first', async ({ page }) => {
-  await page.goto('/demo/');
+  await page.goto('/');
   const download = page.waitForEvent('download');
   await page.locator('.wn-annot-toolbar button[data-action="export"]').click();
   expect((await download).suggestedFilename()).toMatch(/\.json$/);
@@ -80,7 +80,7 @@ test('the export button writes the file without asking first', async ({ page }) 
 
 test('the widget writes the resolved theme on the html element', async ({ page }) => {
   await page.emulateMedia({ colorScheme: 'dark' });
-  await page.goto('/demo/');
+  await page.goto('/');
   await expect(page.locator('html')).toHaveAttribute('data-wn-theme', 'dark');
 });
 
@@ -91,6 +91,28 @@ test('reverse-auto wears the side of the system theme the page does not', async 
   // It reads the preference rather than a fixed side, so it keeps following it.
   await page.emulateMedia({ colorScheme: 'light' });
   await expect(page.locator('html')).toHaveAttribute('data-wn-theme', 'dark');
+});
+
+test('the page theme switch holds the demo page against the widget', async ({ page }) => {
+  // The page is explicit: a dark system resolves the widget to dark and must
+  // leave the page in light, which is the contrast the switch exists for.
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await page.goto('/');
+  await expect(page.locator('html')).toHaveAttribute('data-page-theme', 'light');
+  await expect(page.locator('html')).toHaveAttribute('data-wn-theme', 'dark');
+
+  await page.locator('.page-theme-switch button[data-page-theme-set="dark"]').click();
+  await expect(page.locator('html')).toHaveAttribute('data-page-theme', 'dark');
+
+  // The choice is read before the first paint, so a reload lands dark outright.
+  await page.reload();
+  await expect(page.locator('html')).toHaveAttribute('data-page-theme', 'dark');
+});
+
+test('the page theme switch sits inside the subtree the widget ignores', async ({ page }) => {
+  await page.goto('/');
+  const ignored = await page.locator('.page-theme-switch').evaluate((el) => !!el.closest('[data-uxnote-ignore]'));
+  expect(ignored).toBe(true);
 });
 
 const CAPTURE_FIXTURE = '/test/fixtures/server-capture.html';

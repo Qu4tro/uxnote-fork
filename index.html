@@ -1,961 +1,217 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-page-theme="light">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Uxnote – Annotate and track your pages</title>
-  <link rel="stylesheet" href="assets/uxnote-landing.css">
-  <script defer src="https://cloud.umami.is/script.js" data-website-id="9ba5fe24-9047-43b9-bdc6-c4113d1cf0a5"></script>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Fieldnote — demo page for uxnote-fork</title>
+  <script>
+    // Read the held page theme before the first paint, so a dark page never
+    // flashes light on the way in.
+    (function () {
+      let stored = null;
+      try { stored = localStorage.getItem('uxnote-fork-demo:page-theme'); } catch (e) { stored = null; }
+      document.documentElement.setAttribute('data-page-theme', stored === 'dark' ? 'dark' : 'light');
+    })();
+  </script>
+  <style>
+    /* The page holds its own colours and never follows the system: the whole
+       point of the switch is a known background to read the widget against.
+       These are the page's, not the widget's; the widget keys off
+       :root[data-wn-theme] and names its own properties --wn-*. */
+    :root {
+      color-scheme: light;
+      --page-bg: #f7f8fa;
+      --page-text: #1f2933;
+      --page-text-muted: #52606d;
+      --page-surface: #fff;
+      --page-surface-alt: #f1f4f8;
+      --page-border: #e3e7ec;
+      --page-border-soft: #eef1f4;
+      --page-shadow: rgba(31, 41, 51, 0.06);
+      --page-accent: #1d4f91;
+      --page-accent-soft: #e8f0fb;
+      --page-accent-border: #c2d1e6;
+      --page-cta-bg: #1d4f91;
+      --page-cta-text: #fff;
+      --page-input-bg: #fff;
+      --page-input-border: #c8d0da;
+      --page-footer-bg: #1f2933;
+      --page-footer-text: #b9c2cc;
+      --page-note-bg: #f3efff;
+      --page-note-border: #d9cfff;
+      --page-note-text: #3b2f6b;
+      --page-note-accent: #5b3fd6;
+      --page-note-accent-ink: #fff;
+    }
+    :root[data-page-theme="dark"] {
+      color-scheme: dark;
+      --page-bg: #14171c;
+      --page-text: #e7ebf1;
+      --page-text-muted: #9fa9b6;
+      --page-surface: #1c2027;
+      --page-surface-alt: #232932;
+      --page-border: #2c333d;
+      --page-border-soft: #262c35;
+      --page-shadow: rgba(0, 0, 0, 0.45);
+      --page-accent: #8fbcf0;
+      --page-accent-soft: #22334a;
+      --page-accent-border: #33506f;
+      --page-cta-bg: #2f6ab5;
+      --page-cta-text: #fff;
+      --page-input-bg: #12151a;
+      --page-input-border: #39424e;
+      --page-footer-bg: #0e1014;
+      --page-footer-text: #99a3ae;
+      --page-note-bg: #221d33;
+      --page-note-border: #372e54;
+      --page-note-text: #d9d2f2;
+      --page-note-accent: #b6a2ff;
+      --page-note-accent-ink: #1c1730;
+    }
+    * { margin: 0; box-sizing: border-box; }
+    body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; color: var(--page-text); background: var(--page-bg); line-height: 1.55; }
+    header { display: flex; justify-content: space-between; align-items: center; padding: 1rem 3rem; background: var(--page-surface); border-bottom: 1px solid var(--page-border); }
+    .logo { font-weight: 700; font-size: 1.25rem; color: var(--page-accent); letter-spacing: -0.01em; }
+    nav a { margin-left: 1.5rem; color: var(--page-text-muted); text-decoration: none; font-size: 0.95rem; }
+    .hero { max-width: 64rem; margin: 0 auto; padding: 4.5rem 2rem 3rem; display: grid; grid-template-columns: 1.2fr 1fr; gap: 3rem; align-items: center; }
+    .hero h1 { font-size: 2.5rem; line-height: 1.15; margin-bottom: 1rem; }
+    .hero p { color: var(--page-text-muted); font-size: 1.1rem; margin-bottom: 1.75rem; }
+    .cta { background: var(--page-cta-bg); color: var(--page-cta-text); border: 0; padding: 0.85rem 1.8rem; font-size: 1rem; border-radius: 8px; cursor: pointer; }
+    .cta.secondary { background: transparent; color: var(--page-accent); border: 1px solid var(--page-accent-border); margin-left: 0.6rem; }
+    .preview { background: var(--page-surface); border: 1px solid var(--page-border); border-radius: 12px; padding: 1.25rem; box-shadow: 0 10px 30px var(--page-shadow); }
+    .preview .row { display: flex; justify-content: space-between; padding: 0.7rem 0; border-bottom: 1px solid var(--page-border-soft); font-size: 0.95rem; }
+    .preview .row:last-child { border-bottom: 0; }
+    .preview .tag { background: var(--page-accent-soft); color: var(--page-accent); padding: 0.1rem 0.5rem; border-radius: 999px; font-size: 0.8rem; }
+    .features { max-width: 64rem; margin: 0 auto; padding: 2rem; display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem; }
+    .card { background: var(--page-surface); border: 1px solid var(--page-border); border-radius: 12px; padding: 1.5rem; }
+    .card h3 { margin-bottom: 0.5rem; font-size: 1.05rem; }
+    .card p { color: var(--page-text-muted); font-size: 0.95rem; }
+    .pricing { max-width: 64rem; margin: 2rem auto 0; padding: 2rem; }
+    .pricing h2 { font-size: 1.6rem; margin-bottom: 1.25rem; }
+    table { width: 100%; border-collapse: collapse; background: var(--page-surface); border: 1px solid var(--page-border); border-radius: 12px; overflow: hidden; }
+    th, td { text-align: left; padding: 0.85rem 1rem; border-bottom: 1px solid var(--page-border-soft); font-size: 0.95rem; }
+    th { background: var(--page-surface-alt); font-weight: 600; }
+    tr:last-child td { border-bottom: 0; }
+    form { max-width: 64rem; margin: 2rem auto; padding: 2rem; display: flex; gap: 0.75rem; align-items: center; }
+    form label { font-weight: 600; }
+    form input { flex: 1; padding: 0.7rem 0.9rem; background: var(--page-input-bg); color: var(--page-text); border: 1px solid var(--page-input-border); border-radius: 8px; font-size: 1rem; }
+    footer { margin-top: 3rem; padding: 2rem 3rem; background: var(--page-footer-bg); color: var(--page-footer-text); display: flex; justify-content: space-between; font-size: 0.9rem; }
+    .fork-note { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem; padding: 0.6rem 3rem; background: var(--page-note-bg); border-bottom: 1px solid var(--page-note-border); color: var(--page-note-text); font-size: 0.9rem; }
+    .fork-note img { height: 22px; width: auto; display: block; }
+    .fork-note p { margin: 0; flex: 1; min-width: 18rem; }
+    .fork-note a { color: var(--page-note-accent); }
+    .page-theme { display: flex; align-items: center; gap: 0.5rem; margin-left: auto; }
+    .page-theme-label { font-weight: 600; white-space: nowrap; }
+    .page-theme-switch { display: flex; border: 1px solid var(--page-note-border); border-radius: 999px; overflow: hidden; }
+    .page-theme-switch button { border: 0; background: transparent; color: inherit; font: inherit; font-size: 0.85rem; padding: 0.25rem 0.8rem; cursor: pointer; }
+    .page-theme-switch button[aria-pressed="true"] { background: var(--page-note-accent); color: var(--page-note-accent-ink); }
+    .page-theme-switch button:focus-visible { outline: 2px solid var(--page-note-accent); outline-offset: -2px; }
+    @media (max-width: 800px) { .hero, .features { grid-template-columns: 1fr; } header, footer { padding: 1rem 1.25rem; } .fork-note { padding: 0.6rem 1.25rem; } }
+  </style>
 </head>
 <body>
+  <aside class="fork-note" data-uxnote-ignore>
+    <a href="https://github.com/Qu4tro/uxnote-fork"><img src="assets/uxnote-fork-logo.svg" alt="uxnote-fork"></a>
+    <p>This page is the demo of <a href="https://github.com/Qu4tro/uxnote-fork">uxnote-fork</a>. Fieldnote is a fictional product. Use the toolbar at the bottom to highlight text, pin an element, or drag out a region; the notes stay in this browser. <strong>Page theme</strong> colours this page alone and holds what you pick, so the widget's own theme can be read against either background. The <a href="https://github.com/Qu4tro/uxnote-fork#install">README</a> holds the install snippet and every option.</p>
+    <div class="page-theme">
+      <span class="page-theme-label" id="page-theme-label">Page theme</span>
+      <div class="page-theme-switch" role="group" aria-labelledby="page-theme-label">
+        <button type="button" data-page-theme-set="light" aria-pressed="true">Light</button>
+        <button type="button" data-page-theme-set="dark" aria-pressed="false">Dark</button>
+      </div>
+    </div>
+  </aside>
   <header>
-    <nav class="nav">
-      <div class="brand">
-        <svg class="brand-logo" viewBox="0 0 69 20" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Uxnote logo">
-          <path d="M15.5141351,15.6336045 C15.0749867,15.7571123 13.3484743,16.0588732 13.7282884,18.0055773 C13.9814979,19.3033801 15.5809176,19.5099042 18.5265475,18.6251498 C24.7057419,17.0554179 32.6579091,16.101702 42.3830492,15.7640022 C56.9707594,15.2574524 60.5270025,16.163136 67.0775991,16.9762338 C68.0521554,17.1558296 69.5219587,16.163136 68.0521554,15.0188646 C63.2928783,12.8874893 28.8776434,11.9999303 15.5141351,15.6336045 Z" fill="#9E81FF"></path>
-          <g transform="translate(-5, -4)">
-            <path d="M11.1386719,19.2441406 C14.8007813,19.2441406 17.203125,17.1640625 17.203125,14 L17.203125,6.55859375 C17.203125,5.3671875 16.5488281,4.69335938 15.40625,4.69335938 C14.2734375,4.69335938 13.6191406,5.3671875 13.6191406,6.55859375 L13.6191406,13.6191406 C13.6191406,15.2597656 12.7304688,16.2363281 11.1386719,16.2363281 C9.53710938,16.2363281 8.6484375,15.2597656 8.6484375,13.6191406 L8.6484375,6.55859375 C8.6484375,5.3671875 7.99414062,4.69335938 6.86132812,4.69335938 C5.72851562,4.69335938 5.06445312,5.3671875 5.06445312,6.55859375 L5.06445312,14 C5.06445312,17.1640625 7.46679688,19.2441406 11.1386719,19.2441406 Z" fill="#000000" fill-rule="nonzero"></path>
-            <path d="M18.8613631,11.140625 C19.2434527,11.140625 19.4404676,11.0348981 19.7628556,10.5961316 L20.8494228,9.12124174 L20.8912139,9.12124174 L22.0195721,10.6384224 C22.2703183,10.9767483 22.455393,11.140625 22.8852437,11.140625 C23.458378,11.140625 23.8941989,10.8287307 23.8941989,10.3106691 C23.8941989,10.0992153 23.816587,9.91947963 23.655393,9.72917126 L22.3061392,8.11683645 L23.6076318,6.61022852 C23.8344974,6.35648403 23.9121094,6.171462 23.9121094,5.93357654 C23.9121094,5.45251927 23.5240497,5.140625 22.9330049,5.140625 C22.5330049,5.140625 22.3061392,5.29392896 22.0136019,5.71155011 L21.016587,7.10185848 L20.9747959,7.10185848 L19.9598706,5.70626377 C19.6613631,5.28335628 19.4344974,5.140625 18.9867362,5.140625 C18.4136019,5.140625 17.9837512,5.48952368 17.9837512,5.9652946 C17.9837512,6.18732104 18.055393,6.37234306 18.2106168,6.55207874 L19.5598706,8.1591272 L18.216587,9.72388491 C17.9956915,9.97762941 17.9121094,10.1520787 17.9121094,10.3846779 C17.9121094,10.8340171 18.3061392,11.140625 18.8613631,11.140625 Z" fill="#9E81FF" fill-rule="nonzero"></path>
-            <path d="M28.203125,19.2148438 C29.2675781,19.2148438 29.9023437,18.5800781 29.9023437,17.4375 L29.9023437,10.7285156 L29.9804688,10.7285156 L35.4101562,18.21875 C35.9277344,18.9316406 36.40625,19.2148438 37.1289063,19.2148438 C38.2128906,19.2148438 38.8183594,18.6191406 38.8183594,17.5351563 L38.8183594,6.47070313 C38.8183594,5.328125 38.1933594,4.69335938 37.1191406,4.69335938 C36.0546875,4.69335938 35.4199219,5.328125 35.4199219,6.47070313 L35.4199219,13.1015625 L35.3417969,13.1015625 L29.9511719,5.68945313 C29.4140625,4.98632812 28.9257812,4.69335938 28.2421875,4.69335938 C27.1289062,4.69335938 26.5039062,5.2890625 26.5039062,6.39257812 L26.5039062,17.4375 C26.5039062,18.5800781 27.1289062,19.2148438 28.203125,19.2148438 Z" fill="#000000" fill-rule="nonzero"></path>
-            <path d="M45.8300781,19.2539062 C49.1796875,19.2539062 51.2695312,17.2324219 51.2695312,13.6777344 C51.2695312,10.1914062 49.1503906,8.11132812 45.8300781,8.11132812 C42.5292969,8.11132812 40.390625,10.2011719 40.390625,13.6777344 C40.390625,17.2226562 42.4804688,19.2539062 45.8300781,19.2539062 Z M45.8300781,16.7148438 C44.6386719,16.7148438 43.90625,15.6308594 43.90625,13.6875 C43.90625,11.7734375 44.6582031,10.6503906 45.8300781,10.6503906 C47.0117188,10.6503906 47.7636719,11.7734375 47.7636719,13.6875 C47.7636719,15.6308594 47.0117188,16.7148438 45.8300781,16.7148438 Z" fill="#000000" fill-rule="nonzero"></path>
-            <path d="M53.4765625,16.1484375 C53.4765625,18.1210938 54.5214844,19.1367188 56.5722656,19.1367188 L56.6601562,19.1367188 C57.9980469,19.1367188 59.0917969,18.6289062 59.0917969,17.6230469 C59.0917969,16.8222656 58.6425781,16.4804688 57.8710938,16.3925781 L57.65625,16.3632813 C57.1679688,16.3144531 56.9433594,16.0507812 56.9433594,15.3867188 L56.9433594,10.9238281 L57.7832031,10.9238281 C58.5546875,10.9238281 59.0625,10.4160156 59.0625,9.64453125 C59.0625,8.87304688 58.5546875,8.36523437 57.7832031,8.36523437 L56.9433594,8.36523437 L56.9433594,7.515625 C56.9433594,6.39257812 56.3085938,5.71875 55.2148438,5.71875 C54.1113281,5.71875 53.4765625,6.39257812 53.4765625,7.515625 L53.4765625,8.36523437 L53.0957031,8.36523437 C52.3242188,8.36523437 51.8164062,8.86328125 51.8164062,9.64453125 C51.8164062,10.4160156 52.3242188,10.9238281 53.0957031,10.9238281 L53.4765625,10.9238281 L53.4765625,16.1484375 Z" fill="#000000" fill-rule="nonzero"></path>
-            <path d="M65.3222656,19.2539062 C67.4414062,19.2539062 69.1601562,18.5019531 69.8632812,17.2519531 C70.0195312,16.9980469 70.0976562,16.734375 70.0976562,16.4707031 C70.0976562,15.7089844 69.5019531,15.2597656 68.7988281,15.2597656 C68.3691406,15.2597656 68.0859375,15.3769531 67.7246094,15.71875 C66.953125,16.5 66.2988281,16.8027344 65.3515625,16.8027344 C64.1015625,16.8027344 63.2519531,15.9238281 63.2519531,14.6347656 L63.2519531,14.4394531 L69.0332031,14.4394531 C69.9316406,14.4394531 70.4296875,13.9511719 70.4296875,13.0722656 C70.4296875,10.2011719 68.3496094,8.11132812 65.1855469,8.11132812 C61.9433594,8.11132812 59.8925781,10.2890625 59.8925781,13.7363281 C59.8925781,17.1933594 61.9140625,19.2539062 65.3222656,19.2539062 Z M63.3007812,12.4667969 C63.3886719,11.3535156 64.1796875,10.5722656 65.2539062,10.5722656 C66.3378906,10.5722656 67.109375,11.3144531 67.1679688,12.4667969 L63.3007812,12.4667969 Z" fill="#000000" fill-rule="nonzero"></path>
-          </g>
-          <path d="M15.5141351,15.6336045 C15.0749867,15.7571123 13.3484743,16.0588732 13.7282884,18.0055773 C13.9814979,19.3033801 15.5809176,19.5099042 18.5265475,18.6251498 C24.7057419,17.0554179 32.6579091,16.101702 42.3830492,15.7640022 C56.9707594,15.2574524 60.5270025,16.163136 67.0775991,16.9762338 C68.0521554,17.1558296 69.5219587,16.163136 68.0521554,15.0188646 C63.2928783,12.8874893 28.8776434,11.9999303 15.5141351,15.6336045 Z" fill-opacity="0.3" fill="#9E81FF"></path>
-        </svg>
-      </div>
-      <div class="nav-links">
-        <a class="nav-pill" href="https://github.com/ninefortyonestudio/uxnote" target="_blank" rel="noreferrer noopener">
-          <span class="nav-pill-label" data-i18n="nav_github">GitHub Repo</span>
-        </a>
-        <div class="lang-switch" role="group" aria-label="Language">
-          <button class="lang-btn" type="button" data-lang="en">EN</button>
-          <button class="lang-btn" type="button" data-lang="fr">FR</button>
-        </div>
-      <script type="text/javascript" src="https://cdnjs.buymeacoffee.com/1.0.0/button.prod.min.js" data-name="bmc-button" data-slug="ninefortyonestudio" data-color="#6d56c7" data-emoji="" data-font="Cookie" data-text="&nbsp;Buy me a coffee" data-outline-color="#000000" data-font-color="#ffffff" data-coffee-color="#FFDD00" ></script>
-      </div>
+    <div class="logo">Fieldnote</div>
+    <nav>
+      <a href="#features">Features</a>
+      <a href="#pricing">Pricing</a>
+      <a href="#">Docs</a>
+      <a href="#">Sign in</a>
     </nav>
   </header>
 
   <section class="hero">
-    <div class="hero-grid">
-      <div class="hero-copy">
-        <h1 data-i18n="hero_title">The annotation bar for your mockups and websites.</h1>
-        <p data-i18n="hero_sub">Drop a single script and get text highlights, element pins, numbered cards, color-theming, dimmed focus, import/export, and email handoff—no plugin or backend.</p>
-        <div class="badges">
-          <a class="btn" href="#install" data-i18n="hero_cta">Install UxNote</a>
-        </div>
-      </div>
-      <div class="hero-visual">
-        <div class="demo-frame glass">
-            <div class="demo-window">
-              <div class="demo-header">
-                <div class="demo-dots">
-                  <span class="dot red"></span>
-                  <span class="dot amber"></span>
-                  <span class="dot green"></span>
-              </div>
-              <div class="demo-status-pill" id="demo-status">Demo off</div>
-            </div>
-              <div class="demo-content">
-                <div class="demo-left">
-                  <div class="demo-line long"></div>
-                  <div class="demo-line long"></div>
-                  <div class="demo-highlight"></div>
-                  <div class="demo-line long"></div>
-                  <div class="demo-line long"></div>
-                  <div class="demo-line mid"></div>
-                  <div class="demo-line mid"></div>
-                </div>
-                <div class="demo-right">
-                  <div class="demo-cards">
-                    <div class="demo-card static">
-                      <span class="demo-pill">#12</span>
-                      <span class="demo-trash" aria-hidden="true">✕</span>
-                    </div>
-                    <div class="demo-card static">
-                      <span class="demo-pill">#13</span>
-                      <span class="demo-trash" aria-hidden="true">✕</span>
-                    </div>
-                    <div class="demo-card animate">
-                      <span class="demo-pill">#14</span>
-                      <span class="demo-trash" aria-hidden="true">✕</span>
-                    </div>
-                  </div>
-                </div>
-            </div>
-            <div class="demo-toolbar-preview">
-              <span class="tool pen">
-                <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
-                  <path d="M13.5 6.5l4 4" />
-                  <circle cx="6.1" cy="17.9" r="1.1" fill="#000" stroke="none" />
-                </svg>
-              </span>
-              <span class="tool">
-                <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-                  <circle cx="12" cy="12" r="8" />
-                  <circle cx="12" cy="12" r="4" />
-                  <circle cx="12" cy="12" r="1.2" fill="currentColor" stroke="none" />
-                  <path d="M12 3v3" />
-                  <path d="M12 18v3" />
-                  <path d="M3 12h3" />
-                  <path d="M18 12h3" />
-                </svg>
-              </span>
-            </div>
-          </div>
-          <button class="demo-footer-btn" id="demo-btn-3">Live preview</button>
-        </div>
-      </div>
+    <div>
+      <h1 id="hero-title">Notes that stay where you took them</h1>
+      <p id="hero-copy">Fieldnote pins every observation to a place, a time, and a photo, so a survey reads the same six months later as it did on the day.</p>
+      <button class="cta" id="cta-primary">Start a survey</button>
+      <button class="cta secondary" id="cta-secondary">See a sample</button>
+    </div>
+    <div class="preview" id="preview-card">
+      <div class="row"><span>Riverbank transect 3</span><span class="tag">Today</span></div>
+      <div class="row"><span>Canopy cover, plot B</span><span class="tag">Yesterday</span></div>
+      <div class="row"><span>Soil samples, north field</span><span class="tag">Mon</span></div>
+      <div class="row"><span>Bird count, dawn</span><span class="tag">Sun</span></div>
     </div>
   </section>
 
-  <section class="section" id="why">
-    <h2 data-i18n="who_title">Who and why?</h2>
-    <div class="cards">
-      <div class="card"><h3 data-i18n="who_card1_title">Agencies & freelancers</h3><p data-i18n="who_card1_body">No more vague emails or improvised screenshots: clients comment directly on the page, you export everything in one clean file.</p></div>
-      <div class="card"><h3 data-i18n="who_card2_title">Product & UX teams</h3><p data-i18n="who_card2_body">Review where the interfaces live: in the browser. Uxnote adds notes and highlights without touching existing code.</p></div>
+  <section class="features" id="features">
+    <div class="card" id="card-offline">
+      <h3>Works offline</h3>
+      <p>Notes, photos, and coordinates queue on the device and sync when a connection returns.</p>
+    </div>
+    <div class="card" id="card-export">
+      <h3>Exports to anything</h3>
+      <p>CSV, GeoJSON, or a printed field sheet. The data leaves in the shape your analysis wants.</p>
+    </div>
+    <div class="card" id="card-team">
+      <h3>Built for teams</h3>
+      <p>Assign plots, compare observers, and review a season in one timeline.</p>
     </div>
   </section>
 
-  <section class="section" id="features">
-    <h2 data-i18n="features_title">Core features</h2>
-    <div class="cards">
-      <div class="card"><h3 data-i18n="features_card1_title">Capture modes</h3><p data-i18n="features_card1_body">Highlight text or pin any element; numbered badges and clickable snippets for jump-to.</p></div>
-      <div class="card"><h3 data-i18n="features_card2_title">Focus & theming</h3><p data-i18n="features_card2_body">Built-in 20% dim overlay (toggleable), unified highlight color or per-type colors, panel/marker styling follows your choice.</p></div>
-      <div class="card"><h3 data-i18n="features_card3_title">Import / Export / Mail</h3><p data-i18n="features_card3_body">Single JSON (title + date), re-import to re-render, email sending for sharing with devs.</p></div>
-    </div>
+  <section class="pricing" id="pricing">
+    <h2>Pricing</h2>
+    <table>
+      <thead><tr><th>Plan</th><th>Observers</th><th>Storage</th><th>Price</th></tr></thead>
+      <tbody>
+        <tr><td>Solo</td><td>1</td><td>5 GB</td><td>Free</td></tr>
+        <tr><td>Team</td><td>Up to 10</td><td>100 GB</td><td>€12 / observer / month</td></tr>
+        <tr><td>Institution</td><td>Unlimited</td><td>1 TB</td><td>Contact us</td></tr>
+      </tbody>
+    </table>
   </section>
 
-  <section class="section" id="how">
-    <h2 data-i18n="how_title">How it works?</h2>
-    <div class="steps install-steps">
-      <div class="step"><div class="num">1</div><h3 data-i18n="install_step1_title">Inject</h3><p data-i18n="install_step1_body">Paste the snippet on each page (or via a global tag manager).</p></div>
-      <div class="step"><div class="num">2</div><h3 data-i18n="install_step2_title">Share</h3><p data-i18n="install_step2_body">Send the URL to your client (optionally add <code>?uxnote=1</code> to flag review mode).</p></div>
-      <div class="step"><div class="num">3</div><h3 data-i18n="install_step3_title">Annotate</h3><p data-i18n="install_step3_body">Clients highlight and comment on text or elements; everything shows in the Uxnote panel.</p></div>
-      <div class="step"><div class="num">4</div><h3 data-i18n="install_step4_title">Export / Mail</h3><p data-i18n="install_step4_body">Dev side: click “Export” (JSON) or “Mail” to collect and process feedback.</p></div>
-    </div>
-  </section>
+  <form onsubmit="return false">
+    <label for="email">Get launch news</label>
+    <input id="email" type="email" placeholder="you@example.org">
+    <button class="cta" type="submit">Subscribe</button>
+  </form>
 
-  <section class="section" id="install">
-    <h2 data-i18n="install_title">Install (copy / paste)</h2>
-    <p class="install-version"><span data-i18n="install_version_label">Version</span>: <span>v1.0.0</span></p>
-    <div class="install-head">
-      <div id="install-text-default">
-        <h3 class="install-subtitle" data-i18n="install_default_title">Default install</h3>
-        <p class="lead" data-i18n="install_lead1">Default installation: drop Uxnote right before <code>&lt;/body&gt;</code> on each page you want to annotate:</p>
-      </div>
-      <div id="install-text-custom" hidden>
-        <h3 class="install-subtitle" data-i18n="install_custom_title">Custom install</h3>
-        <p class="lead" data-i18n="install_lead_custom_full">Custom installation: generate your script tag with options and drop Uxnote right before <code>&lt;/body&gt;</code> on each page you want to annotate:</p>
-      </div>
-      <button type="button" class="btn tertiary" id="install-toggle" aria-pressed="false" data-i18n="install_toggle_custom">Add options</button>
-    </div>
-    <div id="install-default">
-      <div class="code-copy">
-        <div class="code-block">
-<pre><code id="default-code">&lt;script src="https://github.com/ninefortyonestudio/uxnote/releases/download/v1.0.0/uxnote.min-v1.0.0.js"&gt;&lt;/script&gt;</code></pre>
-        </div>
-        <button type="button" class="copy-btn" id="default-copy" data-i18n="builder_copy">Copy</button>
-      </div>
-      <div class="builder-status" id="default-status" aria-live="polite"></div>
-    </div>
-    <div class="install-custom-panel" id="install-custom" hidden>
-      <div class="options-builder" id="options-builder">
-        <div class="builder-grid">
-          <form class="builder-form" id="uxnote-builder-form">
-            <div class="builder-row builder-color-block" id="builder-color-block">
-              <div class="card-head">
-                <div class="builder-color-head-left">
-                  <label class="builder-include" for="builder-color-include">
-                    <input type="checkbox" id="builder-color-include">
-                    <span class="sr-only" data-i18n="builder_include">Include</span>
-                  </label>
-                  <div class="builder-color-toggle">
-                    <label class="builder-inline-toggle">
-                      <input type="checkbox" id="builder-color-advanced-toggle">
-                      <span data-i18n="builder_advanced_toggle">Use advanced colors</span>
-                    </label>
-                  </div>
-                </div>
-                <span class="builder-help" data-i18n-title="install_opt_color_body" aria-label="?">?</span>
-              </div>
-              <div class="builder-color-body builder-color-field" id="builder-color-field">
-                <div class="builder-color-line builder-color-unified" id="builder-color-unified">
-                  <div class="builder-color-text">
-                    <div class="builder-name-row">
-                      <span class="builder-name">colorForHighlight</span>
-                    </div>
-                    <span class="builder-desc" data-i18n="builder_color_desc">Unified highlight color (hex).</span>
-                  </div>
-                  <div class="builder-color-inputs">
-                    <input type="color" id="builder-color" value="#4e9cf6" aria-label="colorForHighlight">
-                    <input type="text" id="builder-color-text" value="#4e9cf6" maxlength="7">
-                  </div>
-                </div>
-                <div class="builder-color-line builder-color-advanced" id="builder-color-advanced-fields" hidden>
-                  <div class="builder-color-subrow">
-                    <div class="builder-color-text">
-                      <span class="builder-sub-label">colorForTextHighlight</span>
-                      <span class="builder-desc" data-i18n="builder_text_color_desc">Text-only highlight color.</span>
-                    </div>
-                    <div class="builder-color-inputs">
-                      <input type="color" id="builder-text-color" value="#4e9cf6" aria-label="colorForTextHighlight">
-                      <input type="text" id="builder-text-color-text" value="#4e9cf6" maxlength="7">
-                    </div>
-                  </div>
-                  <div class="builder-color-subrow">
-                    <div class="builder-color-text">
-                      <span class="builder-sub-label">colorForElementHighlight</span>
-                      <span class="builder-desc" data-i18n="builder_element_color_desc">Element-only highlight color.</span>
-                    </div>
-                    <div class="builder-color-inputs">
-                      <input type="color" id="builder-element-color" value="#4e9cf6" aria-label="colorForElementHighlight">
-                      <input type="text" id="builder-element-color-text" value="#4e9cf6" maxlength="7">
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
+  <footer>
+    <div>© 2026 Fieldnote</div>
+    <div>Privacy · Terms · Contact</div>
+  </footer>
 
-            <div class="builder-option-cards">
-              <div class="builder-card" id="builder-card-backdrop">
-                <div class="card-head">
-                  <label class="builder-include" for="builder-backdrop-enabled">
-                    <input type="checkbox" id="builder-backdrop-enabled">
-                    <span class="sr-only" data-i18n="builder_include">Include</span>
-                  </label>
-                  <span class="builder-help" data-i18n-title="install_opt_backdrop_body" aria-label="?">?</span>
-                </div>
-                <div class="builder-name-row"><span class="builder-name">isBackdropVisible</span></div>
-                <p class="builder-desc" data-i18n="builder_backdrop_desc">Dim overlay behind annotations.</p>
-                <div class="builder-field">
-                  <select id="builder-backdrop-value" aria-label="isBackdropVisible">
-                    <option value="true" selected>true</option>
-                    <option value="false">false</option>
-                  </select>
-                </div>
-              </div>
-              <div class="builder-card" id="builder-card-visible">
-                <div class="card-head">
-                  <label class="builder-include" for="builder-visible-enabled">
-                    <input type="checkbox" id="builder-visible-enabled">
-                    <span class="sr-only" data-i18n="builder_include">Include</span>
-                  </label>
-                  <span class="builder-help" data-i18n-title="install_opt_visible_body" aria-label="?">?</span>
-                </div>
-                <div class="builder-name-row"><span class="builder-name">isToolVisibleAtFirstLaunch</span></div>
-                <p class="builder-desc" data-i18n="builder_visible_desc">Toolbar visible on first load.</p>
-                <div class="builder-field">
-                  <select id="builder-visible-value" aria-label="isToolVisibleAtFirstLaunch">
-                    <option value="true" selected>true</option>
-                    <option value="false">false</option>
-                  </select>
-                </div>
-              </div>
-              <div class="builder-card" id="builder-card-top">
-                <div class="card-head">
-                  <label class="builder-include" for="builder-top-enabled">
-                    <input type="checkbox" id="builder-top-enabled">
-                    <span class="sr-only" data-i18n="builder_include">Include</span>
-                  </label>
-                  <span class="builder-help" data-i18n-title="install_opt_top_body" aria-label="?">?</span>
-                </div>
-                <div class="builder-name-row"><span class="builder-name">isToolOnTopAtLaunch</span></div>
-                <p class="builder-desc" data-i18n="builder_top_desc">Toolbar position on first load.</p>
-                <div class="builder-field">
-                  <select id="builder-top-value" aria-label="isToolOnTopAtLaunch">
-                    <option value="true" selected>true</option>
-                    <option value="false">false</option>
-                  </select>
-                </div>
-              </div>
-              <div class="builder-card" id="builder-card-mailto">
-                <div class="card-head">
-                  <label class="builder-include" for="builder-mailto-enabled">
-                    <input type="checkbox" id="builder-mailto-enabled">
-                    <span class="sr-only" data-i18n="builder_include">Include</span>
-                  </label>
-                  <span class="builder-help" data-i18n-title="install_opt_mailto_body" aria-label="?">?</span>
-                </div>
-                <div class="builder-name-row"><span class="builder-name">data-mailto</span></div>
-                <p class="builder-desc" data-i18n="builder_mailto_desc">Recipient for the email export.</p>
-                <div class="builder-field">
-                  <input type="email" id="builder-mailto" placeholder="team@example.com">
-                </div>
-              </div>
-              <div class="builder-card" id="builder-card-json-export">
-                <div class="card-head">
-                  <label class="builder-include" for="builder-json-export-enabled">
-                    <input type="checkbox" id="builder-json-export-enabled">
-                    <span class="sr-only" data-i18n="builder_include">Include</span>
-                  </label>
-                  <span class="builder-help" data-i18n-title="install_opt_json_export_body" aria-label="?">?</span>
-                </div>
-                <div class="builder-name-row"><span class="builder-name">data-json-export</span></div>
-                <p class="builder-desc" data-i18n="builder_json_export_desc">JSON export button and dialog.</p>
-                <div class="builder-field">
-                  <select id="builder-json-export-value" aria-label="data-json-export">
-                    <option value="true">true</option>
-                    <option value="false" selected>false</option>
-                  </select>
-                </div>
-              </div>
-              <div class="builder-card" id="builder-card-json-import">
-                <div class="card-head">
-                  <label class="builder-include" for="builder-json-import-enabled">
-                    <input type="checkbox" id="builder-json-import-enabled">
-                    <span class="sr-only" data-i18n="builder_include">Include</span>
-                  </label>
-                  <span class="builder-help" data-i18n-title="install_opt_json_import_body" aria-label="?">?</span>
-                </div>
-                <div class="builder-name-row"><span class="builder-name">data-json-import</span></div>
-                <p class="builder-desc" data-i18n="builder_json_import_desc">JSON import button and dialog.</p>
-                <div class="builder-field">
-                  <select id="builder-json-import-value" aria-label="data-json-import">
-                    <option value="true">true</option>
-                    <option value="false" selected>false</option>
-                  </select>
-                </div>
-              </div>
-              <div class="builder-card" id="builder-card-mail-export">
-                <div class="card-head">
-                  <label class="builder-include" for="builder-mail-export-enabled">
-                    <input type="checkbox" id="builder-mail-export-enabled">
-                    <span class="sr-only" data-i18n="builder_include">Include</span>
-                  </label>
-                  <span class="builder-help" data-i18n-title="install_opt_mail_export_body" aria-label="?">?</span>
-                </div>
-                <div class="builder-name-row"><span class="builder-name">data-mail-export</span></div>
-                <p class="builder-desc" data-i18n="builder_mail_export_desc">Send by mail button. false also silences data-mailto.</p>
-                <div class="builder-field">
-                  <select id="builder-mail-export-value" aria-label="data-mail-export">
-                    <option value="true">true</option>
-                    <option value="false" selected>false</option>
-                  </select>
-                </div>
-              </div>
-              <div class="builder-card" id="builder-card-theme">
-                <div class="card-head">
-                  <label class="builder-include" for="builder-theme-enabled">
-                    <input type="checkbox" id="builder-theme-enabled">
-                    <span class="sr-only" data-i18n="builder_include">Include</span>
-                  </label>
-                  <span class="builder-help" data-i18n-title="install_opt_theme_body" aria-label="?">?</span>
-                </div>
-                <div class="builder-name-row"><span class="builder-name">data-theme</span></div>
-                <p class="builder-desc" data-i18n="builder_theme_desc">Theme of the toolbar, panel, and dialogs. auto follows the system.</p>
-                <div class="builder-field">
-                  <select id="builder-theme-value" aria-label="data-theme">
-                    <option value="auto">auto</option>
-                    <option value="light">light</option>
-                    <option value="dark" selected>dark</option>
-                  </select>
-                </div>
-              </div>
-              <div class="builder-card" id="builder-card-server">
-                <div class="card-head">
-                  <label class="builder-include" for="builder-server-enabled">
-                    <input type="checkbox" id="builder-server-enabled">
-                    <span class="sr-only" data-i18n="builder_include">Include</span>
-                  </label>
-                  <span class="builder-help" data-i18n-title="install_opt_server_body" aria-label="?">?</span>
-                </div>
-                <div class="builder-name-row"><span class="builder-name">data-server-url</span></div>
-                <p class="builder-desc" data-i18n="builder_server_desc">Server that stores the annotations.</p>
-                <div class="builder-field">
-                  <input type="text" id="builder-server-url" value="http://localhost:8123" aria-label="data-server-url">
-                </div>
-                <div class="builder-name-row"><span class="builder-sub-label">data-server-api-key</span></div>
-                <p class="builder-desc" data-i18n="builder_server_key_desc">Key sent with every request. It is visible in the page source.</p>
-                <div class="builder-field">
-                  <input type="text" id="builder-server-api-key" placeholder="review-key" aria-label="data-server-api-key">
-                </div>
-              </div>
-            </div>
-          </form>
-
-          <div class="builder-output">
-            <div class="code-copy">
-              <div class="code-block"><pre><code id="builder-output"></code></pre></div>
-              <button type="button" class="copy-btn" id="builder-copy" data-i18n="builder_copy">Copy</button>
-            </div>
-            <div class="builder-status" id="builder-status" aria-live="polite"></div>
-          </div>
-        </div>
-      </div>
-    </div>
-    <div id="install-screenshots">
-      <h3 class="install-subtitle" data-i18n="install_screenshots_title">Region screenshots</h3>
-      <p class="lead" data-i18n="install_screenshots_lead">Load snapdom before Uxnote, on the same page, and the toolbar offers a camera. Frame a region and it becomes an annotation:</p>
-      <div class="code-copy">
-        <div class="code-block">
-<pre><code id="screenshots-code">&lt;script src="https://qu4tro.github.io/uxnote-fork/dist/snapdom.min.js"&gt;&lt;/script&gt;
-&lt;script src="https://qu4tro.github.io/uxnote-fork/dist/uxnote.min-v1.0.0.js"&gt;&lt;/script&gt;</code></pre>
-        </div>
-        <button type="button" class="copy-btn" id="screenshots-copy" data-i18n="builder_copy">Copy</button>
-      </div>
-      <div class="builder-status" id="screenshots-status" aria-live="polite"></div>
-    </div>
-  </section>
-
-  <section class="section github-section" id="github">
-    <div class="github-card">
-      <svg class="github-mark" viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M12 2C6.48 2 2 6.58 2 12.25c0 4.54 2.87 8.39 6.84 9.74.5.1.68-.22.68-.49 0-.24-.01-.88-.01-1.73-2.78.62-3.37-1.38-3.37-1.38-.45-1.19-1.11-1.5-1.11-1.5-.91-.64.07-.63.07-.63 1 .07 1.53 1.06 1.53 1.06.9 1.57 2.36 1.12 2.94.86.09-.66.35-1.12.64-1.38-2.22-.26-4.56-1.13-4.56-5.04 0-1.12.39-2.04 1.03-2.76-.1-.26-.45-1.3.1-2.71 0 0 .84-.27 2.75 1.05a9.3 9.3 0 0 1 5 0c1.91-1.32 2.75-1.05 2.75-1.05.55 1.41.2 2.45.1 2.71.64.72 1.03 1.64 1.03 2.76 0 3.92-2.34 4.78-4.57 5.03.36.32.68.94.68 1.9 0 1.37-.01 2.47-.01 2.81 0 .27.18.59.69.49C19.13 20.64 22 16.79 22 12.25 22 6.58 17.52 2 12 2Z"></path>
-      </svg>
-      <div class="github-card-content">
-        <h2 data-i18n="github_title">UxNote on GitHub</h2>
-        <p data-i18n="github_body">Uxnote is open source under the MIT License. Browse the code, follow updates, and share ideas or issues.</p>
-      </div>
-      <div class="github-card-actions">
-        <div class="github-actions-row">
-          <a class="github-pill" href="https://github.com/ninefortyonestudio/uxnote" target="_blank" rel="noreferrer noopener" data-i18n="github_cta">View the repo</a>
-          <a class="github-pill" href="https://github.com/ninefortyonestudio/uxnote/releases" target="_blank" rel="noreferrer noopener" data-i18n="github_releases">View releases</a>
-          <span class="github-url">github.com/ninefortyonestudio/uxnote</span>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <section class="section" id="faq">
-    <h2 data-i18n="faq_title">FAQ</h2>
-    <div class="faq-grid">
-      <details class="faq-item">
-        <summary data-i18n="faq_q1">Where should the script tag be placed?</summary>
-        <p data-i18n="faq_a1">Place it right before <code>&lt;/body&gt;</code> so the DOM is ready. If you must place it in <code>&lt;head&gt;</code>, add <code>defer</code>.</p>
-      </details>
-      <details class="faq-item">
-        <summary data-i18n="faq_q2">How are annotations stored and scoped?</summary>
-        <p data-i18n="faq_a2">Annotations are stored in <code>localStorage</code> for the current origin. Each page URL keeps its own set, and clearing storage removes them.</p>
-      </details>
-      <details class="faq-item">
-        <summary data-i18n="faq_q3">Can we export, import, and merge reviews?</summary>
-        <p data-i18n="faq_a3">Yes. Export generates a JSON file. Import appends annotations so you can consolidate feedback from multiple reviewers.</p>
-      </details>
-      <details class="faq-item">
-        <summary data-i18n="faq_q4">Does it work on staging, previews, or localhost?</summary>
-        <p data-i18n="faq_a4">Yes, as long as the script loads and the browser allows <code>localStorage</code> in that environment.</p>
-      </details>
-      <details class="faq-item">
-        <summary data-i18n="faq_q5">How do we customize colors, dim, and toolbar position?</summary>
-        <p data-i18n="faq_a5">Use script tag options like <code>colorForHighlight</code> (or <code>colorForTextHighlight</code> + <code>colorForElementHighlight</code>), <code>isBackdropVisible</code>, <code>isToolOnTopAtLaunch</code>, and <code>isToolVisibleAtFirstLaunch</code>.</p>
-      </details>
-      <details class="faq-item">
-        <summary data-i18n="faq_q6">Is any data sent to a server?</summary>
-        <p data-i18n="faq_a6">No. Everything stays in the browser unless you export a JSON file or send annotations by email.</p>
-      </details>
-      <details class="faq-item">
-        <summary data-i18n="faq_q6b">Is Uxnote open source?</summary>
-        <p data-i18n="faq_a6b">Yes. Uxnote is open source under the MIT License, which allows commercial use, modification, and redistribution.</p>
-      </details>
-      <details class="faq-item">
-        <summary data-i18n="faq_q7">Can we use it on single-page apps (React, Vue, etc.)?</summary>
-        <p data-i18n="faq_a7">Yes. Annotations are stored per URL. In SPAs, route changes and re-renders do not always trigger a full reload, so you may need to reload or re-initialize to render annotations for the new URL.</p>
-      </details>
-      <details class="faq-item">
-        <summary data-i18n="faq_q8">Will a strict CSP block Uxnote?</summary>
-        <p data-i18n="faq_a8">CSP (Content Security Policy) is a browser security header that restricts script and style sources. If it is strict, allow the Uxnote script origin and inline styles (or use a nonce/hash) so the toolbar and highlights can render.</p>
-      </details>
-      <details class="faq-item">
-        <summary data-i18n="faq_q9">How do we block specific areas from annotations?</summary>
-        <p data-i18n="faq_a9">Add <code>data-uxnote-ignore</code> to any element to disable annotation inside it. You can re-enable a child with <code>data-uxnote-allow</code>.</p>
-      </details>
-      <details class="faq-item">
-        <summary data-i18n="faq_q10">Does it work inside iframes?</summary>
-        <p data-i18n="faq_a10">Cross-origin iframes are blocked by the browser. For same-origin iframes, you must inject Uxnote inside the iframe document.</p>
-      </details>
-    </div>
-  </section>
-
-  <div class="demo-pointer" id="demo-pointer" hidden aria-hidden="true">
-    <span class="demo-pointer-label">Demo</span>
-    <span class="demo-pointer-arrow" aria-hidden="true"></span>
-  </div>
-
-  <footer class="footer"><a href="https://ninefortyone.studio" target="_blank" rel="noreferrer noopener">© UxNote – by ninefortyone.studio</a></footer>
-
-  <script src="uxnote-tool/uxnote.js" isBackdropVisible="true" isToolVisibleAtFirstLaunch="false" isToolOnTopAtLaunch="false"></script>
-  <script src="assets/langues.js"></script>
-  
   <script>
-    const i18n = window.UxnoteI18n || null;
-    const fallbackText = {
-      demo_status_off: 'Demo off',
-      demo_status_active: 'Demo active',
-      demo_status_fail: 'Demo unavailable',
-      demo_button_live: 'Live preview',
-      demo_button_close: 'Close preview',
-      builder_copied: 'Copied to clipboard.',
-      builder_copy_fail: 'Copy failed. Please copy manually.'
-    };
-    const byId = (id) => document.getElementById(id);
-    const statusEl = byId('demo-status');
-    const demoButtons = ['demo-btn', 'demo-btn-2', 'demo-btn-3']
-      .map((id) => document.getElementById(id))
-      .filter(Boolean);
-    let previewActive = false;
-    let statusKey = 'demo_status_off';
+    // The page theme is the demo's own, light or dark and nothing else. It is
+    // deliberately not tied to the widget's data-theme: pinning the page is
+    // what makes the widget's auto, light, and dark worth looking at.
+    (function () {
+      const root = document.documentElement;
+      const buttons = document.querySelectorAll('[data-page-theme-set]');
 
-  const t = (key) => {
-    if (i18n && typeof i18n.t === 'function') return i18n.t(key);
-    return fallbackText[key] || key;
-  };
-
-    const setStatus = (key) => {
-      statusKey = key;
-      if (statusEl) statusEl.textContent = t(key);
-    };
-
-    const updateButtons = () => {
-      const label = previewActive ? t('demo_button_close') : t('demo_button_live');
-      demoButtons.forEach((btn) => (btn.textContent = label));
-    };
-
-    function initInstallToggle() {
-      const toggleBtn = byId('install-toggle');
-      const defaultBlock = byId('install-default');
-      const customBlock = byId('install-custom');
-      const defaultText = byId('install-text-default');
-      const customText = byId('install-text-custom');
-      const installSection = document.getElementById('install');
-      if (!toggleBtn || !defaultBlock || !customBlock) return;
-      let customMode = false;
-      const sync = () => {
-        defaultBlock.hidden = customMode;
-        customBlock.hidden = !customMode;
-        if (defaultText) defaultText.hidden = customMode;
-        if (customText) customText.hidden = !customMode;
-        toggleBtn.textContent = t(customMode ? 'install_toggle_default' : 'install_toggle_custom');
-        toggleBtn.setAttribute('aria-pressed', customMode ? 'true' : 'false');
-      };
-      toggleBtn.addEventListener('click', () => {
-        customMode = !customMode;
-        sync();
-        if (installSection && typeof installSection.scrollIntoView === 'function') {
-          installSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }
-      });
-      sync();
-    }
-
-  if (i18n && typeof i18n.onChange === 'function') {
-    i18n.onChange(() => {
-      updateButtons();
-      setStatus(statusKey);
-      initInstallToggle();
-    });
-  }
-
-    const syncFromUxnote = () => {
-      if (!window.Uxnote || typeof window.Uxnote.isHidden !== 'function') return;
-      previewActive = !window.Uxnote.isHidden();
-      updateButtons();
-      setStatus(previewActive ? 'demo_status_active' : 'demo_status_off');
-    };
-
-    const loadDemo = () => {
-      if (!window.Uxnote || typeof window.Uxnote.toggleVisibility !== 'function') {
-        setStatus('demo_status_fail');
-        return;
-      }
-      window.Uxnote.toggleVisibility();
-    };
-
-    const demoPointerKey = 'uxnote:demo-pointer-dismissed';
-    const demoPointer = byId('demo-pointer');
-    const getEyeButton = () => document.querySelector('.wn-annot-visibility-btn');
-    const isDemoPointerDismissed = () => {
-      try {
-        return localStorage.getItem(demoPointerKey) === '1';
-      } catch (err) {
-        return false;
-      }
-    };
-    const dismissDemoPointer = () => {
-      if (!demoPointer) return;
-      demoPointer.hidden = true;
-      try {
-        localStorage.setItem(demoPointerKey, '1');
-      } catch (err) {
-        // ignore
-      }
-    };
-    const updateDemoPointerPosition = () => {
-      if (!demoPointer || demoPointer.hidden) return;
-      const btn = getEyeButton();
-      if (!btn) return;
-      const rect = btn.getBoundingClientRect();
-      const top = rect.top - 20;
-      const left = rect.left + rect.width / 2;
-      demoPointer.style.left = `${left}px`;
-      demoPointer.style.top = `${top}px`;
-    };
-    const initDemoPointer = () => {
-      if (!demoPointer || isDemoPointerDismissed()) {
-        if (demoPointer) demoPointer.hidden = true;
-        return;
-      }
-      const btn = getEyeButton();
-      if (!btn) {
-        requestAnimationFrame(initDemoPointer);
-        return;
-      }
-      demoPointer.hidden = false;
-      updateDemoPointerPosition();
-      if (!btn.dataset.demoPointerBound) {
-        btn.dataset.demoPointerBound = 'true';
-        btn.addEventListener('click', dismissDemoPointer, { once: true });
-      }
-    };
-
-    const initBuilder = () => {
-      const builder = document.getElementById('options-builder');
-      if (!builder) return;
-
-      const output = byId('builder-output');
-      const status = byId('builder-status');
-      const copyBtn = byId('builder-copy');
-      const src = 'https://github.com/ninefortyonestudio/uxnote/releases/download/v1.0.0/uxnote.min-v1.0.0.js';
-
-      const colorInclude = byId('builder-color-include');
-      const colorBlock = byId('builder-color-block');
-      const colorField = byId('builder-color-field');
-      const color = byId('builder-color');
-      const colorText = byId('builder-color-text');
-      const colorAdvancedToggle = byId('builder-color-advanced-toggle');
-      const colorUnifiedRow = byId('builder-color-unified');
-      const advancedFields = byId('builder-color-advanced-fields');
-      const textColor = byId('builder-text-color');
-      const textColorText = byId('builder-text-color-text');
-      const elementColor = byId('builder-element-color');
-      const elementColorText = byId('builder-element-color-text');
-      const backdropEnabled = byId('builder-backdrop-enabled');
-      const backdropValue = byId('builder-backdrop-value');
-      const visibleEnabled = byId('builder-visible-enabled');
-      const visibleValue = byId('builder-visible-value');
-      const topEnabled = byId('builder-top-enabled');
-      const topValue = byId('builder-top-value');
-      const mailto = byId('builder-mailto');
-      const mailtoEnabled = byId('builder-mailto-enabled');
-      const serverUrl = byId('builder-server-url');
-      const serverApiKey = byId('builder-server-api-key');
-      const serverEnabled = byId('builder-server-enabled');
-      const themeEnabled = byId('builder-theme-enabled');
-      const themeValue = byId('builder-theme-value');
-      const jsonExportEnabled = byId('builder-json-export-enabled');
-      const jsonExportValue = byId('builder-json-export-value');
-      const jsonImportEnabled = byId('builder-json-import-enabled');
-      const jsonImportValue = byId('builder-json-import-value');
-      const mailExportEnabled = byId('builder-mail-export-enabled');
-      const mailExportValue = byId('builder-mail-export-value');
-
-      const normalizeHex = (val) => {
-        if (!val) return '';
-        let v = String(val).trim();
-        if (!v) return '';
-        if (!v.startsWith('#')) v = `#${v}`;
-        if (!/^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(v)) return '';
-        return v.toLowerCase();
-      };
-
-      const setDisabled = (elements, disabled) => {
-        (elements || []).forEach((el) => {
-          if (!el) return;
-          el.disabled = disabled;
+      function mark(theme) {
+        buttons.forEach(function (button) {
+          button.setAttribute('aria-pressed', button.dataset.pageThemeSet === theme ? 'true' : 'false');
         });
-      };
+      }
 
-      const syncColorInputs = (textEl, colorEl) => {
-        const hex = normalizeHex(textEl.value);
-        if (hex) {
-          textEl.value = hex;
-          colorEl.value = hex;
-        }
-      };
+      function apply(theme) {
+        root.setAttribute('data-page-theme', theme);
+        try { localStorage.setItem('uxnote-fork-demo:page-theme', theme); } catch (e) { /* private mode keeps the choice for this load alone */ }
+        mark(theme);
+      }
 
-      const updateColorMode = () => {
-        const includeOn = !!(colorInclude && colorInclude.checked);
-        let advancedOn = false;
-        if (colorAdvancedToggle) {
-          if (!includeOn && colorAdvancedToggle.checked) colorAdvancedToggle.checked = false;
-          advancedOn = includeOn && !!colorAdvancedToggle.checked;
-        }
-        if (colorBlock) colorBlock.classList.toggle('is-active', includeOn);
-        if (colorField) {
-          colorField.classList.toggle('mode-off', !includeOn);
-          colorField.classList.toggle('mode-unified', includeOn && !advancedOn);
-          colorField.classList.toggle('mode-advanced', includeOn && advancedOn);
-        }
-        if (colorAdvancedToggle) colorAdvancedToggle.disabled = !includeOn;
-        if (advancedFields) {
-          advancedFields.hidden = !advancedOn;
-          advancedFields.style.display = advancedOn ? 'flex' : 'none';
-        }
-        if (colorUnifiedRow) {
-          colorUnifiedRow.hidden = advancedOn;
-          colorUnifiedRow.style.display = advancedOn ? 'none' : 'flex';
-        }
-        setDisabled([color, colorText], !includeOn || advancedOn);
-        setDisabled([textColor, textColorText, elementColor, elementColorText], !advancedOn);
-      };
-
-      const buildTag = () => {
-        const closeTag = '</scr' + 'ipt>';
-        const attrs = [`src="${src}"`];
-        const addAttr = (enabled, name, value) => {
-          if (!enabled) return;
-          if (!value) return;
-          attrs.push(`${name}="${value}"`);
-        };
-
-        updateColorMode();
-        const includeOn = !!(colorInclude && colorInclude.checked);
-        const advancedOn = includeOn && !!(colorAdvancedToggle && colorAdvancedToggle.checked);
-        if (includeOn) {
-          if (advancedOn) {
-            addAttr(true, 'colorForTextHighlight', normalizeHex(textColorText.value));
-            addAttr(true, 'colorForElementHighlight', normalizeHex(elementColorText.value));
-          } else {
-            addAttr(true, 'colorForHighlight', normalizeHex(colorText.value));
-          }
-        }
-        setDisabled([backdropValue], !(backdropEnabled && backdropEnabled.checked));
-        setDisabled([visibleValue], !(visibleEnabled && visibleEnabled.checked));
-        setDisabled([topValue], !(topEnabled && topEnabled.checked));
-        addAttr(
-          backdropEnabled && backdropEnabled.checked,
-          'isBackdropVisible',
-          backdropValue ? backdropValue.value : 'true'
-        );
-        addAttr(
-          visibleEnabled && visibleEnabled.checked,
-          'isToolVisibleAtFirstLaunch',
-          visibleValue ? visibleValue.value : 'true'
-        );
-        addAttr(
-          topEnabled && topEnabled.checked,
-          'isToolOnTopAtLaunch',
-          topValue ? topValue.value : 'true'
-        );
-        addAttr(mailtoEnabled && mailtoEnabled.checked, 'data-mailto', (mailto.value || '').trim());
-        setDisabled([jsonExportValue], !(jsonExportEnabled && jsonExportEnabled.checked));
-        setDisabled([jsonImportValue], !(jsonImportEnabled && jsonImportEnabled.checked));
-        setDisabled([mailExportValue], !(mailExportEnabled && mailExportEnabled.checked));
-        addAttr(
-          jsonExportEnabled && jsonExportEnabled.checked,
-          'data-json-export',
-          jsonExportValue ? jsonExportValue.value : 'false'
-        );
-        addAttr(
-          jsonImportEnabled && jsonImportEnabled.checked,
-          'data-json-import',
-          jsonImportValue ? jsonImportValue.value : 'false'
-        );
-        addAttr(
-          mailExportEnabled && mailExportEnabled.checked,
-          'data-mail-export',
-          mailExportValue ? mailExportValue.value : 'false'
-        );
-        setDisabled([themeValue], !(themeEnabled && themeEnabled.checked));
-        addAttr(
-          themeEnabled && themeEnabled.checked,
-          'data-theme',
-          themeValue ? themeValue.value : 'auto'
-        );
-        const serverOn = !!(serverEnabled && serverEnabled.checked);
-        addAttr(serverOn, 'data-server-url', (serverUrl.value || '').trim());
-        addAttr(serverOn, 'data-server-api-key', (serverApiKey.value || '').trim());
-
-        if (attrs.length === 1) {
-          return `<script ${attrs[0]}>${closeTag}`;
-        }
-        return `<script\n  ${attrs.join('\n  ')}\n>${closeTag}`;
-      };
-
-      const updateOutput = () => {
-        if (!output) return;
-        output.textContent = buildTag();
-      };
-
-      const inputs = [
-        colorText,
-        colorAdvancedToggle,
-        colorInclude,
-        textColorText,
-        elementColorText,
-        backdropEnabled,
-        backdropValue,
-        visibleEnabled,
-        visibleValue,
-        topEnabled,
-        topValue,
-        mailto,
-        mailtoEnabled,
-        jsonExportEnabled,
-        jsonExportValue,
-        jsonImportEnabled,
-        jsonImportValue,
-        mailExportEnabled,
-        mailExportValue,
-        themeEnabled,
-        themeValue,
-        serverUrl,
-        serverApiKey,
-        serverEnabled
-      ].filter(Boolean);
-
-      inputs.forEach((el) => {
-        el.addEventListener('input', updateOutput);
-        el.addEventListener('change', updateOutput);
+      buttons.forEach(function (button) {
+        button.addEventListener('click', function () { apply(button.dataset.pageThemeSet); });
       });
 
-      if (colorInclude) {
-        colorInclude.addEventListener('change', () => {
-          updateColorMode();
-          updateOutput();
-        });
-      }
-      if (colorAdvancedToggle) {
-        colorAdvancedToggle.addEventListener('change', () => {
-          updateColorMode();
-          updateOutput();
-        });
-      }
-
-      if (color && colorText) {
-        color.addEventListener('input', () => {
-          colorText.value = color.value;
-          updateOutput();
-        });
-        colorText.addEventListener('blur', () => {
-          syncColorInputs(colorText, color);
-          updateOutput();
-        });
-      }
-      if (textColor && textColorText) {
-        textColor.addEventListener('input', () => {
-          textColorText.value = textColor.value;
-          updateOutput();
-        });
-        textColorText.addEventListener('blur', () => {
-          syncColorInputs(textColorText, textColor);
-          updateOutput();
-        });
-      }
-      if (elementColor && elementColorText) {
-        elementColor.addEventListener('input', () => {
-          elementColorText.value = elementColor.value;
-          updateOutput();
-        });
-        elementColorText.addEventListener('blur', () => {
-          syncColorInputs(elementColorText, elementColor);
-          updateOutput();
-        });
-      }
-
-      const attachCopy = (btn, target, statusEl) => {
-        if (!btn || !target) return;
-        btn.addEventListener('click', async () => {
-          try {
-            await navigator.clipboard.writeText(target.textContent || '');
-            if (statusEl) statusEl.textContent = t('builder_copied');
-          } catch (err) {
-            if (statusEl) statusEl.textContent = t('builder_copy_fail');
-          }
-          if (statusEl) {
-            setTimeout(() => {
-              statusEl.textContent = '';
-            }, 2000);
-          }
-        });
-      };
-
-      attachCopy(copyBtn, output, status);
-
-      const highlightCard = (input, card) => {
-        if (!input || !card) return;
-        card.classList.toggle('is-active', !!input.checked);
-        input.addEventListener('change', () => {
-          card.classList.toggle('is-active', !!input.checked);
-        });
-      };
-
-      highlightCard(colorInclude, colorBlock);
-      highlightCard(byId('builder-backdrop-enabled'), byId('builder-card-backdrop'));
-      highlightCard(byId('builder-visible-enabled'), byId('builder-card-visible'));
-      highlightCard(byId('builder-top-enabled'), byId('builder-card-top'));
-      highlightCard(byId('builder-mailto-enabled'), byId('builder-card-mailto'));
-      highlightCard(byId('builder-json-export-enabled'), byId('builder-card-json-export'));
-      highlightCard(byId('builder-json-import-enabled'), byId('builder-card-json-import'));
-      highlightCard(byId('builder-mail-export-enabled'), byId('builder-card-mail-export'));
-      highlightCard(byId('builder-theme-enabled'), byId('builder-card-theme'));
-      highlightCard(byId('builder-server-enabled'), byId('builder-card-server'));
-
-      if (i18n && typeof i18n.onChange === 'function') {
-        i18n.onChange(() => {
-          if (status && status.textContent) status.textContent = '';
-        });
-      }
-
-      updateColorMode();
-      updateOutput();
-    };
-
-    document.addEventListener('uxnote:visibility', (evt) => {
-      if (!evt || !evt.detail) return;
-      previewActive = !evt.detail.hidden;
-      updateButtons();
-      setStatus(previewActive ? 'demo_status_active' : 'demo_status_off');
-      updateDemoPointerPosition();
-    });
-
-    if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', syncFromUxnote);
-      document.addEventListener('DOMContentLoaded', initBuilder);
-      document.addEventListener('DOMContentLoaded', initDemoPointer);
-    } else {
-      syncFromUxnote();
-      initBuilder();
-      initDemoPointer();
-    }
-    demoButtons.forEach((btn) => btn.addEventListener('click', loadDemo));
-    initInstallToggle();
-    document.querySelectorAll('.builder-help').forEach((el) => {
-      el.addEventListener('click', (e) => {
-        e.preventDefault();
-        el.classList.toggle('tip-open');
-      });
-      el.addEventListener('mouseleave', () => el.classList.remove('tip-open'));
-      el.addEventListener('blur', () => el.classList.remove('tip-open'));
-    });
-    const bindCopyButton = (buttonId, codeId, statusId) => {
-      const button = byId(buttonId);
-      const code = byId(codeId);
-      const status = byId(statusId);
-      if (!button || !code) return;
-      button.addEventListener('click', async () => {
-        try {
-          await navigator.clipboard.writeText(code.textContent || '');
-          if (status) status.textContent = t('builder_copied');
-        } catch (err) {
-          if (status) status.textContent = t('builder_copy_fail');
-        }
-        if (status) {
-          setTimeout(() => {
-            status.textContent = '';
-          }, 2000);
-        }
-      });
-    };
-    bindCopyButton('default-copy', 'default-code', 'default-status');
-    bindCopyButton('screenshots-copy', 'screenshots-code', 'screenshots-status');
-    if (demoPointer) {
-      demoPointer.addEventListener('click', dismissDemoPointer);
-      window.addEventListener('resize', updateDemoPointerPosition);
-      window.addEventListener('scroll', updateDemoPointerPosition, { passive: true });
-    }
+      mark(root.getAttribute('data-page-theme') === 'dark' ? 'dark' : 'light');
+    })();
   </script>
+  <script src="uxnote-tool/snapdom.min.js"></script>
+  <script src="uxnote-tool/uxnote.js"></script>
 </body>
 </html>
