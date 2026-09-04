@@ -84,17 +84,17 @@ Then open <http://localhost:4173/>.
 One tag:
 
 ```html
-<script src="https://github.com/Qu4tro/uxnote-fork/releases/download/v2.1.0/uxnote.min-v2.1.0.js"></script>
+<script src="https://github.com/Qu4tro/uxnote-fork/releases/download/v3.0.0/uxnote.min-v3.0.0.js"></script>
 ```
 
 Two tags for the region screenshots, snapdom first:
 
 ```html
-<script src="https://github.com/Qu4tro/uxnote-fork/releases/download/v2.1.0/snapdom.min.js"></script>
-<script src="https://github.com/Qu4tro/uxnote-fork/releases/download/v2.1.0/uxnote.min-v2.1.0.js"></script>
+<script src="https://github.com/Qu4tro/uxnote-fork/releases/download/v3.0.0/snapdom.min.js"></script>
+<script src="https://github.com/Qu4tro/uxnote-fork/releases/download/v3.0.0/uxnote.min-v3.0.0.js"></script>
 ```
 
-Both files are assets of the `v2.1.0` release, and every release carries both.
+Both files are assets of the `v3.0.0` release, and every release carries both.
 
 The three `is*` names and the three `colorFor*` names are plain attributes; the
 rest are `data-` attributes.
@@ -108,7 +108,7 @@ lines you want.
 ```html
 <!-- Every attribute name, with a value that shows its shape. A reference,
      not a starting point. -->
-<script src="https://github.com/Qu4tro/uxnote-fork/releases/download/v2.1.0/uxnote.min-v2.1.0.js"
+<script src="https://github.com/Qu4tro/uxnote-fork/releases/download/v3.0.0/uxnote.min-v3.0.0.js"
   colorForHighlight="#4e9cf6"
   colorForTextHighlight="#4e9cf6"
   colorForElementHighlight="#8b5cf6"
