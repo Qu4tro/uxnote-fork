@@ -37,6 +37,40 @@ test('the toolbar holds one row on a laptop screen', async ({ page }) => {
   }
 });
 
+test('the toolbar offers the mail handoff on its own button', async ({ page }) => {
+  await page.goto('/demo/');
+  const mail = page.locator('.wn-annot-toolbar button[data-action="mail"]');
+  await expect(mail).toBeVisible();
+  await expect(mail).toHaveAttribute('data-tip', 'Send by mail');
+});
+
+test('the mail handoff survives a page with the JSON export off', async ({ page }) => {
+  const errors = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  await page.goto('/test/fixtures/mail-without-json-export.html');
+  await expect(page.locator('.wn-annot-toolbar')).toBeVisible();
+  await expect(page.locator('.wn-annot-toolbar button[data-action="export"]')).toHaveCount(0);
+  await expect(page.locator('.wn-annot-toolbar button[data-action="import"]')).toHaveCount(0);
+  // The mail button carries its own option, so taking the JSON export away
+  // leaves the reviewer a way to hand the annotations over.
+  await expect(page.locator('.wn-annot-toolbar button[data-action="mail"]')).toBeVisible();
+  await page.locator('.wn-annot-toolbar button[data-action="mail"]').click();
+  // The handoff goes straight to the mail client; it opens nothing on the page.
+  await expect(page.locator('.wn-annot-modal-backdrop.show')).toHaveCount(0);
+  expect(errors).toEqual([]);
+});
+
+test('the JSON export survives a page with the mail off', async ({ page }) => {
+  await page.goto('/test/fixtures/json-export-without-mail.html');
+  await expect(page.locator('.wn-annot-toolbar button[data-action="mail"]')).toHaveCount(0);
+  await page.locator('.wn-annot-toolbar button[data-action="export"]').click();
+  const modal = page.locator('.wn-annot-export-modal');
+  await expect(modal).toBeVisible();
+  // The dialog exports a file and nothing else: the mail pill lived here once.
+  await expect(modal.locator('.wn-annot-pill', { hasText: 'Send by mail' })).toHaveCount(0);
+  await expect(modal.locator('.wn-annot-pill', { hasText: 'Export file' })).toBeVisible();
+});
+
 const CAPTURE_FIXTURE = '/test/fixtures/server-capture.html';
 const ALLOW = { 'Access-Control-Allow-Origin': '*' };
 
