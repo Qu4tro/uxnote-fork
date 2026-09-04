@@ -115,6 +115,137 @@ test('the page theme switch sits inside the subtree the widget ignores', async (
   expect(ignored).toBe(true);
 });
 
+test('the query string sets the widget options', async ({ page }) => {
+  await page.goto('/?json-export=false&theme=dark&color=%23e04f5f');
+  await expect(page.locator('.wn-annot-toolbar button[data-action="export"]')).toHaveCount(0);
+  // Only the requested option changed; the import and mail buttons are untouched.
+  await expect(page.locator('.wn-annot-toolbar button[data-action="import"]')).toBeVisible();
+  await expect(page.locator('.wn-annot-toolbar button[data-action="mail"]')).toBeVisible();
+  await expect(page.locator('html')).toHaveAttribute('data-wn-theme', 'dark');
+  const highlight = await page.evaluate(() =>
+    getComputedStyle(document.documentElement).getPropertyValue('--wn-text-highlight').trim()
+  );
+  expect(highlight).toBe('#e04f5f');
+});
+
+test('the mail handoff has an option of its own here too', async ({ page }) => {
+  await page.goto('/?mail-export=false');
+  await expect(page.locator('.wn-annot-toolbar button[data-action="mail"]')).toHaveCount(0);
+  // The JSON export answers to a different attribute and is still here.
+  await expect(page.locator('.wn-annot-toolbar button[data-action="export"]')).toBeVisible();
+  await expect(page.locator('#settings-snippet')).toContainText('data-mail-export="false"');
+});
+
+test('the demo page carries the reversed theme through to the widget', async ({ page }) => {
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await page.goto('/?theme=reverse-auto');
+  // The widget takes the side the system did not, and the form shows the value
+  // the widget was handed rather than the default it fell back from.
+  await expect(page.locator('html')).toHaveAttribute('data-wn-theme', 'light');
+  await expect(page.locator('#set-theme')).toHaveValue('reverse-auto');
+});
+
+test('every option in the settings grid says what it does', async ({ page }) => {
+  await page.goto('/');
+  const cards = page.locator('.settings-grid label');
+  const count = await cards.count();
+  expect(count).toBeGreaterThan(0);
+  await expect(cards.locator('.settings-desc')).toHaveCount(count);
+});
+
+test('the demo page refuses a server that is not on the loopback address', async ({ page }) => {
+  await page.goto('/?server-url=https://example.invalid&server-api-key=k');
+  const carried = await page.evaluate(() =>
+    Array.from(document.querySelectorAll('script')).some(
+      (s) => s.hasAttribute('data-server-url') || s.hasAttribute('data-server-api-key')
+    )
+  );
+  expect(carried).toBe(false);
+  // Silence would read as a link that worked, so the notice names both what it
+  // dropped and the rule that dropped it.
+  await expect(page.locator('#settings-notice')).toBeVisible();
+  await expect(page.locator('#settings-notice')).toContainText('server-url, server-api-key');
+  await expect(page.locator('#settings-notice')).toContainText('loopback address only');
+});
+
+test('the demo page names a server key spelled some other way', async ({ page }) => {
+  await page.goto('/?serverUrl=https://example.invalid&Server_Url=x&api_key=k');
+  // These name no option this page reads, so nothing applies them. Saying so
+  // beats letting the link look honoured.
+  await expect(page.locator('#settings-notice')).toContainText('serverUrl, Server_Url, api_key');
+  await expect(page.locator('#settings-notice')).toContainText('loopback address only');
+});
+
+test('the demo page takes a loopback server onto the script tag', async ({ page }) => {
+  await page.goto('/?server-url=http%3A%2F%2F127.0.0.1%3A8123&server-api-key=local-key');
+  const carried = await page.evaluate(() => {
+    const tag = Array.from(document.querySelectorAll('script')).find((s) => s.hasAttribute('data-server-url'));
+    return tag && [tag.getAttribute('data-server-url'), tag.getAttribute('data-server-api-key')];
+  });
+  expect(carried).toEqual(['http://127.0.0.1:8123/', 'local-key']);
+  await expect(page.locator('#settings-notice')).toBeHidden();
+  await expect(page.locator('#settings-snippet')).toContainText('data-server-url="http://127.0.0.1:8123/"');
+});
+
+test('applying a set carries it through the reload and leaves the defaults out', async ({ page }) => {
+  await page.goto('/');
+  await page.fill('#set-server-url', 'http://localhost:8123');
+  await page.fill('#set-server-api-key', 'local-key');
+  await page.click('#settings-apply');
+  await page.waitForURL(/server-url=/);
+  // Only the two edited options travel; everything still at its default is
+  // absent from the query string, so a plain path means defaults.
+  expect(new URL(page.url()).searchParams.toString()).toBe(
+    'server-url=http%3A%2F%2Flocalhost%3A8123%2F&server-api-key=local-key'
+  );
+  await expect(page.locator('#set-server-url')).toHaveValue('http://localhost:8123/');
+  const key = await page.evaluate(() => {
+    const tag = Array.from(document.querySelectorAll('script')).find((s) => s.hasAttribute('data-server-url'));
+    return tag && tag.getAttribute('data-server-api-key');
+  });
+  expect(key).toBe('local-key');
+});
+
+test('the server fields come filled with the address the bundled server answers on', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.locator('#set-server-url')).toHaveValue('http://localhost:8123');
+  await expect(page.locator('#set-server-api-key')).toHaveValue('review-key');
+  // Filled is not applied. A visitor who runs no server should not land on a
+  // page already pointed at one, so a plain load still keeps the notes here.
+  const carried = await page.evaluate(() =>
+    Array.from(document.querySelectorAll('script')).some((s) => s.hasAttribute('data-server-url'))
+  );
+  expect(carried).toBe(false);
+  // The snippet is the tag the widget was built from, so a field that is filled
+  // only because it was seeded stays out of it until it is applied or edited.
+  await expect(page.locator('#settings-snippet')).not.toContainText('data-server-url');
+  await expect(page.locator('#settings-snippet')).not.toContainText('data-server-api-key');
+  // Editing one is acting on it, and the snippet says so before Apply is near.
+  await page.fill('#set-server-api-key', 'review-key-2');
+  await expect(page.locator('#settings-snippet')).toContainText('data-server-api-key="review-key-2"');
+  await page.fill('#set-server-api-key', 'review-key');
+
+  // What the filling buys is the press: nothing to type before Apply.
+  await page.click('#settings-apply');
+  await page.waitForURL(/server-url=/);
+  const applied = await page.evaluate(() => {
+    const tag = Array.from(document.querySelectorAll('script')).find((s) => s.hasAttribute('data-server-url'));
+    return tag && [tag.getAttribute('data-server-url'), tag.getAttribute('data-server-api-key')];
+  });
+  expect(applied).toEqual(['http://localhost:8123/', 'review-key']);
+  // Applied is in the set, so now the snippet carries it.
+  await expect(page.locator('#settings-snippet')).toContainText('data-server-url="http://localhost:8123/"');
+});
+
+test('the demo page drops a server key that arrives on its own', async ({ page }) => {
+  await page.goto('/?server-api-key=local-key');
+  const carried = await page.evaluate(() =>
+    Array.from(document.querySelectorAll('script')).some((s) => s.hasAttribute('data-server-api-key'))
+  );
+  expect(carried).toBe(false);
+  await expect(page.locator('#settings-notice')).toContainText('no server to reach');
+});
+
 const CAPTURE_FIXTURE = '/test/fixtures/server-capture.html';
 const ALLOW = { 'Access-Control-Allow-Origin': '*' };
 

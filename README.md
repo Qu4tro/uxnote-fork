@@ -20,6 +20,19 @@ The page carries its own **Page theme** switch, light or dark, in the note at
 the top of it. It is the page's colours alone and it never follows the system,
 so the widget's own `data-theme` can be read against either background.
 
+The page carries the widget's options in its query string, and the **Widget
+settings** section below the pricing table writes it: pick a set, press Apply
+and reload, and the page comes back with the widget holding it. Every option
+carries a line saying what it does, and the section shows the matching script
+tag to copy. Annotations already taken survive the reload.
+
+`data-server-url` is taken only when it names a loopback address — `localhost`,
+anything in 127.0.0.0/8, or `[::1]` — so a link cannot point a visitor's notes
+at somebody else's server, and `data-server-api-key` travels only beside a URL
+that survived. `server/server.py` is what to point them at. The hosted demo is
+served over HTTPS and browsers restrict a public page reaching a loopback
+address, so the pair is meant for a demo you run locally.
+
 Locally:
 
 ```sh

@@ -13,6 +13,7 @@ All notable changes to this project will be documented in this file.
 - An explicit light or dark for the demo page itself, switched in the note at the top of it and held in this browser. The page never follows the system, so the widget's `auto`, `reverse-auto`, `light`, and `dark` each read against a background you chose.
 - Route changes. The widget follows `pushState`, `replaceState`, and `popstate`, so a single-page app keeps its annotations per route.
 - `snapdom.min.js` ships beside the minified widget in every release.
+- Settings on the demo page. The page reads the widget's options from its query string, and a section below the pricing table writes it, says what each option does, and shows the matching script tag. `data-server-url` is taken only on a loopback address and `data-server-api-key` only beside one, so a link cannot point a visitor's notes at somebody else's server.
 ### Changed
 - A note is a comment. The comment card asks for the comment alone, sits beside the toolbar, and saves on Enter.
 - The annotation panel starts closed.
