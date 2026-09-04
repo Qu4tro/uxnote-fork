@@ -193,6 +193,7 @@
     syncDot: null,
     syncStatus: null,
     syncPending: new Set(),
+    shotObserver: null,
     colors: colorPalette,
     customPosition: false,
     dimEnabled,
@@ -1224,6 +1225,9 @@
       /* The picture at the size it was taken at, up to the room a card has.
          A capture taller than it is wide keeps its height rather than being
          letterboxed down to a strip; full size is still a click away. */
+      .wn-annot-panel.is-full .wn-annot-shot.is-pending {
+        min-height: 170px;
+      }
       .wn-annot-panel.is-full .wn-annot-shot img {
         max-height: 260px;
         max-width: 100%;
@@ -1648,6 +1652,14 @@
       }
       .wn-annot-shot {
         margin: 8px 0 4px;
+      }
+      /* The frame a picture that has not been asked for yet stands in. Without
+         a box of its own nothing would ever come on screen to ask for it. */
+      .wn-annot-shot.is-pending {
+        min-height: 84px;
+        border: 1px dashed var(--wn-border);
+        border-radius: 10px;
+        background: rgba(109, 86, 199, 0.05);
       }
       .wn-annot-shot img {
         display: block;
@@ -5149,9 +5161,8 @@
     const shotSrc = screenshotSrc(ann);
     if (shotSrc) {
       const shotWrap = document.createElement('div');
-      shotWrap.className = 'wn-annot-shot';
+      shotWrap.className = 'wn-annot-shot is-pending';
       const shotImg = document.createElement('img');
-      shotImg.src = shotSrc;
       shotImg.alt = 'The screenshot of this annotation';
       shotImg.addEventListener('click', (evt) => {
         evt.stopPropagation();
@@ -5159,6 +5170,7 @@
       });
       shotWrap.appendChild(shotImg);
       item.appendChild(shotWrap);
+      observeShot(shotWrap);
     }
 
     const facts = document.createElement('div');
@@ -5184,6 +5196,54 @@
       else if (isFullView()) setPanelView('rail', { remember: false });
     });
     return item;
+  }
+
+  // A picture is a data URL in storage, and a set of them is more than a
+  // browser should decode to draw a list nobody has scrolled to yet. Each is
+  // asked for when the card holding it comes near the viewport -- which a
+  // closed panel never does, so a panel nobody opened decodes nothing at all.
+  function observeShot(wrap) {
+    const observer = ensureShotObserver();
+    if (!observer) {
+      loadShot(wrap);
+      return;
+    }
+    observer.observe(wrap);
+  }
+
+  function ensureShotObserver() {
+    if (state.shotObserver) return state.shotObserver;
+    if (typeof IntersectionObserver !== 'function' || !state.panel) return null;
+    const list = state.panel.querySelector('.wn-annot-list');
+    if (!list) return null;
+    state.shotObserver = new IntersectionObserver(
+      (entries, observer) => {
+        entries.forEach((entry) => {
+          if (!entry.isIntersecting) return;
+          observer.unobserve(entry.target);
+          loadShot(entry.target);
+        });
+      },
+      { root: list, rootMargin: '400px 0px' }
+    );
+    return state.shotObserver;
+  }
+
+  function loadShot(wrap) {
+    const img = wrap.firstElementChild;
+    if (!img || img.getAttribute('src')) return;
+    const item = wrap.parentNode;
+    const ann = state.annotations.find((one) => one.id === (item && item.dataset.id));
+    const src = ann && screenshotSrc(ann);
+    if (!src) return;
+    img.src = src;
+    wrap.classList.remove('is-pending');
+  }
+
+  // An observer holds what it watches, so a card that leaves the list has to
+  // hand its picture back or the set only ever grows.
+  function releaseCard(entry) {
+    if (entry && entry.shot && state.shotObserver) state.shotObserver.unobserve(entry.shot);
   }
 
   // Everything one search reads. The snippet was searchable and invisible; the
@@ -5253,8 +5313,9 @@
     const key = cardKey(ann, number);
     const held = state.cards.get(ann.id);
     if (held && held.key === key) return held.node;
+    releaseCard(held);
     const node = buildCard(ann, number);
-    state.cards.set(ann.id, { key, node });
+    state.cards.set(ann.id, { key, node, shot: node.querySelector('.wn-annot-shot') });
     return node;
   }
 
@@ -5282,7 +5343,9 @@
     if (state.cards.size === state.annotations.length) return;
     const live = new Set(state.annotations.map((ann) => ann.id));
     state.cards.forEach((entry, id) => {
-      if (!live.has(id)) state.cards.delete(id);
+      if (live.has(id)) return;
+      releaseCard(entry);
+      state.cards.delete(id);
     });
   }
 
