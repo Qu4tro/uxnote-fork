@@ -8,7 +8,7 @@ A fork of [UxNote](https://github.com/ninefortyonestudio/uxnote), the single-scr
 
 ## What it forks
 
-[ninefortyonestudio/uxnote](https://github.com/ninefortyonestudio/uxnote) v1.0.0, MIT. Upstream keeps annotations in `localStorage` and hands them off as a JSON file or an email. This fork keeps the widget, its landing page, and its build.
+[ninefortyonestudio/uxnote](https://github.com/ninefortyonestudio/uxnote) v1.0.0, MIT. Upstream keeps annotations in `localStorage` and hands them off as a JSON file or an email. This fork keeps the widget, its landing page, and its build. Upstream asks for a reviewer name and a priority with every note. This fork asks for the comment alone. A note that carries both fields, from an upstream export, keeps them, and the widget shows neither.
 
 ## What it adds
 
@@ -147,21 +147,21 @@ has its own attribute. Turn any of them off per site:
 
 | Attribute | Meaning |
 |---|---|
-| `data-json-export` | `true` by default. `false` removes the export button and its dialog. |
+| `data-json-export` | `true` by default. `false` removes the export button. |
 | `data-json-import` | `true` by default. `false` removes the import button, its dialog, and its list of imported files. |
 | `data-mail-export` | `true` by default. `false` removes the mail button and the handoff behind it. |
 
 The three are independent. A site that wants the mail handoff and no JSON file
 sets `data-json-export="false"` and leaves the mail button alone; a site that
 wants the JSON file and no mail sets `data-mail-export="false"` and keeps the
-export dialog.
+export button.
 
 `data-mailto` keeps its meaning: it names the recipient of the mail handoff.
 It does nothing while `data-mail-export` is `false`.
 
-The mail button hands every annotation of the page to the mail client at once;
-it opens no dialog. The export dialog is where a reviewer or a priority is
-picked before a file is written.
+Neither button asks anything first. Both carry every annotation of the site:
+the export writes the file on the press, and the mail button hands the same set
+to the mail client.
 
 An annotation imported earlier stays in the store when the import is off. Only
 the dialog that lists the imported files is gone. When all three options are

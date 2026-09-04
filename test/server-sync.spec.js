@@ -59,7 +59,10 @@ async function annotate(page, selector, comment) {
   await page.click(selector);
   const modal = page.locator('.wn-annot-modal-backdrop.show');
   await expect(modal).toBeVisible();
-  await modal.locator('input').fill('Reviewer');
+  // A comment is the whole of a note from this branch on, so the reviewer name
+  // is only there on the branches before it.
+  const name = modal.locator('input');
+  if (await name.count()) await name.fill('Reviewer');
   await modal.locator('textarea').fill(comment);
   await modal.locator('.wn-annot-pill.primary').click();
   await expect(modal).toBeHidden();

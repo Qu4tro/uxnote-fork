@@ -79,8 +79,6 @@
   const dockMode = (script && (script.dataset.dock || script.dataset.layout)) || '';
   const storageKey = `uxnote:site:${siteKey}`;
   const syncedStorageKey = `${storageKey}:synced`;
-  const annotatorNameStorageKey = `uxnote:annotator:${siteKey}`;
-  const annotatorNamesStorageKey = `uxnote:annotators:${siteKey}`;
   const importFilesStorageKey = `uxnote:import-files:${siteKey}`;
   const visibilityStorageKey = `uxnote:hidden:${siteKey}`;
   const pendingFocusKey = `uxnote:pending:${siteKey}`;
@@ -115,8 +113,6 @@
   const state = {
     mode: null,
     annotations: [],
-    annotatorName: '',
-    annotatorNames: [],
     importFiles: [],
     markers: {},
     highlightSpans: {},
@@ -128,7 +124,6 @@
     commentModal: null,
     dialogModal: null,
     importModal: null,
-    exportModal: null,
     markerLayer: null,
     syncDot: null,
     syncStatus: null,
@@ -138,8 +133,6 @@
     dimOpacity,
     dimOverlay: null,
     filters: {
-      priority: 'all',
-      author: 'all',
       query: ''
     },
     hidden: false,
@@ -172,8 +165,6 @@
         : initialHiddenFromVisible !== null
         ? initialHiddenFromVisible
         : parseBoolAttr(startHiddenAttr, false);
-    state.annotatorName = loadAnnotatorName();
-    state.annotatorNames = loadAnnotatorNames();
     if (jsonImport) state.importFiles = loadImportFiles();
     captureBasePadding();
     applyColorTheme();
@@ -183,7 +174,6 @@
     setAnnotatorVisibility(state.hidden);
     loadAnnotations();
     if (server && !loadSyncedSnapshot()) state.annotations = [];
-    refreshKnownAnnotatorNames();
     restoreAnnotations();
     retryResolveMissingAnnotations();
     startMissingObserver();
@@ -638,7 +628,6 @@
         align-items: center;
         gap: 8px;
       }
-      .wn-annot-filters select,
       .wn-annot-filters input[type="search"] {
         height: 34px;
         border-radius: 12px;
@@ -648,42 +637,13 @@
         font-size: 12px;
         color: #342d43;
       }
-      .wn-annot-filter-row select {
-        flex: 1 1 auto;
-        min-width: 0;
-      }
       .wn-annot-filter-row input[type="search"] {
         width: 100%;
       }
-      .wn-annot-filter-clear {
-        border: 1px solid rgba(109, 86, 199, 0.25);
-        background: rgba(109, 86, 199, 0.08);
-        color: #5a5266;
-        width: 26px;
-        height: 26px;
-        border-radius: 50%;
-        display: none;
-        align-items: center;
-        justify-content: center;
-        cursor: pointer;
-        font-size: 12px;
-        line-height: 1;
-        padding: 0;
-      }
-      .wn-annot-filter-clear:hover {
-        background: rgba(109, 86, 199, 0.16);
-      }
-      .wn-annot-filters select:focus,
       .wn-annot-filters input[type="search"]:focus {
         outline: none;
         border-color: rgba(109, 86, 199, 0.6);
         box-shadow: 0 0 0 3px rgba(109, 86, 199, 0.14);
-      }
-      .wn-annot-filters .wn-annot-filter-label {
-        font-size: 12px;
-        color: #5a5266;
-        font-weight: 600;
-        margin-right: 4px;
       }
       .wn-annot-panel .wn-annot-empty {
         color: #7b7588;
@@ -729,8 +689,8 @@
         background: #ffffff;
         border: 1px solid rgba(109, 86, 199, 0.14);
         border-radius: 14px;
-        padding: 14px;
-        margin-bottom: 12px;
+        padding: 10px 12px;
+        margin-bottom: 10px;
         cursor: pointer;
         transition: border-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
         box-shadow: 0 2px 8px rgba(73, 64, 157, 0.08);
@@ -754,20 +714,21 @@
         display: flex;
         align-items: center;
         justify-content: space-between;
-        gap: 10px;
+        gap: 8px;
         margin-bottom: 8px;
-        align-items: flex-start;
       }
       .wn-annot-card-top-left {
         display: inline-flex;
         align-items: center;
-        gap: 10px;
+        flex-wrap: wrap;
+        gap: 8px;
+        row-gap: 4px;
         min-width: 0;
       }
       .wn-annot-card-top-right {
         display: inline-flex;
         align-items: center;
-        gap: 8px;
+        gap: 6px;
         margin-left: auto;
         min-width: 0;
       }
@@ -775,8 +736,8 @@
         border: 1px solid rgba(209, 59, 59, 0.2);
         background: rgba(209, 59, 59, 0.08);
         color: #d13b3b;
-        width: 30px;
-        height: 30px;
+        width: 28px;
+        height: 28px;
         border-radius: 8px;
         display: inline-flex;
         align-items: center;
@@ -797,8 +758,8 @@
         border: 1px solid rgba(109, 86, 199, 0.22);
         background: rgba(109, 86, 199, 0.08);
         color: #4b4557;
-        width: 30px;
-        height: 30px;
+        width: 28px;
+        height: 28px;
         border-radius: 8px;
         display: inline-flex;
         align-items: center;
@@ -841,10 +802,10 @@
         font-weight: 700;
       }
       .wn-annot-number {
-        min-width: 32px;
-        height: 32px;
-        padding: 0 10px;
-        border-radius: 12px;
+        min-width: 26px;
+        height: 22px;
+        padding: 0 8px;
+        border-radius: 8px;
         background: var(--wn-item-number-bg, rgba(109, 86, 199, 0.12));
         border: 1px solid var(--wn-item-number-border, rgba(109, 86, 199, 0.24));
         color: var(--wn-item-number-text, #000000);
@@ -861,43 +822,10 @@
         text-transform: uppercase;
         letter-spacing: 0.3px;
         max-width: 220px;
-        text-align: right;
-        word-break: break-word;
+        text-align: left;
+        white-space: nowrap;
         line-height: 1.4;
       }
-      .wn-annot-meta-bottom {
-        display: flex;
-        flex-direction: column;
-        align-items: flex-end;
-        gap: 2px;
-        margin-left: auto;
-        margin-top: 10px;
-        width: 100%;
-        text-align: right;
-      }
-      .wn-annot-priority {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        font-size: 12px;
-        font-weight: 700;
-        color: #4b4557;
-        padding: 8px 10px;
-        border-radius: 12px;
-        border: 1px solid rgba(109, 86, 199, 0.2);
-        background: rgba(109, 86, 199, 0.06);
-      }
-      .wn-annot-priority .dot {
-        width: 10px;
-        height: 10px;
-        border-radius: 50%;
-      }
-      .wn-annot-priority.low { border-color: rgba(47,191,113,0.35); background: rgba(47,191,113,0.08); color: #1f7a4c; }
-      .wn-annot-priority.low .dot { background: #2fbf71; }
-      .wn-annot-priority.medium { border-color: rgba(227,178,60,0.35); background: rgba(227,178,60,0.08); color: #8a6b1f; }
-      .wn-annot-priority.medium .dot { background: #e3b23c; }
-      .wn-annot-priority.high { border-color: rgba(224,91,91,0.35); background: rgba(224,91,91,0.1); color: #a03232; }
-      .wn-annot-priority.high .dot { background: #e05b5b; }
       .wn-annot-missing {
         display: inline-flex;
         align-items: center;
@@ -944,7 +872,7 @@
         font-size: 12px;
         cursor: pointer;
         margin-left: auto;
-        margin-top: 6px;
+        margin-top: 4px;
       }
       .uxnote-textmark {
         display: inline;
@@ -1093,26 +1021,6 @@
         line-height: 1.6;
         color: #3f3852;
       }
-      .wn-annot-name-row {
-        display: flex;
-        flex-direction: column;
-        gap: 6px;
-        margin-top: 4px;
-      }
-      .wn-annot-name-row label {
-        font-size: 13px;
-        color: #4b4557;
-        font-weight: 600;
-      }
-      .wn-annot-name-inputs {
-        display: flex;
-        gap: 8px;
-        align-items: center;
-        flex-wrap: wrap;
-      }
-      .wn-annot-name-select {
-        min-width: 140px;
-      }
       .wn-annot-modal textarea {
         width: 100%;
         min-height: 90px;
@@ -1126,107 +1034,14 @@
         outline: none;
         box-shadow: inset 0 1px 2px rgba(0,0,0,0.05);
       }
-      .wn-annot-modal input[type="text"] {
-        width: 100%;
-        border-radius: 12px;
-        border: 1px solid rgba(109, 86, 199, 0.22);
-        background: #fff;
-        padding: 10px 12px;
-        font-size: 14px;
-        color: #342d43;
-        outline: none;
-        box-shadow: inset 0 1px 2px rgba(0,0,0,0.05);
-      }
       .wn-annot-modal textarea:focus {
         border-color: rgba(109, 86, 199, 0.55);
         box-shadow: 0 0 0 3px rgba(109, 86, 199, 0.15);
       }
-      .wn-annot-modal input[type="text"]:focus {
-        border-color: rgba(109, 86, 199, 0.55);
-        box-shadow: 0 0 0 3px rgba(109, 86, 199, 0.15);
-      }
       @media (max-width: 640px) {
-        .wn-annot-modal textarea,
-        .wn-annot-modal input[type="text"],
-        .wn-annot-modal select {
+        .wn-annot-modal textarea {
           font-size: 16px;
         }
-      }
-      .wn-annot-export-modal {
-        min-width: min(640px, calc(100vw - 40px));
-        max-width: 860px;
-      }
-      .wn-annot-export-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-        gap: 12px;
-      }
-      .wn-annot-export-panel {
-        border: 1px solid rgba(109, 86, 199, 0.12);
-        border-radius: 14px;
-        padding: 12px;
-        background: #fff;
-        display: flex;
-        flex-direction: column;
-        gap: 10px;
-        min-height: 220px;
-      }
-      .wn-annot-export-panel h5 {
-        margin: 0;
-        font-size: 13px;
-        font-weight: 700;
-        color: #3f3852;
-      }
-      .wn-annot-export-panel p {
-        margin: 0;
-        font-size: 12px;
-        color: #5a5266;
-      }
-      .wn-annot-export-list {
-        display: grid;
-        gap: 8px;
-        overflow-y: auto;
-        padding-right: 4px;
-      }
-      .wn-annot-export-item {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        font-size: 14px;
-        font-weight: 600;
-        color: #3f3852;
-      }
-      .wn-annot-export-item input {
-        appearance: none;
-        width: 20px;
-        height: 20px;
-        border-radius: 6px;
-        border: 1.5px solid rgba(109, 86, 199, 0.5);
-        background: #fff;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        position: relative;
-        transition: all 0.2s ease;
-      }
-      .wn-annot-export-item input:checked {
-        background: #6d56c7;
-        border-color: #6d56c7;
-        box-shadow: 0 0 0 3px rgba(109, 86, 199, 0.18);
-      }
-      .wn-annot-export-item input:checked::after {
-        content: '';
-        width: 8px;
-        height: 5px;
-        border-left: 2px solid #fff;
-        border-bottom: 2px solid #fff;
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -55%) rotate(-45deg);
-      }
-      .wn-annot-export-item span {
-        font-size: 14px;
       }
       .wn-annot-import-modal {
         min-width: min(760px, calc(100vw - 40px));
@@ -1270,11 +1085,6 @@
         font-size: 12px;
         color: #5a5266;
         margin-top: 4px;
-      }
-      .wn-annot-import-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-        gap: 12px;
       }
       .wn-annot-import-panel {
         border: 1px solid rgba(109, 86, 199, 0.12);
@@ -1383,31 +1193,6 @@
         justify-content: center;
         cursor: pointer;
       }
-      .wn-annot-import-stats {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
-        gap: 8px;
-      }
-      .wn-annot-import-stat {
-        background: rgba(109, 86, 199, 0.08);
-        border: 1px solid rgba(109, 86, 199, 0.12);
-        border-radius: 12px;
-        padding: 8px;
-        display: flex;
-        flex-direction: column;
-        gap: 4px;
-      }
-      .wn-annot-import-stat span:first-child {
-        font-size: 11px;
-        color: #5a5266;
-        text-transform: uppercase;
-        letter-spacing: 0.12em;
-      }
-      .wn-annot-import-stat span:last-child {
-        font-size: 16px;
-        font-weight: 700;
-        color: #3f3852;
-      }
       .wn-annot-import-empty {
         font-size: 12px;
         color: #5a5266;
@@ -1454,47 +1239,6 @@
       }
       .wn-annot-modal .wn-annot-pill.secondary:hover {
         background: rgba(109, 86, 199, 0.18);
-      }
-      .wn-annot-modal .wn-annot-prio {
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
-      }
-      .wn-annot-modal .wn-annot-prio label {
-        font-size: 13px;
-        color: #4b4557;
-        font-weight: 600;
-      }
-      .wn-annot-modal .wn-annot-prio-options {
-        display: flex;
-        gap: 10px;
-      }
-      .wn-annot-modal .wn-annot-prio-btn {
-        flex: 1 1 0;
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        padding: 10px 12px;
-        border-radius: 12px;
-        border: 1px solid rgba(109, 86, 199, 0.22);
-        background: #fff;
-        cursor: pointer;
-        transition: all 0.15s ease;
-        font-size: 13px;
-        font-weight: 600;
-        color: #3e384a;
-      }
-      .wn-annot-modal .wn-annot-prio-btn .dot {
-        width: 12px;
-        height: 12px;
-        border-radius: 50%;
-      }
-      .wn-annot-modal .wn-annot-prio-btn[data-priority="low"] .dot { background: #2fbf71; }
-      .wn-annot-modal .wn-annot-prio-btn[data-priority="medium"] .dot { background: #e3b23c; }
-      .wn-annot-modal .wn-annot-prio-btn[data-priority="high"] .dot { background: #e05b5b; }
-      .wn-annot-modal .wn-annot-prio-btn.active {
-        border-color: rgba(109, 86, 199, 0.6);
-        box-shadow: 0 0 0 3px rgba(109, 86, 199, 0.16);
       }
       .wn-annot-shot-frame {
         position: absolute;
@@ -1665,23 +1409,6 @@
           <div class="wn-annot-filter-row wn-annotator">
             <input id="wn-filter-search" class="wn-annotator" type="search" placeholder="Keyword search" />
           </div>
-          <div class="wn-annot-filter-row wn-annotator">
-            <label class="wn-annot-filter-label wn-annotator" for="wn-filter-priority">Priority</label>
-            <select id="wn-filter-priority" class="wn-annotator">
-              <option value="all">All</option>
-              <option value="high">High</option>
-              <option value="medium">Medium</option>
-              <option value="low">Low</option>
-            </select>
-            <button class="wn-annot-filter-clear wn-annotator" type="button" data-filter-clear="priority" aria-label="Clear priority filter">✕</button>
-          </div>
-          <div class="wn-annot-filter-row wn-annotator">
-            <label class="wn-annot-filter-label wn-annotator" for="wn-filter-author">Reviewer</label>
-            <select id="wn-filter-author" class="wn-annotator">
-              <option value="all">All</option>
-            </select>
-            <button class="wn-annot-filter-clear wn-annotator" type="button" data-filter-clear="author" aria-label="Clear reviewer filter">✕</button>
-          </div>
         </div>
       </div>
       <div class="wn-annot-list"></div>
@@ -1792,44 +1519,9 @@
     const title = document.createElement('h4');
     title.textContent = 'Add a comment';
 
-    const nameRow = document.createElement('div');
-    nameRow.className = 'wn-annot-name-row wn-annotator';
-    const nameLabel = document.createElement('label');
-    nameLabel.textContent = 'Reviewer name';
-    const nameInputs = document.createElement('div');
-    nameInputs.className = 'wn-annot-name-inputs wn-annotator';
-    const nameInput = document.createElement('input');
-    nameInput.type = 'text';
-    nameInput.className = 'wn-annotator';
-    nameInput.placeholder = 'Reviewer name';
-    nameInputs.appendChild(nameInput);
-    nameRow.appendChild(nameLabel);
-    nameRow.appendChild(nameInputs);
-
     const textarea = document.createElement('textarea');
     textarea.className = 'wn-annotator';
     textarea.placeholder = 'Your comment...';
-
-    const prioWrapper = document.createElement('div');
-    prioWrapper.className = 'wn-annot-prio wn-annotator';
-    const prioLabel = document.createElement('label');
-    prioLabel.textContent = 'Priority';
-    const prioOptions = document.createElement('div');
-    prioOptions.className = 'wn-annot-prio-options wn-annotator';
-
-    const makePrioBtn = (value, label) => {
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'wn-annot-prio-btn wn-annotator';
-      btn.setAttribute('data-priority', value);
-      btn.innerHTML = `<span class="dot wn-annotator"></span><span class="wn-annotator">${label}</span>`;
-      return btn;
-    };
-
-    const prioButtons = [makePrioBtn('low', 'Low'), makePrioBtn('medium', 'Medium'), makePrioBtn('high', 'High')];
-    prioButtons.forEach((b) => prioOptions.appendChild(b));
-    prioWrapper.appendChild(prioLabel);
-    prioWrapper.appendChild(prioOptions);
 
     const actions = document.createElement('div');
     actions.className = 'wn-annot-actions wn-annotator';
@@ -1845,9 +1537,7 @@
     actions.appendChild(cancelBtn);
     actions.appendChild(okBtn);
     modal.appendChild(title);
-    modal.appendChild(nameRow);
     modal.appendChild(textarea);
-    modal.appendChild(prioWrapper);
     modal.appendChild(actions);
     backdrop.appendChild(modal);
     document.body.appendChild(backdrop);
@@ -1858,9 +1548,7 @@
       textarea,
       title,
       okBtn,
-      cancelBtn,
-      prioButtons,
-      nameInput
+      cancelBtn
     };
     return state.commentModal;
   }
@@ -1884,36 +1572,18 @@
     }
   }
 
-  function askForComment(label, defaultValue = '', defaultPriority = 'medium', defaultAuthor = '') {
+  function askForComment(label, defaultValue = '') {
     return new Promise((resolve) => {
       const modalState = ensureCommentModal();
-      const { backdrop, textarea, title, okBtn, cancelBtn, prioButtons, nameInput } = modalState;
+      const { backdrop, textarea, title, okBtn, cancelBtn } = modalState;
       title.textContent = label || 'Add a comment';
       textarea.value = defaultValue || '';
       textarea.placeholder = 'Your comment...';
-      prioButtons.forEach((b) => b.classList.toggle('active', b.getAttribute('data-priority') === defaultPriority));
-      const onPrioClick = (btn) => {
-        prioButtons.forEach((bb) => bb.classList.remove('active'));
-        btn.classList.add('active');
-      };
-      const prioHandlers = prioButtons.map((b) => (evt) => onPrioClick(b));
-      prioButtons.forEach((b, idx) => b.addEventListener('click', prioHandlers[idx]));
-
-      const names = state.annotatorNames || [];
-      const defaultName = defaultAuthor || state.annotatorName || names[0] || '';
-      nameInput.value = defaultName || '';
-      nameInput.disabled = false;
-      nameInput.placeholder = 'Reviewer name';
 
       backdrop.classList.add('show');
       positionCommentCard();
-      if (defaultName) {
-        textarea.focus();
-        textarea.select();
-      } else {
-        nameInput.focus();
-        nameInput.select();
-      }
+      textarea.focus();
+      textarea.select();
 
       const close = (val) => {
         backdrop.classList.remove('show');
@@ -1921,19 +1591,10 @@
         cancelBtn.removeEventListener('click', onCancel);
         document.removeEventListener('keydown', onKey);
         window.removeEventListener('resize', positionCommentCard);
-        prioButtons.forEach((b, idx) => b.removeEventListener('click', prioHandlers[idx]));
         resolve(val);
       };
-      const onOk = async () => {
-        const selected = prioButtons.find((b) => b.classList.contains('active'));
-        const priority = selected ? selected.getAttribute('data-priority') : defaultPriority;
-        const author = nameInput.value.trim();
-        if (!author) {
-          await alertDialog('Please enter a reviewer name.', 'Reviewer name required');
-          return;
-        }
-        recordAnnotatorName(author);
-        close({ comment: textarea.value.trim(), priority, author });
+      const onOk = () => {
+        close({ comment: textarea.value.trim() });
       };
       const onCancel = () => close(null);
       const onKey = (evt) => {
@@ -1957,168 +1618,6 @@
     const val = await askForComment(label);
     if (!val) return null;
     return val;
-  }
-
-  function ensureExportModal() {
-    if (state.exportModal) return state.exportModal;
-    const backdrop = document.createElement('div');
-    backdrop.className = 'wn-annot-modal-backdrop wn-annotator';
-    const modal = document.createElement('div');
-    modal.className = 'wn-annot-modal wn-annotator wn-annot-export-modal';
-
-    const title = document.createElement('h4');
-    title.textContent = 'Export annotations';
-
-    const body = document.createElement('div');
-    body.className = 'wn-annot-export-grid wn-annotator';
-
-    const reviewerPanel = document.createElement('div');
-    reviewerPanel.className = 'wn-annot-export-panel wn-annotator';
-    const reviewerTitle = document.createElement('h5');
-    reviewerTitle.textContent = 'Reviewers';
-    const reviewerDesc = document.createElement('p');
-    reviewerDesc.textContent = 'Choose reviewers to include.';
-    const reviewerList = document.createElement('div');
-    reviewerList.className = 'wn-annot-export-list wn-annotator';
-    reviewerPanel.appendChild(reviewerTitle);
-    reviewerPanel.appendChild(reviewerDesc);
-    reviewerPanel.appendChild(reviewerList);
-
-    const prioPanel = document.createElement('div');
-    prioPanel.className = 'wn-annot-export-panel wn-annotator';
-    const prioTitle = document.createElement('h5');
-    prioTitle.textContent = 'Criticality';
-    const prioDesc = document.createElement('p');
-    prioDesc.textContent = 'Select priority levels.';
-    const prioList = document.createElement('div');
-    prioList.className = 'wn-annot-export-list wn-annotator';
-    prioPanel.appendChild(prioTitle);
-    prioPanel.appendChild(prioDesc);
-    prioPanel.appendChild(prioList);
-
-    body.appendChild(reviewerPanel);
-    body.appendChild(prioPanel);
-
-    const actions = document.createElement('div');
-    actions.className = 'wn-annot-actions wn-annotator';
-    const cancelBtn = document.createElement('button');
-    cancelBtn.type = 'button';
-    cancelBtn.className = 'wn-annot-pill cancel wn-annotator';
-    cancelBtn.textContent = 'Cancel';
-    const exportBtn = document.createElement('button');
-    exportBtn.type = 'button';
-    exportBtn.className = 'wn-annot-pill primary wn-annotator';
-    exportBtn.textContent = 'Export file';
-    actions.appendChild(cancelBtn);
-    actions.appendChild(exportBtn);
-
-    modal.appendChild(title);
-    modal.appendChild(body);
-    modal.appendChild(actions);
-    backdrop.appendChild(modal);
-    document.body.appendChild(backdrop);
-
-    const close = () => {
-      backdrop.classList.remove('show');
-      document.removeEventListener('keydown', onKey);
-    };
-    const onKey = (evt) => {
-      if (evt.key === 'Escape') close();
-    };
-    const onBackdrop = (evt) => {
-      if (evt.target === backdrop) close();
-    };
-
-    cancelBtn.addEventListener('click', close);
-    backdrop.addEventListener('click', onBackdrop);
-
-    exportBtn.addEventListener('click', () => {
-      const reviewers = getCheckedValues(reviewerList);
-      const priorities = getCheckedValues(prioList);
-      exportAnnotationsFiltered({
-        reviewers,
-        priorities
-      });
-      close();
-    });
-
-    state.exportModal = {
-      backdrop,
-      reviewerList,
-      prioList,
-      onKey
-    };
-    return state.exportModal;
-  }
-
-  function openExportModal() {
-    if (!jsonExport) return;
-    const modalState = ensureExportModal();
-    renderExportModal();
-    modalState.backdrop.classList.add('show');
-    document.addEventListener('keydown', modalState.onKey);
-  }
-
-  function renderExportModal() {
-    if (!state.exportModal) return;
-    const { reviewerList, prioList } = state.exportModal;
-
-    reviewerList.innerHTML = '';
-    getExportReviewers().forEach((reviewer) => {
-      reviewerList.appendChild(makeExportCheckbox(reviewer.value, reviewer.label, true));
-    });
-
-    prioList.innerHTML = '';
-    getExportPriorities().forEach((prio) => {
-      prioList.appendChild(makeExportCheckbox(prio.value, prio.label, true));
-    });
-  }
-
-  function getExportReviewers() {
-    const reviewers = Array.from(
-      new Set(
-        state.annotations.map((ann) => {
-          const name = (ann.author || '').trim();
-          return name || '__unknown';
-        })
-      )
-    )
-      .filter(Boolean)
-      .sort((a, b) => getAuthorLabel(a).localeCompare(getAuthorLabel(b)));
-
-    return reviewers.map((value) => ({
-      value,
-      label: getAuthorLabel(value)
-    }));
-  }
-
-  function getExportPriorities() {
-    return [
-      { value: 'high', label: 'High' },
-      { value: 'medium', label: 'Medium' },
-      { value: 'low', label: 'Low' }
-    ];
-  }
-
-  function makeExportCheckbox(value, label, checked) {
-    const row = document.createElement('label');
-    row.className = 'wn-annot-export-item wn-annotator';
-    const input = document.createElement('input');
-    input.type = 'checkbox';
-    input.value = value;
-    input.checked = checked;
-    input.className = 'wn-annotator';
-    const text = document.createElement('span');
-    text.textContent = label;
-    row.appendChild(input);
-    row.appendChild(text);
-    return row;
-  }
-
-  function getCheckedValues(container) {
-    return Array.from(container.querySelectorAll('input[type="checkbox"]'))
-      .filter((input) => input.checked)
-      .map((input) => input.value);
   }
 
   function ensureImportModal() {
@@ -2153,9 +1652,6 @@
     dropzone.appendChild(fileInput);
     dropzone.appendChild(dropContent);
 
-    const grid = document.createElement('div');
-    grid.className = 'wn-annot-import-grid wn-annotator';
-
     const filesPanel = document.createElement('div');
     filesPanel.className = 'wn-annot-import-panel wn-annotator';
     const filesTitleRow = document.createElement('div');
@@ -2175,42 +1671,6 @@
     filesPanel.appendChild(filesDesc);
     filesPanel.appendChild(fileList);
 
-    const reviewersPanel = document.createElement('div');
-    reviewersPanel.className = 'wn-annot-import-panel wn-annotator';
-    const reviewersTitle = document.createElement('h5');
-    reviewersTitle.textContent = 'Reviewer summary';
-    const reviewersDesc = document.createElement('p');
-    reviewersDesc.textContent = 'Counts based on imported files.';
-    const stats = document.createElement('div');
-    stats.className = 'wn-annot-import-stats wn-annotator';
-    const statReviewers = document.createElement('div');
-    statReviewers.className = 'wn-annot-import-stat wn-annotator';
-    const statReviewersLabel = document.createElement('span');
-    statReviewersLabel.textContent = 'Reviewers';
-    const statReviewersValue = document.createElement('span');
-    statReviewersValue.textContent = '0';
-    statReviewers.appendChild(statReviewersLabel);
-    statReviewers.appendChild(statReviewersValue);
-    const statComments = document.createElement('div');
-    statComments.className = 'wn-annot-import-stat wn-annotator';
-    const statCommentsLabel = document.createElement('span');
-    statCommentsLabel.textContent = 'Comments';
-    const statCommentsValue = document.createElement('span');
-    statCommentsValue.textContent = '0';
-    statComments.appendChild(statCommentsLabel);
-    statComments.appendChild(statCommentsValue);
-    stats.appendChild(statReviewers);
-    stats.appendChild(statComments);
-    const reviewerList = document.createElement('div');
-    reviewerList.className = 'wn-annot-import-list wn-annotator';
-    reviewersPanel.appendChild(reviewersTitle);
-    reviewersPanel.appendChild(reviewersDesc);
-    reviewersPanel.appendChild(stats);
-    reviewersPanel.appendChild(reviewerList);
-
-    grid.appendChild(filesPanel);
-    grid.appendChild(reviewersPanel);
-
     const actions = document.createElement('div');
     actions.className = 'wn-annot-actions wn-annotator';
     const closeBtn = document.createElement('button');
@@ -2220,7 +1680,7 @@
     actions.appendChild(closeBtn);
 
     body.appendChild(dropzone);
-    body.appendChild(grid);
+    body.appendChild(filesPanel);
     modal.appendChild(title);
     modal.appendChild(body);
     modal.appendChild(actions);
@@ -2281,10 +1741,7 @@
       modal,
       fileInput,
       fileList,
-      reviewerList,
       filesCount,
-      statReviewersValue,
-      statCommentsValue,
       onKey,
       close
     };
@@ -2301,8 +1758,8 @@
 
   function renderImportModal() {
     if (!state.importModal) return;
-    const { fileList, reviewerList, filesCount, statReviewersValue, statCommentsValue } = state.importModal;
-    const { fileCounts, reviewerCounts, totalComments } = buildImportSummary();
+    const { fileList, filesCount } = state.importModal;
+    const { fileCounts } = buildImportSummary();
 
     fileList.innerHTML = '';
     if (!state.importFiles.length) {
@@ -2347,61 +1804,17 @@
       });
     }
 
-    reviewerList.innerHTML = '';
-    if (!reviewerCounts.size) {
-      const empty = document.createElement('div');
-      empty.className = 'wn-annot-import-empty wn-annotator';
-      empty.textContent = 'No reviewers yet.';
-      reviewerList.appendChild(empty);
-    } else {
-      Array.from(reviewerCounts.entries())
-        .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-        .forEach(([name, count]) => {
-          const card = document.createElement('div');
-          card.className = 'wn-annot-import-card wn-annotator';
-
-          const meta = document.createElement('div');
-          meta.className = 'wn-annot-import-meta wn-annotator';
-          const reviewerName = document.createElement('div');
-          reviewerName.className = 'wn-annot-import-name wn-annotator';
-          reviewerName.textContent = name;
-          const reviewerCount = document.createElement('div');
-          reviewerCount.className = 'wn-annot-import-sub wn-annotator';
-          reviewerCount.textContent = `${count} comments`;
-          meta.appendChild(reviewerName);
-          meta.appendChild(reviewerCount);
-
-          const badge = document.createElement('div');
-          badge.className = 'wn-annot-import-badge wn-annotator';
-          badge.textContent = String(count);
-
-          card.appendChild(meta);
-          card.appendChild(badge);
-          reviewerList.appendChild(card);
-        });
-    }
-
     filesCount.textContent = String(state.importFiles.length);
-    statReviewersValue.textContent = String(reviewerCounts.size);
-    statCommentsValue.textContent = String(totalComments);
   }
 
   function buildImportSummary() {
     const fileCounts = new Map();
-    const reviewerCounts = new Map();
-    const imported = state.annotations.filter((ann) => ann.importFileId);
-    imported.forEach((ann) => {
+    state.annotations.forEach((ann) => {
       if (ann.importFileId) {
         fileCounts.set(ann.importFileId, (fileCounts.get(ann.importFileId) || 0) + 1);
       }
-      const reviewer = (ann.author || '').trim() || 'Unknown reviewer';
-      reviewerCounts.set(reviewer, (reviewerCounts.get(reviewer) || 0) + 1);
     });
-    return {
-      fileCounts,
-      reviewerCounts,
-      totalComments: imported.length
-    };
+    return { fileCounts };
   }
 
   async function handleImportFiles(files) {
@@ -2423,7 +1836,6 @@
     }
     saveAnnotations();
     saveImportFiles();
-    refreshKnownAnnotatorNames();
     clearRenderedAnnotations();
     restoreAnnotations();
     renumberMarkers();
@@ -2446,9 +1858,6 @@
       return null;
     }
 
-    const fallbackAuthor = Array.isArray(parsed)
-      ? ''
-      : parsed.exportedBy || parsed.annotator || parsed.author || '';
     const payloadCreatedAt = Array.isArray(parsed) ? file.lastModified : parsed.createdAt;
     const pageUrl = Array.isArray(parsed) ? '' : parsed.pageUrl || '';
     const fileId = generateImportFileId();
@@ -2457,7 +1866,6 @@
       .filter(isStoredAnnotation)
       .map((ann) =>
         normalizeImportedAnnotation(ann, {
-          fallbackAuthor,
           createdAt: payloadCreatedAt,
           pageUrl,
           fileId,
@@ -2479,15 +1887,12 @@
 
   function normalizeImportedAnnotation(annotation, options) {
     const ann = annotation && typeof annotation === 'object' ? annotation : {};
-    const author = (ann.author || options.fallbackAuthor || '').trim();
     const pageUrl = ann.pageUrl || options.pageUrl || window.location.href;
     const id = ensureUniqueImportId(ann.id, options.existingIds);
     const normalized = {
       ...ann,
       id,
       createdAt: ann.createdAt || options.createdAt || Date.now(),
-      priority: ann.priority || 'medium',
-      author,
       pageUrl,
       importFileId: options.fileId
     };
@@ -2517,7 +1922,6 @@
     state.annotations = state.annotations.filter((ann) => ann.importFileId !== fileId);
     saveAnnotations();
     saveImportFiles();
-    refreshKnownAnnotatorNames();
     clearRenderedAnnotations();
     restoreAnnotations();
     renumberMarkers();
@@ -2632,99 +2036,20 @@
     watchRouteChanges();
   }
 
-  function getAuthorLabel(value) {
-    return value === '__unknown' ? 'Unknown' : value;
-  }
-
-  function updateFilterClearButtons() {
-    if (!state.panel) return;
-    const prioritySelect = state.panel.querySelector('#wn-filter-priority');
-    const authorSelect = state.panel.querySelector('#wn-filter-author');
-    const priorityClear = state.panel.querySelector('[data-filter-clear="priority"]');
-    const authorClear = state.panel.querySelector('[data-filter-clear="author"]');
-    if (priorityClear && prioritySelect) {
-      priorityClear.style.display = prioritySelect.value === 'all' ? 'none' : 'inline-flex';
-    }
-    if (authorClear && authorSelect) {
-      authorClear.style.display = authorSelect.value === 'all' ? 'none' : 'inline-flex';
-    }
-  }
-
-  function updateAuthorFilterOptions() {
-    if (!state.panel) return;
-    const select = state.panel.querySelector('#wn-filter-author');
-    if (!select) return;
-    const current = state.filters.author || 'all';
-    const authors = Array.from(
-      new Set(
-        state.annotations.map((ann) => {
-          const name = (ann.author || '').trim();
-          return name || '__unknown';
-        })
-      )
-    ).filter((v) => v);
-
-    select.innerHTML = '';
-    const allOption = document.createElement('option');
-    allOption.value = 'all';
-    allOption.textContent = 'All';
-    select.appendChild(allOption);
-
-    authors
-      .sort((a, b) => getAuthorLabel(a).localeCompare(getAuthorLabel(b)))
-      .forEach((value) => {
-        const opt = document.createElement('option');
-        opt.value = value;
-        opt.textContent = getAuthorLabel(value);
-        select.appendChild(opt);
-      });
-
-    const values = ['all', ...authors];
-    select.value = values.includes(current) ? current : 'all';
-    state.filters.author = select.value;
-    updateFilterClearButtons();
-  }
-
   function initFilters() {
-    // Install filters (priority + author + search) and re-render on change
+    // Install the keyword search and re-render on change
     if (!state.panel) return;
-    const prioritySelect = state.panel.querySelector('#wn-filter-priority');
-    const authorSelect = state.panel.querySelector('#wn-filter-author');
     const searchInput = state.panel.querySelector('#wn-filter-search');
-    const priorityClear = state.panel.querySelector('[data-filter-clear="priority"]');
-    const authorClear = state.panel.querySelector('[data-filter-clear="author"]');
-    if (!prioritySelect || !authorSelect || !searchInput) return;
+    if (!searchInput) return;
 
-    prioritySelect.value = state.filters.priority;
-    authorSelect.value = state.filters.author;
     searchInput.value = state.filters.query;
 
     const trigger = () => {
-      state.filters.priority = prioritySelect.value;
-      state.filters.author = authorSelect.value;
       state.filters.query = searchInput.value.trim().toLowerCase();
       renderList();
-      updateFilterClearButtons();
     };
 
-    prioritySelect.addEventListener('change', trigger);
-    authorSelect.addEventListener('change', trigger);
     searchInput.addEventListener('input', trigger);
-    if (priorityClear) {
-      priorityClear.addEventListener('click', () => {
-        prioritySelect.value = 'all';
-        trigger();
-      });
-    }
-    if (authorClear) {
-      authorClear.addEventListener('click', () => {
-        authorSelect.value = 'all';
-        trigger();
-      });
-    }
-
-    updateAuthorFilterOptions();
-    updateFilterClearButtons();
   }
 
   function setMode(nextMode, options = {}) {
@@ -2940,43 +2265,6 @@
     return fallback;
   }
 
-  function loadAnnotatorName() {
-    try {
-      return localStorage.getItem(annotatorNameStorageKey) || '';
-    } catch (err) {
-      return '';
-    }
-  }
-
-  function saveAnnotatorName(name) {
-    try {
-      localStorage.setItem(annotatorNameStorageKey, name);
-    } catch (err) {
-      // ignore storage errors
-    }
-  }
-
-  function loadAnnotatorNames() {
-    try {
-      const stored = localStorage.getItem(annotatorNamesStorageKey);
-      const parsed = stored ? JSON.parse(stored) : [];
-      if (Array.isArray(parsed)) {
-        return parsed.filter((n) => typeof n === 'string' && n.trim()).map((n) => n.trim());
-      }
-      return [];
-    } catch (err) {
-      return [];
-    }
-  }
-
-  function saveAnnotatorNames(names) {
-    try {
-      localStorage.setItem(annotatorNamesStorageKey, JSON.stringify(names || []));
-    } catch (err) {
-      // ignore storage errors
-    }
-  }
-
   function loadImportFiles() {
     try {
       const stored = localStorage.getItem(importFilesStorageKey);
@@ -3002,44 +2290,6 @@
     } catch (err) {
       // ignore storage errors
     }
-  }
-
-  function recordAnnotatorName(name) {
-    const trimmed = (name || '').trim();
-    if (!trimmed) return;
-    state.annotatorName = trimmed;
-    const next = [trimmed, ...state.annotatorNames.filter((n) => n !== trimmed)];
-    state.annotatorNames = next;
-    saveAnnotatorName(trimmed);
-    saveAnnotatorNames(next);
-  }
-
-  function refreshKnownAnnotatorNames() {
-    const existing = Array.from(
-      new Set(
-        (state.annotations || [])
-          .map((a) => (a.author || '').trim())
-          .filter(Boolean)
-      )
-    );
-    const merged = Array.from(new Set([...(state.annotatorNames || []), ...existing]));
-    state.annotatorNames = merged;
-    if (!state.annotatorName) {
-      state.annotatorName = loadAnnotatorName() || merged[0] || '';
-    }
-  }
-
-  function applyAnnotatorNameToAnnotations(name, options = {}) {
-    if (!name) return false;
-    const force = options.force || false;
-    let changed = false;
-    state.annotations.forEach((ann) => {
-      if (!force && ann.author) return;
-      if (ann.author !== name) changed = true;
-      ann.author = name;
-    });
-    if (changed) saveAnnotations();
-    return changed;
   }
 
   function positionTip() {
@@ -3126,7 +2376,9 @@
       return;
     }
     if (action === 'export') {
-      openExportModal();
+      // Nothing to ask: the file holds every annotation of the site either
+      // way, so the press is the answer.
+      if (jsonExport) exportAnnotations();
       return;
     }
     if (action === 'import') {
@@ -3348,7 +2600,7 @@
     if (!snippet) return;
     const res = await awaitComment('Comment for this highlight?');
     if (!res) return;
-    const { comment, priority, author } = res;
+    const { comment } = res;
     const id = generateId();
     const payload = serializeRange(range, snippet);
     const span = applyTextHighlight(range, id);
@@ -3358,8 +2610,6 @@
       type: 'text',
       target: payload,
       comment: comment.trim(),
-      author: author || state.annotatorName || '',
-      priority: priority || 'medium',
       snippet: snippet.slice(0, 180),
       pageUrl: window.location.href,
       pageKey: normalizePageKey(window.location.href),
@@ -3396,7 +2646,7 @@
     evt.stopPropagation();
     const res = await awaitComment('Comment for this element?');
     if (!res) return;
-    const { comment, priority, author } = res;
+    const { comment } = res;
     const id = generateId();
     const targetXPath = getXPath(el);
     const targetCss = buildCssSelector(el);
@@ -3406,8 +2656,6 @@
       type: 'element',
       target: { xpath: targetXPath, css: targetCss, tag: el.tagName.toLowerCase() },
       comment: comment.trim(),
-      author: author || state.annotatorName || '',
-      priority: priority || 'medium',
       snippet: el.innerText ? el.innerText.trim().slice(0, 120) : el.tagName,
       pageUrl: window.location.href,
       pageKey: normalizePageKey(window.location.href),
@@ -4388,7 +3636,6 @@
     const list = state.panel.querySelector('.wn-annot-list');
       const title = state.panel.querySelector('h3');
       list.innerHTML = '';
-      updateAuthorFilterOptions();
       if (!state.annotations.length) {
         const empty = document.createElement('div');
         empty.className = 'wn-annot-empty';
@@ -4402,14 +3649,9 @@
       .slice()
       .sort((a, b) => a.createdAt - b.createdAt)
       .filter((ann) => {
-    const prioOk = state.filters.priority === 'all' || (ann.priority || 'medium') === state.filters.priority;
         const q = state.filters.query;
-        const haystack = `${ann.comment || ''} ${ann.snippet || ''} ${ann.author || ''}`.toLowerCase();
-        const searchOk = !q || haystack.includes(q);
-        const authorFilter = state.filters.author || 'all';
-        const authorValue = (ann.author || '').trim() || '__unknown';
-        const authorOk = authorFilter === 'all' || authorValue === authorFilter;
-    return prioOk && searchOk && authorOk;
+        const haystack = `${ann.comment || ''} ${ann.snippet || ''}`.toLowerCase();
+        return !q || haystack.includes(q);
   });
     if (title) title.textContent = `Annotations (${filtered.length})`;
     filtered.forEach((ann, idx) => {
@@ -4418,9 +3660,6 @@
       item.dataset.id = ann.id;
       applyItemAccent(item, getAnnotationColors(ann));
 
-      const priority = ann.priority || 'medium';
-      const priorityLabel = priority === 'high' ? 'High' : priority === 'low' ? 'Low' : 'Medium';
-
       const top = document.createElement('div');
       top.className = 'wn-annot-card-top';
       const topLeft = document.createElement('div');
@@ -4428,19 +3667,13 @@
       const number = document.createElement('div');
       number.className = 'wn-annot-number';
       number.textContent = `#${idx + 1}`;
-      const prioChip = document.createElement('div');
-      prioChip.className = `wn-annot-priority ${priority}`;
-      prioChip.innerHTML = `<span class="dot"></span><span>${priorityLabel}</span>`;
       topLeft.appendChild(number);
-      topLeft.appendChild(prioChip);
       if (ann.status === 'missing') {
         const missing = document.createElement('div');
         missing.className = 'wn-annot-missing';
         missing.textContent = 'Missing';
         topLeft.appendChild(missing);
       }
-      const metaWrap = document.createElement('div');
-      metaWrap.className = 'wn-annot-meta-bottom';
       const topRight = document.createElement('div');
       topRight.className = 'wn-annot-card-top-right';
 
@@ -4474,8 +3707,6 @@
 
       const meta = document.createElement('div');
       meta.className = 'wn-annot-meta';
-      const authorName = (ann.author || '').trim();
-      const authorLabel = (authorName || 'Unknown reviewer').toUpperCase();
       const createdAt = new Date(ann.createdAt);
       const createdAtDate = createdAt.toLocaleDateString(undefined, {
         year: 'numeric',
@@ -4486,8 +3717,8 @@
         hour: '2-digit',
         minute: '2-digit'
       });
-      meta.textContent = `${authorLabel} • ${createdAtDate} • ${createdAtTime}`;
-      metaWrap.appendChild(meta);
+      meta.textContent = `${createdAtDate} • ${createdAtTime}`;
+      topLeft.appendChild(meta);
 
       const showMore = document.createElement('button');
       showMore.type = 'button';
@@ -4519,7 +3750,6 @@
         item.appendChild(shotWrap);
       }
       item.appendChild(showMore);
-      item.appendChild(metaWrap);
       item.addEventListener('click', () => {
         focusAnnotation(ann.id, true, ann.pageUrl, ann.pageKey);
         if (isMobileLayout() && state.panel) {
@@ -4547,13 +3777,10 @@
   async function editAnnotation(id) {
     const ann = state.annotations.find((a) => a.id === id);
     if (!ann) return;
-    const res = await askForComment('Edit this annotation', ann.comment || '', ann.priority || 'medium', ann.author || state.annotatorName || '');
+    const res = await askForComment('Edit this annotation', ann.comment || '');
     if (!res) return;
-    const { comment, priority, author } = res;
+    const { comment } = res;
     ann.comment = comment.trim();
-    ann.priority = priority || 'medium';
-    ann.author = author || ann.author || state.annotatorName || '';
-    recordAnnotatorName(ann.author);
     saveAnnotations();
     renderList();
   }
@@ -4575,26 +3802,6 @@
   function exportAnnotations() {
     // Export local annotations to a JSON file named with site and time
     const payload = buildAnnotationsPayload();
-    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = buildFilename();
-    a.click();
-    URL.revokeObjectURL(url);
-  }
-
-  function exportAnnotationsFiltered(filters) {
-    const reviewers = new Set((filters && filters.reviewers) || []);
-    const priorities = new Set((filters && filters.priorities) || []);
-    const filtered = state.annotations.filter((ann) => {
-      const reviewerValue = (ann.author || '').trim() || '__unknown';
-      const priorityValue = ann.priority || 'medium';
-      const reviewerOk = !reviewers.size || reviewers.has(reviewerValue);
-      const priorityOk = !priorities.size || priorities.has(priorityValue);
-      return reviewerOk && priorityOk;
-    });
-    const payload = buildAnnotationsPayload(filtered);
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -5058,7 +4265,6 @@
     reconcile(pulled);
     syncWarned = false;
     persistAnnotations();
-    refreshKnownAnnotatorNames();
     clearRenderedAnnotations();
     restoreAnnotations();
     renumberMarkers();
@@ -5449,7 +4655,7 @@
         showToast('Uxnote: could not capture that region');
         return;
       }
-      const { comment, priority, author } = res;
+      const { comment } = res;
       const id = generateId();
       // The picture rides on the annotation until a server takes it off. A
       // server that is not answering used to throw the whole capture away,
@@ -5470,8 +4676,6 @@
         id,
         type: 'screenshot',
         comment: comment.trim(),
-        author: author || state.annotatorName || '',
-        priority: priority || 'medium',
         snippet: '',
         pageUrl: window.location.href,
         pageKey: normalizePageKey(window.location.href),
