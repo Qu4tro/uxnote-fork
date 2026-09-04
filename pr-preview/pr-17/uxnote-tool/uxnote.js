@@ -86,13 +86,6 @@
   })();
   let position = initialPosition;
   const positionStorageKey = 'wn-toolbar-pos';
-  // How much height the bar spends. It is fixed over the page under review, so
-  // that height is page a reviewer cannot see: `compact` spends as little of it
-  // as a mouse allows, `normal` gives every control the size a finger needs.
-  // The reach a coarse pointer gets is not on this switch, and stays 44px on
-  // either setting.
-  const densityAttr = ((script && script.dataset.toolbarDensity) || '').trim().toLowerCase();
-  const toolbarDensity = densityAttr === 'normal' ? 'normal' : 'compact';
   const dockMode = (script && (script.dataset.dock || script.dataset.layout)) || '';
   const storageKey = `uxnote:site:${siteKey}`;
   const syncedStorageKey = `${storageKey}:synced`;
@@ -231,7 +224,6 @@
     captureBasePadding();
     applyColorTheme();
     applyTheme();
-    applyToolbarDensity();
     injectStyles();
     createShell();
     createDimmer();
@@ -325,7 +317,12 @@
         justify-content: center;
         gap: 10px;
         flex-wrap: wrap;
-        padding: 10px 14px;
+        /* This bar is fixed over the page under review, so its height is page
+           the reviewer cannot see. The room around the controls is the only
+           part of that height it can give back: the controls themselves are
+           the box a finger is hit on and stay it, on every pointer. What is
+           left is the 2px that keeps an active control off the edge. */
+        padding: 2px 14px;
         background: var(--wn-surface);
         color: var(--wn-text-muted);
         z-index: 2147483647;
@@ -450,32 +447,6 @@
         width: 94px;
         height: auto;
         fill: currentColor;
-      }
-      /* The 44px on .wn-annot-toolbar button is a finger's reach, and it
-         stays that wherever a finger can arrive. A mouse lands on far less,
-         and the bar it drives is fixed over the page under review, so every
-         pixel that bar does not need is a pixel of the page given back.
-         Asked as the negative because the reach is what is being protected:
-         only a coarse pointer holds it. The :where() carries the density
-         switch at no specificity, so each selector weighs exactly what it
-         would without it, and the compact layout at the end of the sheet
-         still names the size a phone gets. */
-      @media not all and (pointer: coarse) {
-        :where(:root[data-wn-toolbar-density="compact"]) .wn-annot-toolbar {
-          --wn-group-gap: 8px;
-          --wn-spacer: 36px;
-          gap: 8px;
-          padding: 4px 10px;
-        }
-        /* The eye is one of the bar's controls, parked beside it where a wide
-           window has the room. It is the same control at the same size. */
-        :where(:root[data-wn-toolbar-density="compact"]) .wn-annot-toolbar button,
-        :where(:root[data-wn-toolbar-density="compact"]) .wn-annot-visibility-btn {
-          --wn-btn-size: 32px;
-        }
-        :where(:root[data-wn-toolbar-density="compact"]) .wn-annot-logo {
-          padding-left: 12px;
-        }
       }
       .wn-annot-toolbar button:hover {
         background: rgba(109, 86, 199, 0.12);
@@ -2853,11 +2824,6 @@
       (theme === 'auto' && systemDark) ||
       (theme === 'reverse-auto' && !systemDark);
     document.documentElement.setAttribute('data-wn-theme', dark ? 'dark' : 'light');
-  }
-
-  function applyToolbarDensity() {
-    if (!document || !document.documentElement) return;
-    document.documentElement.setAttribute('data-wn-toolbar-density', toolbarDensity);
   }
 
   function applyColorTheme() {

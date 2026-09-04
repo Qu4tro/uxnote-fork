@@ -288,13 +288,6 @@
         <span class="settings-desc">Sent as X-Uxnote-Key on every request to that server.</span>
         <input id="set-server-api-key" type="text" placeholder="review-key">
       </label>
-      <label for="set-toolbar-density"><span class="settings-name">data-toolbar-density</span>
-        <span class="settings-desc">How much height the toolbar takes where a mouse is driving. compact is one short row, and the floating eye is drawn to match it. normal gives every control the size a finger needs. Where the pointer is coarse, neither setting changes the bar.</span>
-        <select id="set-toolbar-density">
-          <option value="compact">compact</option>
-          <option value="normal">normal</option>
-        </select>
-      </label>
     </div>
     <div class="settings-actions">
       <button class="cta" type="button" id="settings-apply">Apply and reload</button>
@@ -361,8 +354,7 @@
         // Apply rather than a trip to the README. Their default stays empty,
         // so a plain load keeps the notes in this browser.
         { key: 'server-url',      attr: 'data-server-url',            kind: 'url',    fallback: '', seed: 'http://localhost:8123' },
-        { key: 'server-api-key',  attr: 'data-server-api-key',        kind: 'key',    fallback: '', seed: 'review-key' },
-        { key: 'toolbar-density', attr: 'data-toolbar-density',       kind: 'choice', values: ['compact', 'normal'], fallback: 'compact' }
+        { key: 'server-api-key',  attr: 'data-server-api-key',        kind: 'key',    fallback: '', seed: 'review-key' }
       ];
       // A crafted link must not be able to point a visitor's notes at somebody
       // else's server. A server on the loopback address is the visitor's own
