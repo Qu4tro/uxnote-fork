@@ -54,8 +54,9 @@ Then open <http://localhost:4173/>.
   site, shared by every reviewer who opens the page. The browser keeps a copy,
   so a note written while the server is down survives a reload and goes up when
   the server comes back.
-- **JSON export and import.** Both are on by default, and each one switches
-  off per site. A `data-mailto` address adds a mail handoff beside them.
+- **JSON export and import.** In the head of the panel, beside the notes they
+  carry. Both are on by default, and each one switches off per site. A
+  `data-mailto` address adds a mail handoff beside them.
 - **A dark theme.** `auto` by default, following the system.
 - **Comment-first notes.** A note is one comment. On a roomy window the card
   parks beside the toolbar; on a small screen it rises from the bottom edge.
@@ -65,6 +66,9 @@ Then open <http://localhost:4173/>.
   full-size view has the room to show the kind, the highlighted text, the
   element, the page, the full-size screenshot, the edit time and what the
   server has of each note; it sorts, groups and searches all of it.
+- **A bubble on a mark.** Rest the pointer on a highlight or on a numbered
+  badge and the note it stands for opens on the page: the kind, the comment,
+  and a button that edits it, without opening the panel.
 - **Single-page apps.** The widget follows `pushState`, so a route change
   without a document load draws the annotations of the route you reached.
 - **Fenced areas.** `data-uxnote-ignore` keeps the widget out of an area;
@@ -73,7 +77,7 @@ Then open <http://localhost:4173/>.
   carries five thumb-sized controls, and the panel, the comment prompt and the
   dialogs become bottom sheets.
 
-![The toolbar on a wide window: the uxnote-fork logo, the two highlight modes, the camera, the import and export buttons, and the panel toggle](assets/readme/toolbar.png)
+![The toolbar on a wide window: the uxnote-fork logo, the two highlight modes, the camera, the top and bottom toggle, and the panel toggle](assets/readme/toolbar.png)
 
 ## Install
 
@@ -131,9 +135,9 @@ lines you want.
 | `isBackdropVisible` | `true` on a mouse, `false` where the pointer is coarse | Dims the page behind the annotations. On a phone the bar is a strip and the page is the whole screen, so the dimmer costs contrast for nothing; naming it brings it back. |
 | `isToolVisibleAtFirstLaunch` | `true` | Shows the toolbar on the first visit. |
 | `isToolOnTopAtLaunch` | `false` | Starts the toolbar at the top instead of the bottom. The control that moves it afterwards is on a wide window only, so on a small screen this is the way to ask for the top. |
-| `data-mailto` | empty | The recipient of the mail handoff, and the switch for it: an address here puts the mail button in the toolbar, and nothing here means no button. Anything that is not an address counts as nothing. `data-email` and `data-to` are read the same way. The button is on a wide window only. |
-| `data-json-export` | `true` | `false` removes the export control. The export writes every annotation of the site and asks nothing first. The control is in the toolbar on a wide window and in the panel head on a small screen. |
-| `data-json-import` | `true` | `false` removes the import button, its dialog, and its list of imported files. The button is on a wide window only; an annotation imported earlier is drawn either way. |
+| `data-mailto` | empty | The recipient of the mail handoff, and the switch for it: an address here puts the mail button in the head of the panel, and nothing here means no button. Anything that is not an address counts as nothing. `data-email` and `data-to` are read the same way. The button is on a wide window only. |
+| `data-json-export` | `true` | `false` removes the export control. The export writes every annotation of the site and asks nothing first. The control is in the head of the panel, at either layout. |
+| `data-json-import` | `true` | `false` removes the import button, its dialog, and its list of imported files. The button is in the head of the panel, on a wide window only; an annotation imported earlier is drawn either way. |
 | `data-server-url` | unset | The base URL of the server that stores the annotations. Unset means `localStorage`. |
 | `data-server-api-key` | empty | Sent as `X-Uxnote-Key` on every request. Empty sends no header. |
 | `data-theme` | `auto` | `auto` follows the system theme and changes with it, `reverse-auto` takes the other side of it, and `light` and `dark` hold one. |
@@ -242,8 +246,15 @@ it, so nothing carries a base64 document to the server.
 ## The annotation panel
 
 The panel starts closed. The rightmost toolbar button opens it, and so does a
-marker on the page. On a window with room it has two shapes, and the control in
-its head switches between them and remembers which one you left it in.
+marker on the page. Picking one of the three ways of marking puts it away
+again, whichever shape it is in: marking is done on the page, and the panel is
+over the page. On a window with room it has two shapes, and the control in its
+head switches between them and remembers which one you left it in.
+
+The head carries what can be done with the whole set, beside the notes it acts
+on: **export**, **import** and, where the page names an address, **send by
+mail**. Delete-all is there too, and the control that switches the two shapes.
+Each is a symbol, named on hover.
 
 **The rail** is the shape it opens in: a 360px column against the right edge,
 with the page beside it. It carries the number, the kind, the comment, the date
@@ -284,6 +295,29 @@ offered; see **On a small screen**.
 
 ![The full-size panel across a wide window: a grid of cards, each with its kind, its comment, the text or the element it points at, and the page it belongs to](assets/readme/full-panel.png)
 
+## The bubble on a mark
+
+Every annotation leaves something where it was made: a highlight over the
+words, an outline around the element, a frame where the region was, and a
+numbered badge beside each of them. Rest the pointer on the highlight or on the
+badge and a bubble opens with the kind, the number, the comment, and a button
+that opens the comment for editing. It stands off the mark far enough to walk
+into, flips below the mark where there is no room above it, follows the mark
+when the page scrolls, and closes when the pointer leaves.
+
+The badge is the hover target for an element pin and for a region capture. A
+pin draws its outline on the page's own element, and a pin on something the
+size of the window would then answer to the pointer anywhere on it; the badge
+sits on that outline and is the size of a mark.
+
+It is a hover surface and nothing else. A finger has no hover to give and a
+keyboard has no pointer, and the card in the panel carries the same comment and
+the same edit button for both. It stays out of the way while one of the capture
+modes is on, so the outline that previews an element has the pointer to itself,
+and it goes with the rest when the widget is hidden.
+
+![The bubble open over a text highlight on the demo page: the kind, the number, the comment, and the button that edits it](assets/readme/note-bubble.png)
+
 ## On a small screen
 
 The widget asks two questions and keeps them apart. How much room the window
@@ -300,18 +334,19 @@ wraps nor scrolls: hide, highlight text, annotate an element, capture, notes.
 Four without snapdom, which is what the camera needs. The wordmark is hidden,
 and the tooltips are not drawn where nothing can hover to open them.
 
-**Import and the top/bottom toggle are not there.** An import needs the file on
-the device, and the bar belongs in thumb reach at the bottom, which leaves the
-toggle no second answer. Annotations imported earlier are still drawn; only the
-dialog that manages the files is gone, and `isToolOnTopAtLaunch="true"` still
-puts the bar at the top.
+**The top/bottom toggle is not there.** The bar belongs in thumb reach at the
+bottom, which leaves the toggle no second answer. `isToolOnTopAtLaunch="true"`
+still puts the bar at the top.
 
-**Export moves to the panel head**, beside delete-all. The file goes to the
-share sheet where the browser offers one, and to the same download a wide
-window uses where it does not. Neither asks anything first. The mail button is
-on a wide window only: a `mailto:` carries the whole document in a URL, the
-first long comment overruns it, and a share sheet is where a phone hands a file
-over anyway.
+**The panel head keeps the export and drops the other two.** The file goes to
+the share sheet where the browser offers one, and to the same download a wide
+window uses where it does not; neither asks anything first, and the symbol
+carries its word here, because nothing hovers to name it. An import needs the
+file on the device, which a phone picker cannot usefully give — annotations
+imported earlier are still drawn, only the dialog that manages the files is
+gone. Mail rides the share sheet: a `mailto:` carries the whole document in a
+URL, the first long comment overruns it, and a share sheet is where a phone
+hands a file over anyway.
 
 **The panel, the comment prompt and the dialogs rise from the bottom edge.**
 Each is a sheet with a drag handle that dismisses it on a drag down, a close
