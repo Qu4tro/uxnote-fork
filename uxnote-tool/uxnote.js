@@ -183,6 +183,8 @@
     toolbar: null,
     panel: null,
     panelView: 'rail',
+    cards: new Map(),
+    focusedId: null,
     visibilityToggle: null,
     commentModal: null,
     dialogModal: null,
@@ -4832,6 +4834,7 @@
     ensurePanelVisible();
     const list = state.panel.querySelector('.wn-annot-list');
     if (!list) return;
+    state.focusedId = id;
     const items = list.querySelectorAll('.wn-annot-item');
     items.forEach((el) => el.classList.remove('is-focused'));
     const target = list.querySelector(`.wn-annot-item[data-id="${id}"]`);
@@ -4947,6 +4950,24 @@
     return iconTarget();
   }
 
+  // The same icon markup goes on every card in the list, and parsing it again
+  // for each of them is the most expensive thing a card does. It is parsed
+  // once per shape and cloned after that.
+  const iconNodes = new Map();
+  function iconNode(markup) {
+    let node = iconNodes.get(markup);
+    if (!node) {
+      const holder = document.createElement('div');
+      holder.innerHTML = markup;
+      node = holder.firstElementChild;
+      iconNodes.set(markup, node);
+    }
+    return node.cloneNode(true);
+  }
+
+  // Two addresses over a set of two hundred notes, not two hundred of them.
+  const pageLabels = new Map();
+
   // The element an element pin points at, in the terms it was stored in.
   function describeAnnotationTarget(ann) {
     const target = (ann && ann.target) || {};
@@ -4962,12 +4983,16 @@
   function describeAnnotationPage(ann) {
     const href = (ann && (ann.pageUrl || ann.pageKey)) || '';
     if (!href) return '';
+    if (pageLabels.has(href)) return pageLabels.get(href);
+    let label;
     try {
       const url = new URL(href, window.location.href);
-      return truncateText(`${url.pathname || '/'}${url.search || ''}`, 60);
+      label = truncateText(`${url.pathname || '/'}${url.search || ''}`, 60);
     } catch (err) {
-      return truncateText(href, 60);
+      label = truncateText(href, 60);
     }
+    pageLabels.set(href, label);
+    return label;
   }
 
   function isOnThisPage(ann) {
@@ -4990,11 +5015,19 @@
     local: 'Only in this browser'
   };
 
+  // One formatter each, built on the first card and kept. Asking a date to
+  // format itself with options builds one of these behind the call, and a
+  // long list asks twice per card.
+  let stampFormats = null;
   function formatStamp(value) {
+    if (!stampFormats) {
+      stampFormats = {
+        date: new Intl.DateTimeFormat(undefined, { year: 'numeric', month: '2-digit', day: '2-digit' }),
+        time: new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit' })
+      };
+    }
     const at = new Date(value);
-    const date = at.toLocaleDateString(undefined, { year: 'numeric', month: '2-digit', day: '2-digit' });
-    const time = at.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
-    return `${date} \u2022 ${time}`;
+    return `${stampFormats.date.format(at)} \u2022 ${stampFormats.time.format(at)}`;
   }
 
   function addFact(row, label, value, className) {
@@ -5016,6 +5049,7 @@
     const item = document.createElement('div');
     item.className = 'wn-annot-item';
     item.dataset.id = ann.id;
+    if (state.focusedId === ann.id) item.classList.add('is-focused');
     applyItemAccent(item, getAnnotationColors(ann));
 
     const top = document.createElement('div');
@@ -5027,7 +5061,7 @@
     const kind = document.createElement('div');
     kind.className = 'wn-annot-kind';
     kind.title = kindLabel;
-    kind.innerHTML = kindIcon(ann.type);
+    kind.appendChild(iconNode(kindIcon(ann.type)));
     const kindName = document.createElement('span');
     kindName.className = 'wn-annot-kind-label';
     kindName.textContent = kindLabel;
@@ -5055,7 +5089,7 @@
     editBtn.type = 'button';
     editBtn.className = 'wn-annot-edit wn-annotator';
     editBtn.setAttribute('aria-label', 'Edit this annotation');
-    editBtn.innerHTML = iconEdit();
+    editBtn.appendChild(iconNode(iconEdit()));
     editBtn.addEventListener('click', async (evt) => {
       evt.stopPropagation();
       await editAnnotation(ann.id);
@@ -5065,7 +5099,7 @@
     deleteBtn.type = 'button';
     deleteBtn.className = 'wn-annot-delete wn-annotator';
     deleteBtn.setAttribute('aria-label', 'Delete this annotation');
-    deleteBtn.innerHTML = iconTrash();
+    deleteBtn.appendChild(iconNode(iconTrash()));
     deleteBtn.addEventListener('click', (evt) => {
       evt.stopPropagation();
       deleteAnnotation(ann.id);
@@ -5191,11 +5225,71 @@
     return empty;
   }
 
+  // Everything a card draws, in one string. Two renders that agree on it would
+  // have built the same card, so the one already on the page is kept: an edit,
+  // a delete, a keystroke in the search box or an answer from the server
+  // rebuilds the cards it changed and leaves a long list alone.
+  function cardKey(ann, number) {
+    const shot = ann.screenshot;
+    return [
+      number,
+      ann.type,
+      ann.status || '',
+      ann.comment || '',
+      ann.snippet || '',
+      ann.createdAt,
+      ann.updatedAt || '',
+      ann.author || '',
+      ann.priority || '',
+      ann.pageUrl || '',
+      isOnThisPage(ann) ? '1' : '0',
+      describeAnnotationTarget(ann),
+      shot ? shot.url || `inline:${(shot.dataUrl || '').length}` : '',
+      syncStateOf(ann)
+    ].join('\u001f');
+  }
+
+  function cardFor(ann, number) {
+    const key = cardKey(ann, number);
+    const held = state.cards.get(ann.id);
+    if (held && held.key === key) return held.node;
+    const node = buildCard(ann, number);
+    state.cards.set(ann.id, { key, node });
+    return node;
+  }
+
+  // Put the wanted nodes in the wanted order with the fewest moves, rather
+  // than emptying the list and building it again.
+  function reconcileList(list, wanted) {
+    let node = list.firstChild;
+    for (const next of wanted) {
+      if (node === next) {
+        node = node.nextSibling;
+        continue;
+      }
+      list.insertBefore(next, node);
+    }
+    while (node) {
+      const spent = node;
+      node = node.nextSibling;
+      list.removeChild(spent);
+    }
+  }
+
+  // A card a search hid is worth keeping; a card whose annotation is gone is
+  // not, and holding it would grow the map for the life of the page.
+  function pruneCards() {
+    if (state.cards.size === state.annotations.length) return;
+    const live = new Set(state.annotations.map((ann) => ann.id));
+    state.cards.forEach((entry, id) => {
+      if (!live.has(id)) state.cards.delete(id);
+    });
+  }
+
   // Rebuild the side panel list with filtering and numbering
   function renderList() {
     const list = state.panel.querySelector('.wn-annot-list');
     const title = state.panel.querySelector('h3');
-    list.innerHTML = '';
     // The number on a card is the number on its marker, and the marker counts
     // from the order the notes were made in. A filtered list used to renumber
     // itself, so the card and the mark on the page disagreed.
@@ -5203,18 +5297,20 @@
     state.annotations.forEach((ann, idx) => numbers.set(ann.id, idx + 1));
     const query = state.filters.query;
     const filtered = state.annotations
-      .slice()
-      .sort((a, b) => a.createdAt - b.createdAt)
-      .filter((ann) => !query || searchHaystack(ann).includes(query));
+      .filter((ann) => !query || searchHaystack(ann).includes(query))
+      .sort((a, b) => a.createdAt - b.createdAt);
     if (title) title.textContent = `Annotations (${filtered.length})`;
     list.classList.toggle('is-multipage', spansPages());
+    let wanted;
     if (!state.annotations.length) {
-      list.appendChild(emptyNote('No annotations yet.'));
+      wanted = [emptyNote('No annotations yet.')];
     } else if (!filtered.length) {
-      list.appendChild(emptyNote('No annotation matches that search.'));
+      wanted = [emptyNote('No annotation matches that search.')];
     } else {
-      filtered.forEach((ann) => list.appendChild(buildCard(ann, numbers.get(ann.id))));
+      wanted = filtered.map((ann) => cardFor(ann, numbers.get(ann.id)));
     }
+    reconcileList(list, wanted);
+    pruneCards();
     ensureFooter();
   }
 
