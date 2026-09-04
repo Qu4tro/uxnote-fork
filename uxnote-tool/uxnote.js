@@ -317,7 +317,12 @@
         justify-content: center;
         gap: 10px;
         flex-wrap: wrap;
-        padding: 10px 14px;
+        /* This bar is fixed over the page under review, so its height is page
+           the reviewer cannot see. The room around the controls is the only
+           part of that height it can give back: the controls themselves are
+           the box a finger is hit on and stay it, on every pointer. What is
+           left is the 2px that keeps an active control off the edge. */
+        padding: 2px 14px;
         background: var(--wn-surface);
         color: var(--wn-text-muted);
         z-index: 2147483647;

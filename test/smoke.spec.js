@@ -55,6 +55,31 @@ test('the toolbar holds one row on a laptop screen', async ({ page }) => {
   }
 });
 
+test('the bar carries one row of controls and little else', async ({ page }) => {
+  await page.goto('/');
+  const bar = await page.locator('.wn-annot-toolbar').boundingBox();
+  const btn = await page.locator('.wn-annot-toolbar button[data-mode="text"]').boundingBox();
+  // Every pixel of this bar's height is a pixel of the host page a reviewer
+  // cannot see, and the only part of it the bar can give back is the room
+  // around its controls.
+  expect(bar.height - btn.height).toBeLessThanOrEqual(6);
+});
+
+test('a shorter bar costs no control any of the box it is hit on', async ({ page }) => {
+  await page.goto('/');
+  // The bar gets shorter by giving up padding, never by giving up target. The
+  // same 44px is asserted on the phone viewports in mobile.spec.js; it is the
+  // floor here too, the floating eye included.
+  const controls = await page.locator('.wn-annot-toolbar button, .wn-annot-visibility-btn').all();
+  expect(controls.length).toBeGreaterThan(0);
+  for (const control of controls) {
+    const name = await control.evaluate((el) => el.getAttribute('data-action') || 'visibility');
+    const box = await control.boundingBox();
+    expect(box.width, `${name} is ${box.width}px wide`).toBeGreaterThanOrEqual(44);
+    expect(box.height, `${name} is ${box.height}px tall`).toBeGreaterThanOrEqual(44);
+  }
+});
+
 test('the toolbar offers the mail handoff on its own button', async ({ page }) => {
   await page.goto('/?mailto=team%40example.org');
   const mail = page.locator('.wn-annot-toolbar button[data-action="mail"]');

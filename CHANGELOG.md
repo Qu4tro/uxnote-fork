@@ -38,6 +38,7 @@ All notable changes to this project will be documented in this file.
 - An element is committed from `Pin here` rather than from the tap that found it where the pointer is coarse. A mouse still previews on hover and commits on the click.
 - The mode tip names the gesture the form factor actually takes, and stands down while a capture bar holds the same strip of screen.
 - The README says which of its sentences describe a mouse alone: the comment card parked beside the toolbar and translucent until it is pointed at, the drag that frames a region, and the mail button beside the export.
+- The toolbar stands 50px tall rather than 66px. A bar fixed over the page under review spends its height on page the reviewer cannot see, and the room around the controls is the only part of that height it can give back: every control keeps the box it is hit on, 44px here and 48px on the compact layout, and the floating visibility button is untouched. The 2px left is what keeps an active control off the edge of the bar.
 - The block of every attribute at once is labelled as a reference of names rather than a snippet to start from. Copied whole it pointed the widget at a server on `http://localhost:8123` with the key `review-key` and mailed to `team@example.com`.
 - The Options table says where each control lives once the layout is compact, and that the page dimmer starts off where the pointer is coarse.
 ### Fixed
