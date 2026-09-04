@@ -579,8 +579,10 @@ test('a capture survives a server that is not answering', async ({ page }) => {
   await page.locator('.wn-annot-toolbar button[data-action="toggle-panel"]').click();
   // The picture is on the annotation, so the card can still draw it with the
   // server unreachable.
-  const src = await page.locator('.wn-annot-shot img').getAttribute('src');
-  expect(src.startsWith('data:image/png;base64,')).toBe(true);
+  // Asked for when the card comes on screen, which is a frame after the panel
+  // opens, so this is the assertion that waits for it rather than the read
+  // that raced it.
+  await expect(page.locator('.wn-annot-shot img')).toHaveAttribute('src', /^data:image\/png;base64,/);
 });
 
 test('the picture goes up as a PNG once the server answers', async ({ page }) => {
