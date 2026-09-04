@@ -112,7 +112,8 @@ lines you want.
   data-json-import="true"
   data-server-url="http://localhost:8123"
   data-server-api-key="review-key"
-  data-theme="auto"></script>
+  data-theme="auto"
+  data-toolbar-density="compact"></script>
 ```
 
 ### Options
@@ -132,6 +133,7 @@ lines you want.
 | `data-server-url` | unset | The base URL of the server that stores the annotations. Unset means `localStorage`. |
 | `data-server-api-key` | empty | Sent as `X-Uxnote-Key` on every request. Empty sends no header. |
 | `data-theme` | `auto` | `auto` follows the system theme and changes with it, `reverse-auto` takes the other side of it, and `light` and `dark` hold one. |
+| `data-toolbar-density` | `compact` | How much height the toolbar takes where a mouse is driving. `compact` is one short row -- a 32px control between 4px of padding -- and the floating eye matches it. `normal` gives every control the 44px a finger needs. The bar is fixed over the page, so its height is page the reviewer cannot see; where the pointer is coarse neither setting touches it, and the reach stays. |
 
 **Write the word on an option that takes `true` or `false`.** Those options
 read `true`, `1`, `yes` and `on`, and `false`, `0`, `no` and `off`, in any
