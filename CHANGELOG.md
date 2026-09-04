@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [3.0.0] - 2026-09-04
 ### Added
 - A bubble on a mark. Resting the pointer on a highlight, or on the numbered badge beside any annotation, opens the note it stands for on the page: the kind, the number, the comment, and a button that edits it. It stands off the mark far enough to walk into, flips below the mark where there is no room above it, follows the mark as the page scrolls, and stands down while a capture mode is on so the outline that previews an element keeps the pointer to itself. It is a hover surface and nothing else -- a finger has no hover to give and a keyboard has no pointer, and the card in the panel carries the same comment and the same edit button for both. The badge is the target for an element pin and for a region capture: a pin draws its outline on the page's own element, and one the size of the window would otherwise answer to the pointer anywhere on it.
 - Bubble and panel-head checks in the test suite: resting on a highlight says what the note says, the badge on a pinned element opens the same bubble, the bubble edits the note it is showing, a note nobody wrote a comment on says so, a capture mode keeps the bubble out of the way, it stands clear of its mark and inside the screen, and it follows its mark up the page; picking a way to mark puts the panel away in either shape, the head holds its three handoffs on one line beside the count in a 360px rail, and each symbol carries the name the bar used to write under it.
@@ -27,7 +27,6 @@ All notable changes to this project will be documented in this file.
 ### Changed
 - Export, import and the mail handoff leave the toolbar for the head of the panel, symbol for symbol. They act on the whole set of notes rather than on the page, so they are drawn beside the notes; the bar is left with the three ways of marking and the two controls that say where the widget sits. Each symbol is named on hover, and a compact layout keeps the export -- carrying its word, because nothing hovers there to name it -- and drops the other two.
 - Picking one of the three ways of marking puts the panel away, in either shape and whichever of the three was picked. Marking is done on the page, and the panel is over the page: a rail of it in the side view and the whole of it in the full-size one.
-- `data-mail-export` is gone. The mail handoff is switched by the address it sends to: name a `data-mailto` and the head of the panel carries the button, name none and there is none. The two attributes could disagree, and the pairing that read worst was the default one -- no address and the button there anyway, opening a draft addressed to nobody. An address the widget cannot parse counts as no address.
 - The three kinds of annotation start on three colours -- text `#4e9cf6`, element `#8b5cf6`, region `#f59f00` -- so a marker, an outline or a frame says which kind it belongs to before the note is read. `colorForHighlight` still paints all three at once; what it no longer does is work the other way round, where naming one kind alone made that colour the base and moved the other two with it.
 - The demo's settings grid carries the three per-kind colours in place of the shortcut. A colour input has no way to say *unset*, so a control for `colorForHighlight` could only lie about its default; the README carries it instead.
 - The toolbar carries five controls on a compact layout -- hide, highlight text, annotate an element, capture, notes -- each 48px, in one row, with no scrolling strip. The top/bottom toggle is left out there: the bar belongs in thumb reach at the bottom, which leaves it no second answer.
@@ -64,6 +63,8 @@ All notable changes to this project will be documented in this file.
 - The element outline is drawn to what the page actually shows of the element. Outlining a row of the demo page's pricing table, which sits in a scroller narrower than itself, took the document from 375px to 459px -- and fixed chrome is positioned against that width, so the toolbar went with it.
 - A store with no room left says so. The write failed silently, and a capture on a coarse pointer is a whole viewport rather than a hand-framed corner of one, so the room runs out sooner.
 - The README's screenshot of a panel card showed a card the widget had already stopped drawing when the file was committed: the timestamp under the thumbnail rather than beside the number. Retaken at the same framing.
+### Removed
+- `data-mail-export` is gone. The mail handoff is switched by the address it sends to: name a `data-mailto` and the head of the panel carries the button, name none and there is none. The two attributes could disagree, and the pairing that read worst was the default one -- no address and the button there anyway, opening a draft addressed to nobody. An address the widget cannot parse counts as no address.
 
 ## [2.1.0] - 2026-09-03
 ### Added
