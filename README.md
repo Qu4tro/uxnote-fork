@@ -13,7 +13,7 @@ A fork of [UxNote](https://github.com/ninefortyonestudio/uxnote), the single-scr
 ## What it adds
 
 - **Server sync.** Set a server URL and an API key, and annotations persist on that server per site, with a copy in `localStorage` that carries them across a reload the server was down for. Leave the server unset and the widget stores them in `localStorage` only, as upstream does.
-- **Region screenshots.** Each annotation can carry a crop of the page around the annotated element or text.
+- **Region screenshots.** A note can be a picture of a region of the page, framed by the reviewer.
 - **Settings.** `jsonExport`, `jsonImport`, and `server` are script-tag attributes, and cards in the landing-page builder.
 - **Dark mode.** The toolbar, panel, and dialogs follow the page's color scheme.
 - **Comment-first notes.** A note is one comment, written on a card beside the toolbar so the annotated area stays visible. The panel starts closed.
@@ -89,7 +89,7 @@ script tag, so anybody who can read the page can read the key. It stops a
 passer-by from writing to a review server. It is not access control. Put the
 server behind a network boundary if the notes matter.
 
-`PROTOCOL.md` holds the contract: four routes, an optional health probe, and one
+`PROTOCOL.md` holds the contract: six routes, an optional health probe, and one
 JSON shape. Any stack can implement it. `server/server.py` does, in the Python 3.9 standard library, and
 it serves the repository too, so the page under review runs on the same origin:
 
@@ -99,6 +99,38 @@ python3 server/server.py --port 8123 --root . --api-key review-key
 
 Then open http://localhost:8123/server/demo.html and annotate it. The
 annotations land in `uxnote-data/`.
+
+## Region screenshots
+
+A note can be a picture of a region of the page. Load
+[snapdom](https://github.com/zumerlab/snapdom) before the widget, on the same
+page, and the toolbar offers a camera beside the two other capture modes:
+
+```html
+<script src="https://qu4tro.github.io/uxnote-fork/dist/snapdom.min.js"></script>
+<script src="https://qu4tro.github.io/uxnote-fork/dist/uxnote.min-v1.0.0.js"></script>
+```
+
+Press the camera and drag to frame a region. Release the button and the comment
+prompt opens, the way it does for a highlight or an element. Escape stops. Write
+a comment and the region becomes an annotation: a numbered marker and a frame on
+the page, a thumbnail on its card. The picture is taken while the comment is
+written, from a copy of the page snapdom renders without the widget's own
+interface: it carries no toolbar, no panel and no marker, and nothing on the page
+moves while it is taken.
+
+With a server the picture travels to it as a PNG, and the annotation keeps the
+address the server answers with. With no server the picture rides on the
+annotation itself, and the JSON export carries it.
+
+A server that does not answer does not cost you the capture. The picture stays
+on the annotation, the toast says so, and the note behaves like every other
+one written while the server is away: it is held and sent again. The picture
+goes up as a PNG on that later attempt, before the annotation that points at
+it, so nothing carries a base64 document to the server.
+
+`npm run build` writes `snapdom.min.js` into `dist/` beside the minified widget,
+so both URLs above resolve against one directory.
 
 ## Develop
 
@@ -111,4 +143,6 @@ CI runs the syntax check, the build, and the smoke test on every pull request an
 
 ## License
 
-MIT. The widget is © ninefortyonestudio; see `LICENSE`.
+MIT. The widget is © ninefortyonestudio; see `LICENSE`. `uxnote-tool/snapdom.min.js`
+is SnapDOM, MIT © Juan Martin Muda, vendored unmodified; see
+`uxnote-tool/LICENSE-snapdom.txt`.

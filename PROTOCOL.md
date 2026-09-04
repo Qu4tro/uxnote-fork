@@ -3,7 +3,7 @@
 This is the contract between the UxNote widget and a server that stores its
 annotations. Set `data-server-url` on the script tag and the widget speaks it.
 
-The protocol is small on purpose: one resource, four requests, and one optional
+The protocol is small on purpose: two resources, six requests, and one optional
 probe. Any stack can implement it. `server/server.py` is a reference
 implementation in the Python standard library.
 
@@ -18,12 +18,15 @@ implementation in the Python standard library.
   site key. The server treats the key as an opaque string.
 - **Annotation** — a JSON object. The server reads two properties: `id`, which
   matches `^[A-Za-z0-9_-]{1,64}$` and is unique inside a site, and `type`, which
-  is `text` or `element`. Past those two the annotation is opaque: the server
+  is `text`, `element` or `screenshot`. Past those two the annotation is opaque:
+  the server
   stores it and returns it byte-faithfully, and it strips no property and
   re-keys nothing. Re-keying is not cosmetic here: the widget decides whether a
   note changed under it by hashing the JSON, so a server that reorders the keys
   costs a `PUT` per note per load. The widget writes uuids, but the pattern is
   the contract and a server must take any id that matches it.
+- **Screenshot** — a PNG of the region of the page one annotation is about. The
+  widget sends at most one screenshot per annotation.
 
 ## Requests
 
@@ -33,6 +36,8 @@ implementation in the Python standard library.
 | `PUT` | `{base}/annotations/{id}?site={site}` | the annotation, JSON | `{"ok":true}` |
 | `DELETE` | `{base}/annotations/{id}?site={site}` | — | `{"ok":true}` |
 | `DELETE` | `{base}/annotations?site={site}` | — | `{"ok":true}` |
+| `PUT` | `{base}/screenshots/{id}?site={site}` | the PNG, `image/png` | `201 {"url":"screenshots/…"}` |
+| `GET` | `{base}/screenshots/{name}` | — | the PNG |
 | `GET` | `{base}/health` | — | `{"status":"ok","version":1}` |
 
 ### Read the set
@@ -83,6 +88,39 @@ DELETE {base}/annotations?site={site}
 This is the widget's **Delete all**. It is one request, never one request per
 annotation.
 
+### Store a screenshot
+
+```
+PUT {base}/screenshots/{id}?site={site}
+Content-Type: image/png
+```
+
+The body is the PNG itself, so a server needs no multipart parser. `{id}` is the
+annotation the screenshot belongs to.
+
+The answer is `201`:
+
+```json
+{ "url": "screenshots/example.com-a1b2c3.png" }
+```
+
+`url` is relative to the base URL, and the widget resolves it against
+`{base}/`. The server can be a different origin from the page under review, so
+an absolute path off the page origin reaches the wrong host. The server chooses
+the name. The widget stores the answer on the annotation and asks for nothing
+else about it.
+
+A second screenshot on the same annotation replaces the first.
+
+### Read a screenshot
+
+```
+GET {base}/screenshots/{name}
+```
+
+`{name}` is the tail of a `url` a store answered with. The answer is the PNG,
+as `image/png`.
+
 ## How the widget writes
 
 The widget holds the set it last agreed on with the server. On every change it
@@ -108,6 +146,14 @@ A browser that has no stored digests has never synced this site. The set beside
 them was then written before a server was named, and it is that reviewer's
 alone: the first pull adopts the server's set rather than pushing private notes
 onto a shared one.
+
+A capture taken while the server was down has no address to point at yet, so
+the browser keeps the PNG inline, in the set, in `localStorage`. Pictures are
+what fill that store: a few tens of them can pass what a browser gives an
+origin. The widget does not drop them to make room. The write fails, one toast
+says the browser has no room left, and what is on the screen is then no better
+protected against a reload than it was before this section existed. Export, or
+delete what is finished, or bring the server back.
 
 ### Settling two sets
 
@@ -167,6 +213,10 @@ notes matter.
 A server that wants the key compares it in constant time and answers `401` when
 it does not match.
 
+`GET {base}/screenshots/{name}` is the one route that asks for no key. The
+widget shows a screenshot in an `<img>`, which sends no header. A screenshot
+is as readable as the page it is of.
+
 ## CSRF
 
 The protocol carries no cookie and no session, so a CSRF header would protect
@@ -193,7 +243,7 @@ Every annotation carries:
 
 ```
 id          unique string, ^[A-Za-z0-9_-]{1,64}$
-type        "text" or "element"
+type        "text", "element" or "screenshot"
 comment     the note itself
 author      the name of the reviewer who wrote it
 priority    "low", "medium" or "high"
@@ -206,4 +256,16 @@ status      "active"
 
 `type: "text"` adds `target`, a serialized text range. `type: "element"` adds
 `target` as `{ xpath, css, tag }` and `rect` as `{ x, y, w, h }` in page
-coordinates.
+coordinates. `type: "screenshot"` adds `rect`, the framed region in page
+coordinates, and `screenshot`:
+
+```
+url         the address the store answered with, relative to the base URL
+w           the width of the PNG in pixels
+h           the height of the PNG in pixels
+capturedAt  epoch milliseconds
+```
+
+With no server the widget has nowhere to send the PNG, so it writes the picture
+into `screenshot.dataUrl` instead of `screenshot.url` and the JSON export
+carries it. A server never sees that form.
