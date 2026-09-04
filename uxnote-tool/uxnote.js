@@ -1186,8 +1186,8 @@
       :root[data-wn-theme="dark"] .wn-annot-fact.is-pending {
         color: #e3b341;
       }
-      /* The rail has room for the note and little else. Everything the panel
-         used to drop for want of width is built once and drawn full size. */
+      /* The rail has room for the note and little else. Everything a 360px
+         column has to drop is built once and drawn where there is room. */
       .wn-annot-detail,
       .wn-annot-facts {
         display: none;
@@ -1266,6 +1266,11 @@
       }
       .wn-annot-panel.is-full .wn-annot-card-top {
         margin-bottom: 0;
+      }
+      /* The stamp takes a line of its own rather than wrapping on to one at
+         whatever width the kind's name happens to run out of room. */
+      .wn-annot-panel.is-full .wn-annot-meta {
+        flex-basis: 100%;
       }
       .wn-annot-panel.is-full .wn-annot-shot {
         margin: 0;
@@ -5114,7 +5119,7 @@
   }
 
   // The page a note belongs to, as the part of the address that distinguishes
-  // it. A set can span pages; the panel never used to say which one.
+  // it. The widget follows route changes, so a set can span pages.
   function describeAnnotationPage(ann) {
     // The page key, not the address: the widget files a note under the origin
     // and the path, so two addresses that differ only in their query string
@@ -5537,8 +5542,8 @@
     const list = state.panel.querySelector('.wn-annot-list');
     const title = state.panel.querySelector('h3');
     // The number on a card is the number on its marker, and the marker counts
-    // from the order the notes were made in. A filtered list used to renumber
-    // itself, so the card and the mark on the page disagreed.
+    // from the order the notes were made in. Numbering off the filtered list
+    // would make the card and the mark on the page disagree.
     const numbers = new Map();
     state.annotations.forEach((ann, idx) => numbers.set(ann.id, idx + 1));
     const query = state.filters.query;

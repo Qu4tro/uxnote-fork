@@ -60,6 +60,11 @@ Then open <http://localhost:4173/>.
 - **Comment-first notes.** A note is one comment. On a roomy window the card
   parks beside the toolbar; on a small screen it rises from the bottom edge.
   The panel starts closed.
+- **A panel with two shapes.** A 360px rail beside the page, or a full-size
+  view across the width of the window, between the two toolbar positions. The
+  full-size view has the room to show the kind, the highlighted text, the
+  element, the page, the full-size screenshot, the edit time and what the
+  server has of each note; it sorts, groups and searches all of it.
 - **Single-page apps.** The widget follows `pushState`, so a route change
   without a document load draws the annotations of the route you reached.
 - **Fenced areas.** `data-uxnote-ignore` keeps the widget out of an area;
@@ -234,6 +239,51 @@ it, so nothing carries a base64 document to the server.
 
 ![A panel card for a region note: the number, the comment, and the thumbnail of the framed region](assets/readme/screenshot-card.png)
 
+## The annotation panel
+
+The panel starts closed. The rightmost toolbar button opens it, and so does a
+marker on the page. On a window with room it has two shapes, and the control in
+its head switches between them and remembers which one you left it in.
+
+**The rail** is the shape it opens in: a 360px column against the right edge,
+with the page beside it. It carries the number, the kind, the comment, the date
+and the picture, which is as much as 360px holds.
+
+**The full-size view** is the width of the window, and vertically the room
+between the two toolbar positions. The bar's height is given up at the top and
+at the bottom at once, so the view clears the bar wherever the bar is and does
+not move when you swap it over. The cards run in a grid — three columns on a
+laptop, five on a wide monitor — and each of them shows what the rail has no
+room for:
+
+- **the kind**, as a coloured mark: a text highlight, an element pin or a
+  region capture, each in the colour it wears on the page;
+- **the text that was highlighted**, which the search reads and the rail has
+  no width to draw;
+- **the element** an element pin points at, as the selector it was filed under;
+- **the page** the note belongs to, where the set spans more than the one you
+  are reading;
+- **the picture** at the size it was taken at, up to the room a card has;
+- **when it was made**, and when it was last edited;
+- **what the server has of it**, where a server is named: on the server, not
+  sent yet, or only in this browser;
+- **the author and the priority** an import brought in.
+
+The head holds a keyword search over all of that, a sort — oldest, newest, by
+kind, by page — and a grouping by page or by kind. `Tab` reaches the list and
+the arrow keys walk it, `Home` and `End` jump to the ends, and `Enter` opens
+the note under the cursor. Opening a note returns the panel to the rail, so the
+page it points at is visible again.
+
+A card's picture is asked for when the card comes near the viewport. A set of
+two hundred notes does not decode two hundred pictures to draw a list, and a
+panel nobody has opened decodes none of them.
+
+On a compact layout the panel is a bottom sheet and the full-size view is not
+offered; see **On a small screen**.
+
+![The full-size panel across a wide window: a grid of cards, each with its kind, its comment, the text or the element it points at, and the page it belongs to](assets/readme/full-panel.png)
+
 ## On a small screen
 
 The widget asks two questions and keeps them apart. How much room the window
@@ -314,12 +364,14 @@ text.
 Where the layout is compact the card is a sheet on the bottom edge instead:
 opaque, with a handle and a close button of its own.
 
-The panel starts closed. The toolbar button opens it, and so does a marker on
-the page or a card. On a small screen the panel is a sheet, and pressing a note
-in the list closes it and carries the page to that note.
+Pressing a note in the list carries the page to it. On a small screen that
+closes the sheet, and in the full-size view it returns the panel to the rail,
+because both of them cover the page they are pointing at. **The annotation
+panel** has the rest.
 
-An annotation written by an earlier release keeps its `author` and its
-`priority`. The widget shows neither.
+An annotation written by an earlier release, or brought in by an import, keeps
+its `author` and its `priority`. The full-size view draws both. Neither is
+written on a note made here, and neither can be edited.
 
 ![The comment card on a wide window, parked beside the toolbar, with a comment typed and the Cancel and Save buttons](assets/readme/comment-card.png)
 
