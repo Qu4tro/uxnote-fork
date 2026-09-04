@@ -168,6 +168,20 @@ the dialog that lists the imported files is gone. When all three options are
 off, the toolbar drops the group between the capture modes and the panel
 controls.
 
+## Single-page apps
+
+The widget follows a route change made without a document load. It wraps
+`history.pushState` and `history.replaceState` and listens for `popstate`.
+When the path changes, it removes the markers of the page you left, draws the
+markers of the page you reached, and, with a server named, reads the
+annotation set from the server again. It waits 120 ms first, so the router
+has drawn the page that an annotation attaches to. An annotation whose target
+arrives later is drawn when the target appears.
+
+A page is its origin plus its pathname. A change of the query string or of the
+hash alone is not a route change, so a router that keeps its routes in the
+hash shows every route's annotations on every route.
+
 ## Develop
 
 ```sh
