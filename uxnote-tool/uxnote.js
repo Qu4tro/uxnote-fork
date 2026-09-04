@@ -86,6 +86,7 @@
   })();
   let position = initialPosition;
   const positionStorageKey = 'wn-toolbar-pos';
+  const panelViewStorageKey = 'wn-panel-view';
   const dockMode = (script && (script.dataset.dock || script.dataset.layout)) || '';
   const storageKey = `uxnote:site:${siteKey}`;
   const syncedStorageKey = `${storageKey}:synced`;
@@ -181,6 +182,7 @@
     elementTrailIndex: 0,
     toolbar: null,
     panel: null,
+    panelView: 'rail',
     visibilityToggle: null,
     commentModal: null,
     dialogModal: null,
@@ -220,6 +222,7 @@
         : initialHiddenFromVisible !== null
         ? initialHiddenFromVisible
         : parseBoolAttr(startHiddenAttr, false);
+    state.panelView = loadPanelView();
     if (jsonImport) state.importFiles = loadImportFiles();
     captureBasePadding();
     applyColorTheme();
@@ -773,6 +776,33 @@
         width: 16px;
         height: 16px;
       }
+      .wn-annot-panel-view {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 30px;
+        height: 30px;
+        padding: 0;
+        border-radius: 10px;
+        border: 1px solid var(--wn-border);
+        background: rgba(109, 86, 199, 0.08);
+        color: var(--wn-text-muted);
+        cursor: pointer;
+        transition: all 0.12s ease;
+      }
+      .wn-annot-panel-view:hover {
+        background: rgba(109, 86, 199, 0.16);
+        color: var(--wn-text);
+      }
+      .wn-annot-panel-view.active {
+        background: rgba(109, 86, 199, 0.2);
+        border-color: rgba(109, 86, 199, 0.4);
+        color: var(--wn-text);
+      }
+      .wn-annot-panel-view svg {
+        width: 16px;
+        height: 16px;
+      }
       .wn-annot-delete-all {
         display: inline-flex;
         align-items: center;
@@ -992,6 +1022,68 @@
         cursor: pointer;
         margin-left: auto;
         margin-top: 4px;
+      }
+      /* The full-size view. Full width, and vertically the room between the
+         two toolbar positions: --wn-bar-reserve is the bar's height given up
+         at the top and at the bottom at once, so the view clears the bar
+         wherever it is and nothing moves when the reviewer swaps it over. The
+         geometry itself is written inline beside the rail's, which is inline
+         too and would otherwise beat any rule here. */
+      .wn-annot-panel.is-full {
+        padding: 14px 24px 8px;
+        border-left: none;
+        border-right: none;
+        overflow: hidden;
+        box-shadow: 0 0 30px var(--wn-shadow);
+      }
+      .wn-annot-panel.is-full .wn-annot-panel-head {
+        gap: 12px;
+        padding-bottom: 12px;
+        border-bottom: 1px solid var(--wn-border);
+      }
+      .wn-annot-panel.is-full h3 {
+        margin: 0;
+        font-size: 16px;
+        white-space: nowrap;
+      }
+      .wn-annot-panel.is-full .wn-annot-filters {
+        flex-direction: row;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-bottom: 0;
+      }
+      .wn-annot-panel.is-full .wn-annot-filter-row {
+        flex: 1 1 240px;
+        max-width: 420px;
+      }
+      .wn-annot-panel.is-full .wn-annot-list {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(330px, 1fr));
+        align-content: start;
+        /* Each card is as tall as it needs to be. Stretching them to the
+           tallest of their row gives a one-word note the height of a long one
+           and fills the difference with nothing. */
+        align-items: start;
+        gap: 14px;
+        padding: 14px 2px 10px;
+        overflow-y: auto;
+      }
+      .wn-annot-panel.is-full .wn-annot-item {
+        margin-bottom: 0;
+        padding: 12px 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .wn-annot-panel.is-full .wn-annot-card-top {
+        margin-bottom: 0;
+      }
+      .wn-annot-panel.is-full .wn-annot-shot {
+        margin: 0;
+      }
+      .wn-annot-panel.is-full .wn-annot-showmore {
+        margin-top: 0;
       }
       .uxnote-textmark {
         display: inline;
@@ -1594,6 +1686,11 @@
         .wn-annot-panel-export {
           display: inline-flex;
         }
+        /* A compact layout is already a sheet, and the full-size view is the
+           room a pointer layout has. The class never reaches here. */
+        .wn-annot-panel-view {
+          display: none;
+        }
 
         /* The sheet. Insets rather than a width, because a host page that
            overflows horizontally makes the containing block wider than the
@@ -1939,6 +2036,7 @@
   function applyFormFactor() {
     buildToolbar();
     positionVisibilityToggle();
+    syncPanelView();
     positionPanel();
     positionTip();
     positionCommentCard();
@@ -1964,6 +2062,7 @@
         <div class="wn-annot-panel-top wn-annotator">
           <h3>Annotations (0)</h3>
           <div class="wn-annot-panel-tools wn-annotator">
+            <button class="wn-annot-panel-view wn-annotator" type="button"></button>
             ${
               jsonExport
                 ? `<button class="wn-annot-panel-export wn-annotator" type="button">${iconDownload()}<span>Export</span></button>`
@@ -2003,6 +2102,13 @@
         panelHead.firstChild
       );
     }
+    const panelViewBtn = panel.querySelector('.wn-annot-panel-view');
+    if (panelViewBtn) {
+      panelViewBtn.addEventListener('click', (evt) => {
+        evt.stopPropagation();
+        setPanelView(isFullView() ? 'rail' : 'full');
+      });
+    }
     const panelExportBtn = panel.querySelector('.wn-annot-panel-export');
     if (panelExportBtn) {
       panelExportBtn.addEventListener('click', (evt) => {
@@ -2029,6 +2135,7 @@
     state.tip = tip;
 
     toolbar.addEventListener('click', onToolbarClick);
+    syncPanelView();
     renderList();
     applyPageOffset();
     applySheetInset();
@@ -2790,6 +2897,57 @@
     return null;
   }
 
+  function loadPanelView() {
+    try {
+      if (localStorage.getItem(panelViewStorageKey) === 'full') return 'full';
+    } catch (err) {
+      // ignore
+    }
+    return 'rail';
+  }
+
+  // The rail is the shape that leaves the page visible, so it is the one the
+  // panel opens in. The full-size view is asked for, and the asking is
+  // remembered -- except when the widget shrinks the panel itself to uncover
+  // the note the reviewer just picked.
+  function setPanelView(next, options = {}) {
+    const view = next === 'full' ? 'full' : 'rail';
+    if (options.remember !== false) {
+      try {
+        localStorage.setItem(panelViewStorageKey, view);
+      } catch (err) {
+        // ignore
+      }
+    }
+    if (state.panelView === view) return;
+    state.panelView = view;
+    syncPanelView();
+  }
+
+  function isFullView() {
+    return state.panelView === 'full' && !isCompactLayout();
+  }
+
+  // A compact layout is already a sheet and never takes the class, so the
+  // sheet's rules and the full-size view's never meet.
+  function syncPanelView() {
+    if (!state.panel) return;
+    const full = isFullView();
+    const btn = state.panel.querySelector('.wn-annot-panel-view');
+    if (btn) {
+      const label = full ? 'Shrink the panel to the side' : 'Open the panel full size';
+      btn.innerHTML = full ? iconCollapse() : iconExpand();
+      btn.classList.toggle('active', full);
+      btn.setAttribute('aria-label', label);
+      btn.setAttribute('aria-pressed', full ? 'true' : 'false');
+      btn.setAttribute('data-tip', label);
+    }
+    if (state.panel.classList.contains('is-full') === full) return;
+    state.panel.classList.toggle('is-full', full);
+    positionPanel();
+    renderList();
+  }
+
   function loadHiddenState() {
     try {
       const saved = localStorage.getItem(visibilityStorageKey);
@@ -3157,6 +3315,20 @@
     const p = state.panel;
     const inset = 18;
     const barRect = state.toolbar.getBoundingClientRect();
+    // The room the full-size view runs in. The bar sits the same distance from
+    // whichever edge it is docked against, so giving up that distance at both
+    // ends at once clears the bar at either position and leaves the view where
+    // it is when the reviewer swaps the bar over. A hidden bar has no box and
+    // reserves nothing.
+    const reserve = barRect.height
+      ? Math.max(
+          0,
+          Math.round(
+            (position === 'top' ? barRect.bottom : document.documentElement.clientHeight - barRect.top) + 10
+          )
+        )
+      : 0;
+    document.documentElement.style.setProperty('--wn-bar-reserve', `${reserve}px`);
 
     if (isCompactLayout()) {
       // The sheet is placed by the stylesheet, against the viewport edges and
@@ -3173,6 +3345,20 @@
       p.style.paddingTop = '';
       p.style.paddingBottom = '';
       applySheetInset();
+      return;
+    }
+
+    if (isFullView()) {
+      p.style.width = '100%';
+      p.style.maxHeight = 'none';
+      p.style.left = '0px';
+      p.style.right = '0px';
+      p.style.top = 'var(--wn-bar-reserve)';
+      p.style.bottom = 'var(--wn-bar-reserve)';
+      p.style.height = '';
+      p.style.borderRadius = '0px';
+      p.style.paddingTop = '';
+      p.style.paddingBottom = '';
       return;
     }
 
@@ -4727,8 +4913,11 @@
       item.appendChild(showMore);
       item.addEventListener('click', () => {
         focusAnnotation(ann.id, true, ann.pageUrl, ann.pageKey);
-        // The sheet covers the page it is pointing at, so it steps aside.
+        // The sheet covers the page it is pointing at, so it steps aside. The
+        // full-size view covers it too, and falls back to the rail rather than
+        // closing: the list is still what the reviewer is working through.
         if (isCompactLayout()) setPanelOpen(false);
+        else if (isFullView()) setPanelView('rail', { remember: false });
       });
       list.appendChild(item);
     });
@@ -4952,6 +5141,22 @@
     return iconSvg(`
       <path d="M6 6l12 12" />
       <path d="M18 6l-12 12" />
+    `);
+  }
+  function iconExpand() {
+    return iconSvg(`
+      <path d="M4 9v-4a1 1 0 0 1 1 -1h4" />
+      <path d="M20 9v-4a1 1 0 0 0 -1 -1h-4" />
+      <path d="M4 15v4a1 1 0 0 0 1 1h4" />
+      <path d="M20 15v4a1 1 0 0 1 -1 1h-4" />
+    `);
+  }
+  function iconCollapse() {
+    return iconSvg(`
+      <path d="M9 4v4a1 1 0 0 1 -1 1h-4" />
+      <path d="M15 4v4a1 1 0 0 0 1 1h4" />
+      <path d="M9 20v-4a1 1 0 0 0 -1 -1h-4" />
+      <path d="M15 20v-4a1 1 0 0 1 1 -1h4" />
     `);
   }
   function iconPanel() {
