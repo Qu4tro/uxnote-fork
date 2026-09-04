@@ -47,7 +47,8 @@ Then open <http://localhost:4173/>.
 - **Text highlights and element pins.** Select text or click an element, write
   a comment, and the page carries a numbered marker.
 - **Region screenshots.** Drag a frame around part of the page and the note
-  carries a picture of it. Load snapdom for this.
+  carries a picture of it. On a touch screen one press of the camera takes the
+  view. Load snapdom for this.
 - **Server sync.** Name a server and the annotations live on it, one set per
   site, shared by every reviewer who opens the page. The browser keeps a copy,
   so a note written while the server is down survives a reload and goes up when
@@ -187,7 +188,8 @@ A note can be a picture of a region of the page. Load
 page, and the toolbar offers a camera beside the two other capture modes.
 
 Press the camera and drag to frame a region. Release the button and the comment
-prompt opens, the way it does for a highlight or an element. Escape stops. Write
+prompt opens, the way it does for a highlight or an element. Escape stops, and
+so does the `Cancel` button on the hint. Write
 a comment and the region becomes an annotation: a numbered marker and a frame on
 the page, a thumbnail on its card. The picture is taken while the comment is
 written, from a copy of the page snapdom renders without the widget's own
@@ -205,6 +207,27 @@ goes up as a PNG on that later attempt, before the annotation that points at
 it, so nothing carries a base64 document to the server.
 
 ![A panel card for a region note: the number, the comment, and the thumbnail of the framed region](assets/readme/screenshot-card.png)
+
+## On a touch screen
+
+Where the pointer is coarse and nothing can hover, the three capture modes take
+a different gesture. Nothing about them changes on a mouse.
+
+**Highlight.** Select the text the way the phone selects text: press and hold,
+then drag the handles. The widget waits for the selection to settle rather than
+reading the release, because every drag of a handle ends in one. A bar rises
+above the toolbar reading `Add note`; press it and the comment prompt opens.
+
+**Element.** The first press previews rather than commits. The element under the
+finger is outlined and a bar names it, with `Wider` and `Narrower` to walk the
+chain it sits in — press anywhere inside a card and climb to the card — and
+`Pin here` to commit it. It is the only way to see what is about to be
+annotated when there is no hover to show it.
+
+**Camera.** One press takes the part of the page that is on the screen. The
+framing gesture is the phone's own scroll: put the page where you want it, then
+press. The note carries the same `rect` a dragged frame would, so the marker,
+the frame and the panel behave the same either way.
 
 ## A note is a comment
 

@@ -10,6 +10,10 @@ All notable changes to this project will be documented in this file.
 - A sheet shell the notes panel, the comment prompt and the confirm dialogs share on a compact layout: anchored to the bottom edge, 85% of the viewport at most, a handle that dismisses it on a drag, a close button of its own, safe-area padding, its list scrolling inside it, and the page held still underneath. The panel had no way to dismiss itself at all -- the only exit was a toolbar button the panel was painted over, along with its own footer.
 - A close button on the screenshot lightbox. `Escape` closed it and nothing else did, and a phone has no `Escape`.
 - Sheet checks on the four phone viewports: the panel is dismissable without the toolbar, no sheet runs past the viewport or under the toolbar, the page is held still under an open sheet and let go after, a note tapped in the list still carries the page to itself, the import dialog is not built at all, and export opens no modal.
+- An `Add note` bar above the toolbar on a coarse pointer. The selection is watched and given time to settle instead of being read off the release, so the handles can be dragged out to the end of the phrase before anything is committed.
+- A preview on the element picker. On a coarse pointer the first tap outlines the element under the finger and names it, with `Wider` and `Narrower` to walk the chain it sits in and `Pin here` to commit. Wider is also the answer to a fat finger: start anywhere inside a block and climb to the block.
+- A guard on the screenshot render. snapdom draws the whole document before the crop comes out of it, and a long page on a slow device could sit on it with no end; the wait is bounded now and the toast says which of the two happened.
+- Touch checks on the four phone viewports, driving real touch events: a release mid-selection commits nothing, a multi-word selection reaches the prompt whole, the element preview stands before the commit and the picker stops at the page, one tap of the camera writes an annotation carrying the viewport rect, and the bars follow the toolbar to whichever edge it is on.
 ### Changed
 - The toolbar carries five controls on a compact layout -- hide, highlight text, annotate an element, capture, notes -- each 48px, in one row, with no scrolling strip. Import and the top/bottom toggle are left out there, and export moves to the panel head beside delete-all.
 - Fixed chrome is placed with `left` and `right` insets and sized in percent rather than `vw`. A host page that overflows horizontally makes the containing block wider than `100vw`, which used to size the toolbar by one box and position it against another. The rules meant to anchor the bar to the edges on a small screen now carry enough specificity to apply at all.
@@ -23,8 +27,18 @@ All notable changes to this project will be documented in this file.
 - The comment card's `opacity: 0.55` and the `:hover` that undid it are drawn only where a pointer can hover. Without one the card never came back, and the page read straight through the comment being written.
 - The sheet surfaces are named in the `color-scheme: dark` selector list, so the native controls they hold follow the theme rather than rendering light on dark.
 - A narrow window on a desktop gets the sheets too, and keeps its tooltips and its parked comment card. How much room there is and what kind of pointer is driving are separate questions.
+- The camera takes the visible viewport in one tap on a coarse pointer, and the drag overlay is not built there at all. The framing gesture is the page's own scroll. The annotation carries the same `rect` a dragged frame would, so markers, frames and the hop to a note are unchanged.
+- A highlight is committed from the `Add note` bar rather than from a release where the pointer is coarse. A mouse still commits on the release.
+- An element is committed from `Pin here` rather than from the tap that found it where the pointer is coarse. A mouse still previews on hover and commits on the click.
+- The mode tip names the gesture the form factor actually takes, and stands down while a capture bar holds the same strip of screen.
 ### Fixed
 - The visibility button was built with a French label and tooltip before the first sync replaced them.
+- Region capture did nothing at all on a touch screen. `selectRegion()` bound mouse events only, so a touch drag framed nothing, opened no prompt, and left the reviewer inside an overlay whose hint named the Escape key.
+- A highlight was committed on the first `touchend`. A press and hold selects one word and every drag of a handle after it is another release, so the widget wrote down the first word and cleared the selection out from under the reviewer mid-gesture.
+- An annotation the server refused is sent again when the tab is hidden, when the page goes away, and when the connection comes back. A failed upsert waited for the next change to retry it, and on a phone there often is no next change. `pagehide` rather than `beforeunload`, which iOS does not fire reliably.
+- Annotating in element mode no longer calls the widget's own toolbar a popup. Its controls were never a target, and saying so on every press of them was noise.
+- The element outline is drawn to what the page actually shows of the element. Outlining a row of the demo page's pricing table, which sits in a scroller narrower than itself, took the document from 375px to 459px -- and fixed chrome is positioned against that width, so the toolbar went with it.
+- A store with no room left says so. The write failed silently, and a capture on a coarse pointer is a whole viewport rather than a hand-framed corner of one, so the room runs out sooner.
 
 ## [2.1.0] - 2026-09-03
 ### Added
