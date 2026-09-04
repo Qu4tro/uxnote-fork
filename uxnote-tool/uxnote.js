@@ -2737,9 +2737,9 @@
     const touch = isTouchInput();
     let text = '';
     if (mode === 'text') {
-      text = touch ? 'Select text, then tap Add note.' : 'Select text then release to add a note.';
+      text = touch ? 'Select text, then tap Add note.' : 'Select text then release to add a note. Escape stops.';
     } else if (mode === 'element') {
-      text = touch ? 'Tap an element to preview it, then pin it.' : 'Hover an element, click to annotate.';
+      text = touch ? 'Tap an element to preview it, then pin it.' : 'Hover an element, click to annotate. Escape stops.';
     }
     if (!text) return hideTip();
     state.tip.textContent = text;
