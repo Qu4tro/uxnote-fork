@@ -100,7 +100,7 @@ rest are `data-` attributes. Every option at once:
 | `data-mail-export` | `true` | `false` removes the mail button and the handoff behind it. Independent of `data-json-export`. |
 | `data-server-url` | unset | The base URL of the server that stores the annotations. Unset means `localStorage`. |
 | `data-server-api-key` | empty | Sent as `X-Uxnote-Key` on every request. Empty sends no header. |
-| `data-theme` | `auto` | `auto` follows the system theme and changes with it; `light` and `dark` hold one. |
+| `data-theme` | `auto` | `auto` follows the system theme and changes with it, `reverse-auto` takes the other side of it, and `light` and `dark` hold one. |
 
 The page has a say too. The widget does not annotate inside a `<dialog>`, an
 element with `popover`, or an element with `role="dialog"`, `role="menu"`,
@@ -198,6 +198,11 @@ An annotation written by an earlier release keeps its `author` and its
 
 The widget follows `prefers-color-scheme` and changes with it. Hold one theme
 per site with `data-theme="light"` or `data-theme="dark"`.
+
+A site that follows the system theme leaves the widget dressed like the page it
+annotates, on either setting. `data-theme="reverse-auto"` reads the same
+preference and takes the other side of it, so the two stay apart however the
+system is set — a contrast a fixed `light` or `dark` only gets on one of them.
 
 The theme covers the toolbar, the panel, the cards, the dialogs, the comment
 card, the capture overlay, and the toasts. The highlight colours do not change:

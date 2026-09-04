@@ -7,8 +7,8 @@ All notable changes to this project will be documented in this file.
 - Server sync. `data-server-url` and `data-server-api-key` name a server that stores the annotations, one set per site, over the protocol of `PROTOCOL.md`. `server/server.py` is a reference server in the Python standard library.
 - Region screenshots. With snapdom loaded, the toolbar offers a camera. Drag to frame a region and release; the frame becomes an annotation with a comment and a picture, uploaded as a PNG when a server is set and kept inline otherwise.
 - `data-json-export`, `data-json-import`, and `data-mail-export` turn the JSON export, the JSON import, and the mail handoff off per site. The three are independent of one another: the mail handoff has a toolbar button of its own, and it stays when the JSON export is off.
-- `data-theme` and a dark theme for the widget, `auto` by default.
-- An explicit light or dark for the demo page itself, switched in the note at the top of it and held in this browser. The page never follows the system, so the widget's `auto`, `light`, and `dark` each read against a background you chose.
+- `data-theme` and a dark theme for the widget, `auto` by default. `reverse-auto` follows the system preference to the other side of it, for a site that follows it too.
+- An explicit light or dark for the demo page itself, switched in the note at the top of it and held in this browser. The page never follows the system, so the widget's `auto`, `reverse-auto`, `light`, and `dark` each read against a background you chose.
 - Route changes. The widget follows `pushState`, `replaceState`, and `popstate`, so a single-page app keeps its annotations per route.
 - `snapdom.min.js` ships beside the minified widget in every release.
 ### Changed
