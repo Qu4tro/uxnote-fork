@@ -364,6 +364,27 @@
         border-radius: 50%;
         box-shadow: none;
       }
+      /* The 44px above is a finger's reach, and it stays that wherever a
+         finger can arrive. A mouse lands on far less, and this bar is fixed
+         over the page under review, so every pixel it does not need is a
+         pixel of that page given back. Asked as the negative because the
+         reach is what is being protected: only a coarse pointer holds it.
+         The compact layout at the end of the sheet names a size of its own
+         and comes later, so a phone keeps the one it sets there. */
+      @media not all and (pointer: coarse) {
+        .wn-annot-toolbar {
+          --wn-group-gap: 8px;
+          --wn-spacer: 36px;
+          gap: 8px;
+          padding: 4px 10px;
+        }
+        .wn-annot-toolbar button {
+          --wn-btn-size: 32px;
+        }
+        .wn-annot-logo {
+          padding-left: 12px;
+        }
+      }
       .wn-annot-visibility-btn {
         position: fixed;
         left: max(12px, env(safe-area-inset-left));
