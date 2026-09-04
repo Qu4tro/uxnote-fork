@@ -103,10 +103,11 @@ test('the bar carries five controls and drops the rest', async ({ page }) => {
 test('export leaves the bar for the panel and stays a 44px target', async ({ page }) => {
   await page.goto('/');
   await page.locator('.wn-annot-toolbar button[data-action="toggle-panel"]').click();
-  const exportBtn = page.locator('.wn-annot-panel-export');
+  const exportBtn = page.locator('.wn-annot-panel button[data-action="export"]');
   await expect(exportBtn).toBeVisible();
   const box = await exportBtn.boundingBox();
   expect(box.height).toBeGreaterThanOrEqual(TOUCH_MINIMUM);
+  expect(box.width).toBeGreaterThanOrEqual(TOUCH_MINIMUM);
   const deleteAll = await page.locator('.wn-annot-delete-all').boundingBox();
   expect(deleteAll.height).toBeGreaterThanOrEqual(TOUCH_MINIMUM);
   // What it does when tapped is measured in mobile-sheets.spec.js: one action,

@@ -86,6 +86,7 @@
   })();
   let position = initialPosition;
   const positionStorageKey = 'wn-toolbar-pos';
+  const panelViewStorageKey = 'wn-panel-view';
   const dockMode = (script && (script.dataset.dock || script.dataset.layout)) || '';
   const storageKey = `uxnote:site:${siteKey}`;
   const syncedStorageKey = `${storageKey}:synced`;
@@ -181,6 +182,9 @@
     elementTrailIndex: 0,
     toolbar: null,
     panel: null,
+    panelView: 'rail',
+    cards: new Map(),
+    focusedId: null,
     visibilityToggle: null,
     commentModal: null,
     dialogModal: null,
@@ -188,21 +192,29 @@
     markerLayer: null,
     syncDot: null,
     syncStatus: null,
+    syncPending: new Set(),
+    shotObserver: null,
     colors: colorPalette,
     customPosition: false,
     dimEnabled,
     dimOpacity,
     dimOverlay: null,
     filters: {
-      query: ''
+      query: '',
+      sort: 'oldest',
+      group: 'none'
     },
+    bands: new Map(),
     hidden: false,
     missingObserver: null,
     missingRetryTimer: null,
     layoutObserver: null,
     layoutTimer: null,
     toast: null,
-    toastTimer: null
+    toastTimer: null,
+    note: null,
+    noteAnchor: null,
+    noteTimer: null
   };
 
   // Entry point: load config, build UI, restore data
@@ -220,6 +232,7 @@
         : initialHiddenFromVisible !== null
         ? initialHiddenFromVisible
         : parseBoolAttr(startHiddenAttr, false);
+    state.panelView = loadPanelView();
     if (jsonImport) state.importFiles = loadImportFiles();
     captureBasePadding();
     applyColorTheme();
@@ -720,6 +733,64 @@
         align-items: center;
         gap: 8px;
       }
+      /* Two controls the rail has no room for and no use for: it holds one
+         column in the order the notes were made in. */
+      .wn-annot-arrange {
+        display: none;
+        align-items: center;
+        gap: 10px;
+      }
+      .wn-annot-arrange label {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--wn-text-faint);
+      }
+      .wn-annot-arrange select {
+        height: 34px;
+        border-radius: 12px;
+        border: 1px solid var(--wn-border);
+        background: var(--wn-surface-input);
+        color: var(--wn-text);
+        font-size: 12px;
+        padding: 0 8px;
+        cursor: pointer;
+      }
+      .wn-annot-arrange select:focus {
+        outline: none;
+        border-color: rgba(109, 86, 199, 0.6);
+        box-shadow: 0 0 0 3px rgba(109, 86, 199, 0.14);
+      }
+      .wn-annot-band {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 11px;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--wn-text-faint);
+      }
+      .wn-annot-band-count {
+        color: var(--wn-text-muted);
+        background: rgba(109, 86, 199, 0.1);
+        border-radius: 999px;
+        padding: 1px 8px;
+      }
+      .wn-annot-band::after {
+        content: '';
+        flex: 1 1 auto;
+        height: 1px;
+        background: var(--wn-border);
+      }
+      .wn-annot-item:focus-visible {
+        outline: 2px solid var(--wn-item-accent-strong, var(--wn-accent));
+        outline-offset: 2px;
+      }
       .wn-annot-filters input[type="search"] {
         height: 34px;
         border-radius: 12px;
@@ -746,37 +817,88 @@
         border-radius: 12px;
         text-align: center;
       }
+      /* Four symbols and a named button in the head of a 360px rail. They
+         drop below the title together rather than one at a time, so a long
+         count never leaves a single icon stranded on its own line. */
+      .wn-annot-panel-top {
+        flex-wrap: wrap;
+      }
+      .wn-annot-panel-top h3 {
+        flex: 1 1 auto;
+      }
       .wn-annot-panel-tools {
         display: inline-flex;
         align-items: center;
-        gap: 8px;
+        flex: 0 0 auto;
+        margin-left: auto;
+        gap: 4px;
       }
-      /* The bar has no room for export on compact, so the panel carries it
-         there, beside the delete-all it already holds. */
-      .wn-annot-panel-export {
-        display: none;
+      .wn-annot-panel-view,
+      .wn-annot-panel-io {
+        display: inline-flex;
         align-items: center;
-        gap: 6px;
-        background: rgba(109, 86, 199, 0.12);
-        border: 1px solid var(--wn-border);
-        color: var(--wn-text-muted);
-        padding: 6px 10px;
+        justify-content: center;
+        width: 28px;
+        height: 28px;
+        padding: 0;
         border-radius: 10px;
-        font-weight: 700;
-        font-size: 12px;
+        border: 1px solid var(--wn-border);
+        background: rgba(109, 86, 199, 0.08);
+        color: var(--wn-text-muted);
         cursor: pointer;
         transition: all 0.12s ease;
       }
-      .wn-annot-panel-export:hover {
-        background: rgba(109, 86, 199, 0.18);
+      .wn-annot-panel-view:hover,
+      .wn-annot-panel-io:hover {
+        background: rgba(109, 86, 199, 0.16);
         color: var(--wn-text);
       }
-      .wn-annot-panel-export:active {
+      .wn-annot-panel-io:active {
         transform: translateY(1px);
       }
-      .wn-annot-panel-export svg {
+      .wn-annot-panel-view.active {
+        background: rgba(109, 86, 199, 0.2);
+        border-color: rgba(109, 86, 199, 0.4);
+        color: var(--wn-text);
+      }
+      .wn-annot-panel-view svg,
+      .wn-annot-panel-io svg {
         width: 16px;
         height: 16px;
+      }
+      /* The word each symbol stands for. A pointer reads it on hover, so here
+         it is only the label a layout without hover falls back to. */
+      .wn-annot-panel-io span {
+        display: none;
+      }
+      /* A symbol on its own says little, so it is named on hover, the way the
+         bar names its own. The label hangs from the right edge of the head,
+         which is the edge these buttons sit against. */
+      @media (hover: hover) {
+        .wn-annot-panel-tools button[data-tip] {
+          position: relative;
+        }
+        .wn-annot-panel-tools button[data-tip]::after {
+          content: attr(data-tip);
+          position: absolute;
+          top: calc(100% + 8px);
+          right: 0;
+          background: rgba(35, 31, 74, 0.92);
+          color: #fff;
+          padding: 6px 8px;
+          border-radius: 8px;
+          font-size: 11px;
+          font-weight: 600;
+          white-space: nowrap;
+          opacity: 0;
+          pointer-events: none;
+          transform: translateY(-2px);
+          transition: opacity 0.12s ease, transform 0.12s ease;
+        }
+        .wn-annot-panel-tools button[data-tip]:hover::after {
+          opacity: 1;
+          transform: translateY(0);
+        }
       }
       .wn-annot-delete-all {
         display: inline-flex;
@@ -998,6 +1120,235 @@
         margin-left: auto;
         margin-top: 4px;
       }
+      /* Which of the three kinds this is, in the kind's own colour, read
+         before any of the words beside it. */
+      .wn-annot-kind {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: 22px;
+        padding: 0 4px;
+        border-radius: 8px;
+        background: var(--wn-item-accent, var(--wn-accent));
+        color: var(--wn-item-accent-text, #ffffff);
+        font-size: 11px;
+        font-weight: 700;
+      }
+      .wn-annot-kind svg {
+        width: 14px;
+        height: 14px;
+      }
+      .wn-annot-kind-label {
+        display: none;
+      }
+      .wn-annot-quote {
+        font-size: 12px;
+        line-height: 1.5;
+        color: var(--wn-text);
+        border-left: 3px solid var(--wn-item-accent, var(--wn-accent));
+        padding: 1px 0 1px 10px;
+        display: -webkit-box;
+        -webkit-line-clamp: 3;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+      }
+      .wn-annot-target {
+        align-self: flex-start;
+        max-width: 100%;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 11px;
+        color: var(--wn-text-muted);
+        background: rgba(109, 86, 199, 0.08);
+        border: 1px solid var(--wn-border);
+        border-radius: 8px;
+        padding: 3px 8px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .wn-annot-fact {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        max-width: 100%;
+        font-size: 11px;
+        color: var(--wn-text-muted);
+        background: rgba(109, 86, 199, 0.06);
+        border: 1px solid var(--wn-border);
+        border-radius: 999px;
+        padding: 3px 9px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      /* The name of the fact is the quieter half of it: a reviewer reads the
+         author, not the word Author. */
+      .wn-annot-fact b {
+        font-weight: 700;
+        color: var(--wn-text-faint);
+      }
+      /* Every note on the page being read makes a page chip on every card
+         that says nothing. It is drawn where the set spans more than the one. */
+      .wn-annot-list:not(.is-multipage) .wn-annot-fact.is-page {
+        display: none;
+      }
+      .wn-annot-fact.is-elsewhere {
+        color: var(--wn-accent);
+        border-color: rgba(109, 86, 199, 0.4);
+        background: rgba(109, 86, 199, 0.12);
+      }
+      .wn-annot-fact.is-sent {
+        color: #2ea043;
+        border-color: rgba(46, 160, 67, 0.35);
+        background: rgba(46, 160, 67, 0.1);
+      }
+      .wn-annot-fact.is-pending {
+        color: #b5820f;
+        border-color: rgba(210, 153, 34, 0.4);
+        background: rgba(210, 153, 34, 0.12);
+      }
+      .wn-annot-fact.is-local {
+        color: var(--wn-danger);
+        border-color: rgba(224, 91, 91, 0.35);
+        background: rgba(224, 91, 91, 0.1);
+      }
+      :root[data-wn-theme="dark"] .wn-annot-fact.is-sent {
+        color: #56d364;
+      }
+      :root[data-wn-theme="dark"] .wn-annot-fact.is-pending {
+        color: #e3b341;
+      }
+      /* The rail has room for the note and little else. Everything a 360px
+         column has to drop is built once and drawn where there is room. */
+      .wn-annot-detail,
+      .wn-annot-facts {
+        display: none;
+      }
+      /* The full-size view. Full width, and vertically the room between the
+         two toolbar positions: --wn-bar-reserve is the bar's height given up
+         at the top and at the bottom at once, so the view clears the bar
+         wherever it is and nothing moves when the reviewer swaps it over. The
+         geometry itself is written inline beside the rail's, which is inline
+         too and would otherwise beat any rule here. */
+      .wn-annot-panel.is-full {
+        padding: 14px 24px 8px;
+        border-left: none;
+        border-right: none;
+        overflow: hidden;
+        box-shadow: 0 0 30px var(--wn-shadow);
+      }
+      .wn-annot-panel.is-full .wn-annot-panel-head {
+        gap: 12px;
+        padding-bottom: 12px;
+        border-bottom: 1px solid var(--wn-border);
+      }
+      .wn-annot-panel.is-full h3 {
+        margin: 0;
+        font-size: 16px;
+        white-space: nowrap;
+      }
+      .wn-annot-panel.is-full .wn-annot-filters {
+        flex-direction: row;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-bottom: 0;
+      }
+      .wn-annot-panel.is-full .wn-annot-filter-row {
+        flex: 1 1 240px;
+        max-width: 420px;
+      }
+      .wn-annot-panel.is-full .wn-annot-arrange {
+        display: inline-flex;
+      }
+      /* A heading owns the width of the grid, not one cell of it. */
+      .wn-annot-panel.is-full .wn-annot-band {
+        grid-column: 1 / -1;
+        margin: 4px 0 -4px;
+      }
+      /* An empty list in a full-size view is mostly room. The one thing it
+         has to say belongs in the middle of it, not in a corner. */
+      .wn-annot-panel.is-full .wn-annot-empty {
+        grid-column: 1 / -1;
+        max-width: 460px;
+        margin: 48px auto 0;
+        padding: 26px 20px;
+      }
+      .wn-annot-panel.is-full .wn-annot-list {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(330px, 1fr));
+        align-content: start;
+        /* Each card is as tall as what it holds. Stretching them to the
+           tallest of their row gives a one-word note the height of a capture
+           and fills the difference with nothing. */
+        align-items: start;
+        gap: 14px;
+        padding: 14px 2px 10px;
+        overflow-y: auto;
+      }
+      /* The cards of a row are as tall as the tallest of them, and the facts
+         sit on the floor of each. A ragged bottom edge reads as a layout that
+         has gone wrong; a row of cards that end together does not. */
+      .wn-annot-panel.is-full .wn-annot-item {
+        margin-bottom: 0;
+        padding: 12px 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .wn-annot-panel.is-full .wn-annot-card-top {
+        margin-bottom: 0;
+      }
+      /* The stamp takes a line of its own rather than wrapping on to one at
+         whatever width the kind's name happens to run out of room. */
+      .wn-annot-panel.is-full .wn-annot-meta {
+        flex-basis: 100%;
+      }
+      .wn-annot-panel.is-full .wn-annot-shot {
+        margin: 0;
+      }
+      .wn-annot-panel.is-full .wn-annot-showmore {
+        margin-top: 0;
+      }
+      .wn-annot-panel.is-full .wn-annot-kind {
+        padding-right: 9px;
+      }
+      .wn-annot-panel.is-full .wn-annot-kind-label {
+        display: inline;
+      }
+      .wn-annot-panel.is-full .wn-annot-comment {
+        font-size: 13px;
+        color: var(--wn-text);
+        background: transparent;
+        border: none;
+        border-radius: 0;
+        padding: 0;
+        -webkit-line-clamp: 5;
+      }
+      .wn-annot-panel.is-full .wn-annot-comment.expanded {
+        -webkit-line-clamp: unset;
+      }
+      .wn-annot-panel.is-full .wn-annot-detail {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .wn-annot-panel.is-full .wn-annot-facts {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        padding-top: 2px;
+      }
+      /* The picture at the size it was taken at, up to the room a card has.
+         A capture taller than it is wide keeps its height rather than being
+         letterboxed down to a strip; full size is still a click away. */
+      .wn-annot-panel.is-full .wn-annot-shot.is-pending {
+        min-height: 170px;
+      }
+      .wn-annot-panel.is-full .wn-annot-shot img {
+        max-height: 260px;
+        max-width: 100%;
+      }
       .uxnote-textmark {
         display: inline;
         background: var(--wn-text-highlight-overlay, rgba(78,156,246,0.2));
@@ -1046,6 +1397,98 @@
         background: var(--wn-element-highlight-soft, rgba(139,92,246,0.1));
         pointer-events: none;
         z-index: 2147482800;
+      }
+      /* A mark on the page says where a note is. This says what it says, and
+         opens it for editing, without a trip to the panel. It takes the
+         pointer, so the pointer can travel from the mark into it. */
+      .wn-annot-note {
+        position: fixed;
+        left: 0;
+        top: 0;
+        z-index: 2147483090;
+        display: none;
+        flex-direction: column;
+        gap: 8px;
+        width: max-content;
+        max-width: 320px;
+        padding: 10px 12px;
+        border-radius: 12px;
+        border: 1px solid var(--wn-border);
+        background: var(--wn-surface);
+        color: var(--wn-text);
+        box-shadow: 0 12px 28px var(--wn-shadow);
+        font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+        font-size: 12px;
+        line-height: 1.5;
+      }
+      .wn-annot-note.show {
+        display: flex;
+      }
+      .wn-annot-note-top {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 6px;
+      }
+      .wn-annot-note-kind {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 10px;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--wn-item-accent-strong, var(--wn-text-muted));
+      }
+      .wn-annot-note-kind svg {
+        width: 13px;
+        height: 13px;
+      }
+      .wn-annot-note-number {
+        font-size: 11px;
+        font-weight: 800;
+        color: var(--wn-text-muted);
+        background: var(--wn-item-number-bg, rgba(109, 86, 199, 0.1));
+        border: 1px solid var(--wn-item-number-border, transparent);
+        border-radius: 999px;
+        padding: 1px 7px;
+      }
+      .wn-annot-note-edit {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        margin-left: auto;
+        width: 26px;
+        height: 26px;
+        padding: 0;
+        border-radius: 8px;
+        border: 1px solid var(--wn-border);
+        background: rgba(109, 86, 199, 0.08);
+        color: var(--wn-text-muted);
+        cursor: pointer;
+        transition: all 0.12s ease;
+      }
+      .wn-annot-note-edit:hover {
+        background: rgba(109, 86, 199, 0.18);
+        color: var(--wn-text);
+      }
+      .wn-annot-note-edit svg {
+        width: 14px;
+        height: 14px;
+      }
+      /* A comment is whatever was typed, newlines and long words included,
+         and a very long one scrolls inside the bubble rather than growing it
+         past the screen. */
+      .wn-annot-note-text {
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        max-height: 180px;
+        overflow-y: auto;
+        color: var(--wn-text);
+      }
+      .wn-annot-note-text.is-empty {
+        color: var(--wn-text-faint);
+        font-style: italic;
       }
       .wn-annot-toast {
         position: fixed;
@@ -1419,6 +1862,14 @@
       .wn-annot-shot {
         margin: 8px 0 4px;
       }
+      /* The frame a picture that has not been asked for yet stands in. Without
+         a box of its own nothing would ever come on screen to ask for it. */
+      .wn-annot-shot.is-pending {
+        min-height: 84px;
+        border: 1px dashed var(--wn-border);
+        border-radius: 10px;
+        background: rgba(109, 86, 199, 0.05);
+      }
       .wn-annot-shot img {
         display: block;
         max-width: 100%;
@@ -1596,8 +2047,30 @@
           border-color: var(--wn-border);
           box-shadow: 0 6px 16px var(--wn-shadow);
         }
-        .wn-annot-panel-export {
-          display: inline-flex;
+        /* Import wants a file already on the device, which a phone picker
+           cannot usefully give; mail rides the share sheet the export opens
+           here. The export itself stays, and is the whole handoff. */
+        .wn-annot-panel-io[data-action='import'],
+        .wn-annot-panel-io[data-action='mail'] {
+          display: none;
+        }
+        /* Nothing hovers here, so the symbol that is left carries its word
+           rather than waiting to be asked for it. */
+        .wn-annot-panel-io {
+          width: auto;
+          height: auto;
+          gap: 6px;
+          padding: 8px 14px;
+          font-weight: 700;
+          font-size: 13px;
+        }
+        .wn-annot-panel-io span {
+          display: inline;
+        }
+        /* A compact layout is already a sheet, and the full-size view is the
+           room a pointer layout has. The class never reaches here. */
+        .wn-annot-panel-view {
+          display: none;
         }
 
         /* The sheet. Insets rather than a width, because a host page that
@@ -1674,11 +2147,15 @@
           width: 18px;
           height: 18px;
         }
-        .wn-annot-delete-all,
-        .wn-annot-panel-export {
+        .wn-annot-delete-all {
           min-height: 44px;
           padding: 8px 14px;
           font-size: 13px;
+        }
+        .wn-annot-panel-view,
+        .wn-annot-panel-io {
+          min-width: 44px;
+          min-height: 44px;
         }
         .wn-annot-modal .wn-annot-pill {
           min-height: 44px;
@@ -1908,27 +2385,19 @@
     if (captureAvailable()) {
       editButtons.push({ action: 'mode', mode: 'screenshot', tip: 'Capture a region', icon: iconCamera() });
     }
-    // Compact keeps five controls -- hide, highlight, element, camera, notes --
-    // so each is a thumb-sized target and none of them scrolls out of reach.
-    // Import needs the file on the device and is unusable at this size, the
-    // position toggle has no second answer where the bar belongs in thumb
-    // reach, and export moves to the panel head. The mail button goes with
-    // them: on a phone the export path already opens the system share sheet,
-    // which is where a handoff to mail belongs.
-    const exportButtons = [];
-    if (jsonImport && !compact) exportButtons.push({ action: 'import', tip: 'Import JSON', icon: iconUpload() });
-    if (jsonExport && !compact) exportButtons.push({ action: 'export', tip: 'Export JSON', icon: iconDownload() });
-    if (mailExport && !compact) exportButtons.push({ action: 'mail', tip: 'Send by mail', icon: iconMail() });
+    // The bar is for marking the page: three ways of taking a note, and the
+    // two controls that say where the widget itself sits. Handing the whole
+    // set of notes on -- to a file, from a file, to a mail client -- acts on
+    // what the panel holds, so those three are drawn in the panel's head,
+    // beside the notes they carry. Compact drops the position toggle too:
+    // there is no second answer to where the bar belongs in thumb reach, and
+    // what is left is five thumb-sized targets that never scroll out of it.
     const controlButtons = [];
     if (!compact) controlButtons.push({ action: 'toggle-pos', tip: 'Toolbar top / bottom', icon: iconSwap() });
     controlButtons.push({ action: 'toggle-panel', tip: 'Show / hide annotations', icon: iconPanel() });
 
     frag.appendChild(makeSpacer());
     frag.appendChild(makeGroup(editButtons));
-    if (exportButtons.length) {
-      frag.appendChild(makeSpacer());
-      frag.appendChild(makeGroup(exportButtons));
-    }
     frag.appendChild(makeSpacer());
     frag.appendChild(makeGroup(controlButtons));
 
@@ -1939,11 +2408,24 @@
     mountVisibilityToggle();
   }
 
+  // One handoff for the whole set of notes, drawn in the head of the panel
+  // that holds them. The head is built once and the compact layout is a media
+  // query away, so what a phone leaves out is left out by the stylesheet
+  // rather than by this.
+  function panelToolButton(enabled, action, label, word, icon) {
+    if (!enabled) return '';
+    return (
+      `<button class="wn-annot-panel-io wn-annotator" type="button" data-action="${action}"` +
+      ` data-tip="${label}" aria-label="${label}">${icon}<span>${word}</span></button>`
+    );
+  }
+
   // One entry point for a change of form factor. The bar's button set differs
   // between the two, so a rotation has to rebuild it, not merely reposition it.
   function applyFormFactor() {
     buildToolbar();
     positionVisibilityToggle();
+    syncPanelView();
     positionPanel();
     positionTip();
     positionCommentCard();
@@ -1969,11 +2451,10 @@
         <div class="wn-annot-panel-top wn-annotator">
           <h3>Annotations (0)</h3>
           <div class="wn-annot-panel-tools wn-annotator">
-            ${
-              jsonExport
-                ? `<button class="wn-annot-panel-export wn-annotator" type="button">${iconDownload()}<span>Export</span></button>`
-                : ''
-            }
+            <button class="wn-annot-panel-view wn-annotator" type="button"></button>
+            ${panelToolButton(jsonImport, 'import', 'Import JSON', 'Import', iconUpload())}
+            ${panelToolButton(jsonExport, 'export', 'Export JSON', 'Export', iconDownload())}
+            ${panelToolButton(mailExport, 'mail', 'Send by mail', 'Mail', iconMail())}
             <button class="wn-annot-delete-all wn-annotator" type="button">
               ${iconTrash()}<span>All</span>
             </button>
@@ -1982,6 +2463,23 @@
         <div class="wn-annot-filters wn-annotator">
           <div class="wn-annot-filter-row wn-annotator">
             <input id="wn-filter-search" class="wn-annotator" type="search" placeholder="Keyword search" />
+          </div>
+          <div class="wn-annot-arrange wn-annotator">
+            <label for="wn-filter-sort">Sort
+              <select id="wn-filter-sort" class="wn-annotator">
+                <option value="oldest">Oldest first</option>
+                <option value="newest">Newest first</option>
+                <option value="kind">By kind</option>
+                <option value="page">By page</option>
+              </select>
+            </label>
+            <label for="wn-filter-group">Group
+              <select id="wn-filter-group" class="wn-annotator">
+                <option value="none">Nothing</option>
+                <option value="page">By page</option>
+                <option value="kind">By kind</option>
+              </select>
+            </label>
           </div>
         </div>
       </div>
@@ -2008,13 +2506,17 @@
         panelHead.firstChild
       );
     }
-    const panelExportBtn = panel.querySelector('.wn-annot-panel-export');
-    if (panelExportBtn) {
-      panelExportBtn.addEventListener('click', (evt) => {
+    const panelList = panel.querySelector('.wn-annot-list');
+    if (panelList) panelList.addEventListener('keydown', onListKey);
+    const panelViewBtn = panel.querySelector('.wn-annot-panel-view');
+    if (panelViewBtn) {
+      panelViewBtn.addEventListener('click', (evt) => {
         evt.stopPropagation();
-        requestExport();
+        setPanelView(isFullView() ? 'rail' : 'full');
       });
     }
+    const panelTools = panel.querySelector('.wn-annot-panel-tools');
+    if (panelTools) panelTools.addEventListener('click', onPanelToolClick);
 
     const markerLayer = document.createElement('div');
     markerLayer.className = 'wn-annot-marker-layer wn-annotator';
@@ -2034,6 +2536,7 @@
     state.tip = tip;
 
     toolbar.addEventListener('click', onToolbarClick);
+    syncPanelView();
     renderList();
     applyPageOffset();
     applySheetInset();
@@ -2653,6 +3156,7 @@
     document.addEventListener('pointerup', handleTextSelection);
     document.addEventListener('selectionchange', handleSelectionChange);
     document.addEventListener('mousemove', handleElementHover);
+    document.addEventListener('mouseover', handleNoteHover);
     document.addEventListener('click', handleElementClick, true);
     window.addEventListener('keydown', handleModeEscape);
     window.addEventListener('resize', refreshMarkers);
@@ -2687,6 +3191,23 @@
     };
 
     searchInput.addEventListener('input', trigger);
+
+    const sortInput = state.panel.querySelector('#wn-filter-sort');
+    if (sortInput) {
+      sortInput.value = state.filters.sort;
+      sortInput.addEventListener('change', () => {
+        state.filters.sort = sortInput.value;
+        renderList();
+      });
+    }
+    const groupInput = state.panel.querySelector('#wn-filter-group');
+    if (groupInput) {
+      groupInput.value = state.filters.group;
+      groupInput.addEventListener('change', () => {
+        state.filters.group = groupInput.value;
+        renderList();
+      });
+    }
   }
 
   function setMode(nextMode, options = {}) {
@@ -2701,6 +3222,7 @@
       return;
     }
     state.mode = nextMode;
+    hideNoteBubble();
     updateToolbarActive();
     showTipForMode(nextMode);
     closeTouchCapture();
@@ -2793,6 +3315,57 @@
       // ignore
     }
     return null;
+  }
+
+  function loadPanelView() {
+    try {
+      if (localStorage.getItem(panelViewStorageKey) === 'full') return 'full';
+    } catch (err) {
+      // ignore
+    }
+    return 'rail';
+  }
+
+  // The rail is the shape that leaves the page visible, so it is the one the
+  // panel opens in. The full-size view is asked for, and the asking is
+  // remembered -- except when the widget shrinks the panel itself to uncover
+  // the note the reviewer just picked.
+  function setPanelView(next, options = {}) {
+    const view = next === 'full' ? 'full' : 'rail';
+    if (options.remember !== false) {
+      try {
+        localStorage.setItem(panelViewStorageKey, view);
+      } catch (err) {
+        // ignore
+      }
+    }
+    if (state.panelView === view) return;
+    state.panelView = view;
+    syncPanelView();
+  }
+
+  function isFullView() {
+    return state.panelView === 'full' && !isCompactLayout();
+  }
+
+  // A compact layout is already a sheet and never takes the class, so the
+  // sheet's rules and the full-size view's never meet.
+  function syncPanelView() {
+    if (!state.panel) return;
+    const full = isFullView();
+    const btn = state.panel.querySelector('.wn-annot-panel-view');
+    if (btn) {
+      const label = full ? 'Shrink the panel to the side' : 'Open the panel full size';
+      btn.innerHTML = full ? iconCollapse() : iconExpand();
+      btn.classList.toggle('active', full);
+      btn.setAttribute('aria-label', label);
+      btn.setAttribute('aria-pressed', full ? 'true' : 'false');
+      btn.setAttribute('data-tip', label);
+    }
+    if (state.panel.classList.contains('is-full') === full) return;
+    state.panel.classList.toggle('is-full', full);
+    positionPanel();
+    renderList();
   }
 
   function loadHiddenState() {
@@ -2925,6 +3498,7 @@
   function applyItemAccent(item, palette) {
     if (!item || !palette) return;
     item.style.setProperty('--wn-item-accent', palette.base);
+    item.style.setProperty('--wn-item-accent-text', palette.text);
     item.style.setProperty('--wn-item-accent-strong', palette.strong);
     item.style.setProperty('--wn-item-accent-shadow', palette.shadow);
     item.style.setProperty('--wn-item-accent-soft', palette.soft);
@@ -3046,23 +3620,16 @@
     if (!action) return;
     if (action === 'mode') {
       const mode = btn.getAttribute('data-mode');
+      // Marking is done on the page, and the panel is over the page: a rail
+      // of it in the side view and the whole of it in the full-size one. So
+      // picking a way to mark puts the panel away first, whichever way it is
+      // pointing and whichever of the three was picked.
+      setPanelOpen(false);
       if (mode === 'screenshot') {
         await captureRegionAnnotation();
         return;
       }
       setMode(mode);
-      return;
-    }
-    if (action === 'export') {
-      requestExport();
-      return;
-    }
-    if (action === 'import') {
-      openImportModal();
-      return;
-    }
-    if (action === 'mail') {
-      await emailAnnotations();
       return;
     }
     if (action === 'toggle-panel') {
@@ -3073,6 +3640,24 @@
       setPosition(position === 'bottom' ? 'top' : 'bottom');
       updatePositionIcon();
       return;
+    }
+  }
+
+  async function onPanelToolClick(evt) {
+    const btn = evt.target.closest('button[data-action]');
+    if (!btn) return;
+    evt.stopPropagation();
+    const action = btn.getAttribute('data-action');
+    if (action === 'export') {
+      requestExport();
+      return;
+    }
+    if (action === 'import') {
+      openImportModal();
+      return;
+    }
+    if (action === 'mail') {
+      await emailAnnotations();
     }
   }
 
@@ -3093,6 +3678,7 @@
       setMode(null);
       hideTip();
       hideOutline();
+      hideNoteBubble();
     }
     syncVisibilityButton();
     updateDimmer();
@@ -3162,6 +3748,20 @@
     const p = state.panel;
     const inset = 18;
     const barRect = state.toolbar.getBoundingClientRect();
+    // The room the full-size view runs in. The bar sits the same distance from
+    // whichever edge it is docked against, so giving up that distance at both
+    // ends at once clears the bar at either position and leaves the view where
+    // it is when the reviewer swaps the bar over. A hidden bar has no box and
+    // reserves nothing.
+    const reserve = barRect.height
+      ? Math.max(
+          0,
+          Math.round(
+            (position === 'top' ? barRect.bottom : document.documentElement.clientHeight - barRect.top) + 10
+          )
+        )
+      : 0;
+    document.documentElement.style.setProperty('--wn-bar-reserve', `${reserve}px`);
 
     if (isCompactLayout()) {
       // The sheet is placed by the stylesheet, against the viewport edges and
@@ -3178,6 +3778,20 @@
       p.style.paddingTop = '';
       p.style.paddingBottom = '';
       applySheetInset();
+      return;
+    }
+
+    if (isFullView()) {
+      p.style.width = '100%';
+      p.style.maxHeight = 'none';
+      p.style.left = '0px';
+      p.style.right = '0px';
+      p.style.top = 'var(--wn-bar-reserve)';
+      p.style.bottom = 'var(--wn-bar-reserve)';
+      p.style.height = '';
+      p.style.borderRadius = '0px';
+      p.style.paddingTop = '';
+      p.style.paddingBottom = '';
       return;
     }
 
@@ -4497,6 +5111,7 @@
       positionMarker(entry.el, rect, ann);
       applyMarkerPalette(entry.el, getAnnotationColors(ann));
     });
+    positionNoteBubble();
   }
 
   function ensurePanelVisible() {
@@ -4509,6 +5124,7 @@
     ensurePanelVisible();
     const list = state.panel.querySelector('.wn-annot-list');
     if (!list) return;
+    state.focusedId = id;
     const items = list.querySelectorAll('.wn-annot-item');
     items.forEach((el) => el.classList.remove('is-focused'));
     const target = list.querySelector(`.wn-annot-item[data-id="${id}"]`);
@@ -4593,6 +5209,180 @@
     }, 800);
   }
 
+  // ------------------------------------------------------------------
+  // The bubble on a mark
+  // ------------------------------------------------------------------
+
+  // Every annotation leaves something on the page -- a highlight over the
+  // words, a border around the element, a frame where the region was, and a
+  // numbered badge beside each of them. Resting on one of those opens what
+  // the note says and a button that edits it, so reading a mark does not mean
+  // finding its card in the panel.
+  //
+  // It is a hover surface and only a hover surface. A finger has no hover to
+  // give and a keyboard has no pointer, and both already reach the same
+  // comment and the same edit button on the card in the panel, so nothing is
+  // out of reach for want of this.
+
+  function noteBubbleAllowed() {
+    // A capture mode owns the pointer: element mode draws its own preview
+    // under it, and a bubble in the way would be one more thing to click
+    // through. A hidden widget draws nothing at all.
+    return !isTouchInput() && !state.hidden && !state.mode;
+  }
+
+  // What the pointer is resting on, and the note that mark stands for.
+  //
+  // The two marks the widget draws for itself: the numbered badge, which
+  // every annotation has and which sits on the border of what was picked,
+  // and the highlight over the words, which is that border. The border of a
+  // pinned element is drawn on the page's own element, and a pin on
+  // something the size of the screen would then open the bubble anywhere on
+  // it; the badge in its corner is the border there.
+  //
+  // A badge stands for one note. An element carrying several is drawn one
+  // badge per note, offset along the same edge, so the answer is always one.
+  function noteTargetOf(node) {
+    if (!node || !node.closest) return null;
+    const marker = node.closest('.wn-annot-marker[data-wn-annot-id]');
+    if (marker) return { anchor: marker, id: marker.dataset.wnAnnotId };
+    const span = node.closest('.uxnote-textmark[data-uxnote-id]');
+    if (span) return { anchor: span, id: span.dataset.uxnoteId };
+    return null;
+  }
+
+  function ensureNoteBubble() {
+    if (state.note) return state.note;
+    const note = document.createElement('div');
+    note.className = 'wn-annot-note wn-annotator';
+    note.addEventListener('mouseleave', queueNoteClose);
+    document.body.appendChild(note);
+    state.note = note;
+    return note;
+  }
+
+  function buildNoteBody(ann, number) {
+    const frag = document.createDocumentFragment();
+    const top = document.createElement('div');
+    top.className = 'wn-annot-note-top';
+    const kind = document.createElement('span');
+    kind.className = 'wn-annot-note-kind';
+    kind.appendChild(iconNode(kindIcon(ann.type)));
+    const kindName = document.createElement('span');
+    kindName.textContent = KIND_LABELS[ann.type] || KIND_LABELS.element;
+    kind.appendChild(kindName);
+    top.appendChild(kind);
+
+    const numberEl = document.createElement('span');
+    numberEl.className = 'wn-annot-note-number';
+    numberEl.textContent = `#${number}`;
+    top.appendChild(numberEl);
+
+    const edit = document.createElement('button');
+    edit.type = 'button';
+    edit.className = 'wn-annot-note-edit wn-annotator';
+    edit.setAttribute('aria-label', 'Edit this annotation');
+    edit.appendChild(iconNode(iconEdit()));
+    edit.addEventListener('click', async (evt) => {
+      evt.stopPropagation();
+      hideNoteBubble();
+      await editAnnotation(ann.id);
+    });
+    top.appendChild(edit);
+    frag.appendChild(top);
+
+    const text = document.createElement('div');
+    const comment = (ann.comment || '').trim();
+    text.className = comment ? 'wn-annot-note-text' : 'wn-annot-note-text is-empty';
+    text.textContent = comment || 'Nothing written on this one yet.';
+    frag.appendChild(text);
+    return frag;
+  }
+
+  function showNoteBubble(anchor, id) {
+    if (!noteBubbleAllowed()) return hideNoteBubble();
+    const index = state.annotations.findIndex((one) => one.id === id);
+    if (index === -1) return hideNoteBubble();
+    // The number is the one the badge carries, and both count from the order
+    // the notes were made in.
+    const ann = state.annotations[index];
+    const number = index + 1;
+    cancelNoteClose();
+    const note = ensureNoteBubble();
+    // The same mark under the pointer redraws nothing. An edit moves the
+    // stamp, which is what tells the two apart without comparing the text.
+    const key = `${ann.id}:${number}:${ann.updatedAt || ''}`;
+    if (state.noteAnchor !== anchor || note.dataset.key !== key) {
+      note.dataset.key = key;
+      note.innerHTML = '';
+      applyItemAccent(note, getAnnotationColors(ann));
+      note.appendChild(buildNoteBody(ann, number));
+      state.noteAnchor = anchor;
+    }
+    note.classList.add('show');
+    positionNoteBubble();
+  }
+
+  // Above the mark by preference, below it where there is no room above, and
+  // never past either side of the screen.
+  function positionNoteBubble() {
+    const note = state.note;
+    const anchor = state.noteAnchor;
+    if (!note || !anchor || !note.classList.contains('show')) return;
+    if (!anchor.isConnected) return hideNoteBubble();
+    const rect = anchor.getBoundingClientRect();
+    if (!rect.width && !rect.height) return hideNoteBubble();
+    const box = note.getBoundingClientRect();
+    const view = document.documentElement;
+    const margin = 8;
+    const gap = 10;
+    const left = Math.max(
+      margin,
+      Math.min(rect.left + rect.width / 2 - box.width / 2, view.clientWidth - box.width - margin)
+    );
+    const above = rect.top - box.height - gap;
+    const top = above >= margin ? above : Math.min(rect.bottom + gap, view.clientHeight - box.height - margin);
+    note.style.left = `${Math.round(left)}px`;
+    note.style.top = `${Math.round(Math.max(margin, top))}px`;
+  }
+
+  // The bubble stands off the mark, so the pointer crosses the page on its
+  // way to the edit button. It waits out that crossing rather than closing
+  // under the pointer halfway there.
+  function queueNoteClose() {
+    cancelNoteClose();
+    state.noteTimer = setTimeout(hideNoteBubble, 180);
+  }
+
+  function cancelNoteClose() {
+    if (!state.noteTimer) return;
+    clearTimeout(state.noteTimer);
+    state.noteTimer = null;
+  }
+
+  function hideNoteBubble() {
+    cancelNoteClose();
+    state.noteAnchor = null;
+    if (state.note) state.note.classList.remove('show');
+  }
+
+  // One listener for the whole page rather than one per mark, so a note added
+  // or resolved late is covered without anything being bound to it.
+  function handleNoteHover(evt) {
+    if (!noteBubbleAllowed()) return;
+    const target = evt.target;
+    if (state.note && state.note.contains(target)) {
+      cancelNoteClose();
+      return;
+    }
+    const found = noteTargetOf(target);
+    if (found) {
+      showNoteBubble(found.anchor, found.id);
+      return;
+    }
+    queueNoteClose();
+  }
+
   function ensureFooter() {
     if (!state.panel) return null;
     let footer = state.panel.querySelector('.wn-annot-footer');
@@ -4611,133 +5401,528 @@
   }
 
 
+  // What each kind is called, and the mark the eye reads before the words.
+  const KIND_LABELS = {
+    text: 'Text highlight',
+    element: 'Element pin',
+    screenshot: 'Region capture'
+  };
+
+  const KIND_ORDER = { text: 0, element: 1, screenshot: 2 };
+
+  const LIST_SORTS = {
+    oldest: (a, b) => a.createdAt - b.createdAt,
+    newest: (a, b) => b.createdAt - a.createdAt,
+    kind: (a, b) => (KIND_ORDER[a.type] ?? 3) - (KIND_ORDER[b.type] ?? 3) || a.createdAt - b.createdAt,
+    page: (a, b) =>
+      String(a.pageKey || '').localeCompare(String(b.pageKey || '')) || a.createdAt - b.createdAt
+  };
+
+  function kindIcon(type) {
+    if (type === 'text') return iconPen();
+    if (type === 'screenshot') return iconCamera();
+    return iconTarget();
+  }
+
+  // The same icon markup goes on every card in the list, and parsing it again
+  // for each of them is the most expensive thing a card does. It is parsed
+  // once per shape and cloned after that.
+  const iconNodes = new Map();
+  function iconNode(markup) {
+    let node = iconNodes.get(markup);
+    if (!node) {
+      const holder = document.createElement('div');
+      holder.innerHTML = markup;
+      node = holder.firstElementChild;
+      iconNodes.set(markup, node);
+    }
+    return node.cloneNode(true);
+  }
+
+  // Two addresses over a set of two hundred notes, not two hundred of them.
+  const pageLabels = new Map();
+
+  // The element an element pin points at, in the terms it was stored in.
+  function describeAnnotationTarget(ann) {
+    const target = (ann && ann.target) || {};
+    if (ann.type !== 'element') return '';
+    if (target.css) return truncateText(target.css, 90);
+    if (target.tag) return `<${target.tag}>`;
+    if (target.xpath) return truncateText(target.xpath, 90);
+    return '';
+  }
+
+  // The page a note belongs to, as the part of the address that distinguishes
+  // it. The widget follows route changes, so a set can span pages.
+  function describeAnnotationPage(ann) {
+    // The page key, not the address: the widget files a note under the origin
+    // and the path, so two addresses that differ only in their query string
+    // are one page here and the label says the same.
+    const href = (ann && (ann.pageKey || ann.pageUrl)) || '';
+    if (!href) return '';
+    if (pageLabels.has(href)) return pageLabels.get(href);
+    let label;
+    try {
+      label = truncateText(new URL(href, window.location.href).pathname || '/', 60);
+    } catch (err) {
+      label = truncateText(href, 60);
+    }
+    pageLabels.set(href, label);
+    return label;
+  }
+
+  function isOnThisPage(ann) {
+    return (ann && ann.pageKey) === normalizePageKey(window.location.href);
+  }
+
+  // Where a server is named, whether it has this note. The snapshot holds the
+  // id of everything the server took, and the pending set the ids a change is
+  // still owed for -- an edit leaves the id in the snapshot and the note
+  // unsent, and those are not the same answer.
+  function syncStateOf(ann) {
+    if (!server) return '';
+    if (state.syncPending.has(ann.id)) return 'pending';
+    return syncedSnapshot.has(ann.id) ? 'sent' : 'local';
+  }
+
+  const SYNC_FACTS = {
+    sent: 'On the server',
+    pending: 'Not sent yet',
+    local: 'Only in this browser'
+  };
+
+  // One formatter each, built on the first card and kept. Asking a date to
+  // format itself with options builds one of these behind the call, and a
+  // long list asks twice per card.
+  let stampFormats = null;
+  function formatStamp(value) {
+    if (!stampFormats) {
+      stampFormats = {
+        date: new Intl.DateTimeFormat(undefined, { year: 'numeric', month: '2-digit', day: '2-digit' }),
+        time: new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit' })
+      };
+    }
+    const at = new Date(value);
+    return `${stampFormats.date.format(at)} \u2022 ${stampFormats.time.format(at)}`;
+  }
+
+  function addFact(row, label, value, className) {
+    if (!value) return;
+    const chip = document.createElement('div');
+    chip.className = className ? `wn-annot-fact ${className}` : 'wn-annot-fact';
+    const name = document.createElement('b');
+    name.textContent = label;
+    chip.appendChild(name);
+    chip.appendChild(document.createTextNode(value));
+    chip.title = `${label} ${value}`;
+    row.appendChild(chip);
+  }
+
+  // Everything one annotation holds, in one card. The rail draws the part of
+  // it that fits in 360px and the full-size view draws all of it; which is
+  // which is the stylesheet's to decide, so a change of view moves no DOM.
+  function buildCard(ann, number) {
+    const item = document.createElement('div');
+    item.className = 'wn-annot-item';
+    item.dataset.id = ann.id;
+    item.tabIndex = -1;
+    if (state.focusedId === ann.id) item.classList.add('is-focused');
+    applyItemAccent(item, getAnnotationColors(ann));
+
+    const top = document.createElement('div');
+    top.className = 'wn-annot-card-top';
+    const topLeft = document.createElement('div');
+    topLeft.className = 'wn-annot-card-top-left';
+
+    const kindLabel = KIND_LABELS[ann.type] || KIND_LABELS.element;
+    const kind = document.createElement('div');
+    kind.className = 'wn-annot-kind';
+    kind.title = kindLabel;
+    kind.appendChild(iconNode(kindIcon(ann.type)));
+    const kindName = document.createElement('span');
+    kindName.className = 'wn-annot-kind-label';
+    kindName.textContent = kindLabel;
+    kind.appendChild(kindName);
+    topLeft.appendChild(kind);
+
+    const numberEl = document.createElement('div');
+    numberEl.className = 'wn-annot-number';
+    numberEl.textContent = `#${number}`;
+    topLeft.appendChild(numberEl);
+    if (ann.status === 'missing') {
+      const missing = document.createElement('div');
+      missing.className = 'wn-annot-missing';
+      missing.textContent = 'Missing';
+      topLeft.appendChild(missing);
+    }
+    const meta = document.createElement('div');
+    meta.className = 'wn-annot-meta';
+    meta.textContent = formatStamp(ann.createdAt);
+    topLeft.appendChild(meta);
+
+    const topRight = document.createElement('div');
+    topRight.className = 'wn-annot-card-top-right';
+    const editBtn = document.createElement('button');
+    editBtn.type = 'button';
+    editBtn.className = 'wn-annot-edit wn-annotator';
+    editBtn.setAttribute('aria-label', 'Edit this annotation');
+    editBtn.appendChild(iconNode(iconEdit()));
+    editBtn.addEventListener('click', async (evt) => {
+      evt.stopPropagation();
+      await editAnnotation(ann.id);
+    });
+    topRight.appendChild(editBtn);
+    const deleteBtn = document.createElement('button');
+    deleteBtn.type = 'button';
+    deleteBtn.className = 'wn-annot-delete wn-annotator';
+    deleteBtn.setAttribute('aria-label', 'Delete this annotation');
+    deleteBtn.appendChild(iconNode(iconTrash()));
+    deleteBtn.addEventListener('click', (evt) => {
+      evt.stopPropagation();
+      deleteAnnotation(ann.id);
+    });
+    topRight.appendChild(deleteBtn);
+    top.appendChild(topLeft);
+    top.appendChild(topRight);
+    item.appendChild(top);
+
+    const comment = document.createElement('div');
+    comment.className = 'wn-annot-comment';
+    const commentText = ann.comment || '\u2014';
+    comment.textContent = commentText;
+    item.appendChild(comment);
+
+    const showMore = document.createElement('button');
+    showMore.type = 'button';
+    showMore.className = 'wn-annot-showmore wn-annotator';
+    showMore.textContent = 'See more';
+    showMore.addEventListener('click', (evt) => {
+      evt.stopPropagation();
+      const expanded = comment.classList.toggle('expanded');
+      showMore.textContent = expanded ? 'See less' : 'See more';
+    });
+    if (commentText.length < 160) showMore.style.display = 'none';
+    item.appendChild(showMore);
+
+    const detail = document.createElement('div');
+    detail.className = 'wn-annot-detail';
+    const snippet = (ann.snippet || '').trim();
+    if (snippet) {
+      const quote = document.createElement('div');
+      quote.className = 'wn-annot-quote';
+      quote.textContent = snippet;
+      detail.appendChild(quote);
+    }
+    const targetText = describeAnnotationTarget(ann);
+    if (targetText) {
+      const target = document.createElement('div');
+      target.className = 'wn-annot-target';
+      target.textContent = targetText;
+      target.title = targetText;
+      detail.appendChild(target);
+    }
+    item.appendChild(detail);
+
+    const shotSrc = screenshotSrc(ann);
+    if (shotSrc) {
+      const shotWrap = document.createElement('div');
+      shotWrap.className = 'wn-annot-shot is-pending';
+      const shotImg = document.createElement('img');
+      shotImg.alt = 'The screenshot of this annotation';
+      shotImg.addEventListener('click', (evt) => {
+        evt.stopPropagation();
+        openScreenshotLightbox(shotSrc);
+      });
+      shotWrap.appendChild(shotImg);
+      item.appendChild(shotWrap);
+      observeShot(shotWrap);
+    }
+
+    const facts = document.createElement('div');
+    facts.className = 'wn-annot-facts';
+    addFact(facts, 'Page', describeAnnotationPage(ann), isOnThisPage(ann) ? 'is-page' : 'is-page is-elsewhere');
+    if (ann.updatedAt && ann.updatedAt > ann.createdAt) {
+      addFact(facts, 'Edited', formatStamp(ann.updatedAt));
+    }
+    const sync = syncStateOf(ann);
+    if (sync) addFact(facts, '', SYNC_FACTS[sync], `is-${sync}`);
+    // An import can carry these and the widget reads neither. Showing what
+    // arrived is honest; offering to edit it would not be.
+    if (ann.author) addFact(facts, 'Author', truncateText(String(ann.author), 40));
+    if (ann.priority) addFact(facts, 'Priority', truncateText(String(ann.priority), 20));
+    item.appendChild(facts);
+
+    item.addEventListener('click', () => {
+      focusAnnotation(ann.id, true, ann.pageUrl, ann.pageKey);
+      // The sheet covers the page it is pointing at, so it steps aside. The
+      // full-size view covers it too, and falls back to the rail rather than
+      // closing: the list is still what the reviewer is working through.
+      if (isCompactLayout()) setPanelOpen(false);
+      else if (isFullView()) setPanelView('rail', { remember: false });
+    });
+    return item;
+  }
+
+  // A picture is a data URL in storage, and a set of them is more than a
+  // browser should decode to draw a list nobody has scrolled to yet. Each is
+  // asked for when the card holding it comes near the viewport -- which a
+  // closed panel never does, so a panel nobody opened decodes nothing at all.
+  function observeShot(wrap) {
+    const observer = ensureShotObserver();
+    if (!observer) {
+      loadShot(wrap);
+      return;
+    }
+    observer.observe(wrap);
+  }
+
+  function ensureShotObserver() {
+    if (state.shotObserver) return state.shotObserver;
+    if (typeof IntersectionObserver !== 'function' || !state.panel) return null;
+    const list = state.panel.querySelector('.wn-annot-list');
+    if (!list) return null;
+    state.shotObserver = new IntersectionObserver(
+      (entries, observer) => {
+        entries.forEach((entry) => {
+          if (!entry.isIntersecting) return;
+          observer.unobserve(entry.target);
+          loadShot(entry.target);
+        });
+      },
+      { root: list, rootMargin: '400px 0px' }
+    );
+    return state.shotObserver;
+  }
+
+  function loadShot(wrap) {
+    const img = wrap.firstElementChild;
+    if (!img || img.getAttribute('src')) return;
+    const item = wrap.parentNode;
+    const ann = state.annotations.find((one) => one.id === (item && item.dataset.id));
+    const src = ann && screenshotSrc(ann);
+    if (!src) return;
+    img.src = src;
+    wrap.classList.remove('is-pending');
+  }
+
+  // An observer holds what it watches, so a card that leaves the list has to
+  // hand its picture back or the set only ever grows.
+  function releaseCard(entry) {
+    if (entry && entry.shot && state.shotObserver) state.shotObserver.unobserve(entry.shot);
+  }
+
+  // Everything one search reads. The snippet was searchable and invisible; the
+  // rest of it was neither.
+  function searchHaystack(ann) {
+    return `${ann.comment || ''} ${ann.snippet || ''} ${KIND_LABELS[ann.type] || ''} ${
+      describeAnnotationTarget(ann)
+    } ${ann.pageUrl || ''} ${ann.author || ''} ${ann.priority || ''}`.toLowerCase();
+  }
+
+  // A bulk sync answers one request per annotation, and each answer changes
+  // one card. Rendering on every one of them would run the list as many times
+  // as there are notes; this runs it once for the frame.
+  function queueListRender() {
+    if (state.listRenderQueued || !state.panel) return;
+    state.listRenderQueued = true;
+    requestAnimationFrame(() => {
+      state.listRenderQueued = false;
+      if (state.panel) renderList();
+    });
+  }
+
+  // Whether the set is about more than the page being read. The widget
+  // follows route changes, so it can hold notes made anywhere on the site.
+  function spansPages() {
+    const pages = new Set();
+    for (const ann of state.annotations) {
+      if (!isOnThisPage(ann)) return true;
+      pages.add(ann.pageKey);
+      if (pages.size > 1) return true;
+    }
+    return false;
+  }
+
+  function bandKey(ann, group) {
+    return group === 'kind' ? `kind:${ann.type}` : `page:${ann.pageKey || ''}`;
+  }
+
+  function bandLabel(ann, group) {
+    if (group === 'kind') return KIND_LABELS[ann.type] || KIND_LABELS.element;
+    return describeAnnotationPage(ann) || 'This page';
+  }
+
+  function bandFor(key, label, tally) {
+    let node = state.bands.get(key);
+    if (!node) {
+      node = document.createElement('div');
+      node.className = 'wn-annot-band';
+      const name = document.createElement('span');
+      name.className = 'wn-annot-band-name';
+      const count = document.createElement('span');
+      count.className = 'wn-annot-band-count';
+      node.appendChild(name);
+      node.appendChild(count);
+      state.bands.set(key, node);
+    }
+    node.firstChild.textContent = label;
+    node.lastChild.textContent = tally;
+    return node;
+  }
+
+  // A long list is not only a pointer's to walk. One card at a time is in the
+  // tab order -- two hundred tab stops is not a keyboard path -- and the
+  // arrows step from there.
+  function onListKey(evt) {
+    const item = evt.target.closest && evt.target.closest('.wn-annot-item');
+    if (!item) return;
+    if (evt.key === 'Enter' || evt.key === ' ') {
+      // A button inside the card answers for itself.
+      if (evt.target !== item) return;
+      evt.preventDefault();
+      item.click();
+      return;
+    }
+    const steps = { ArrowDown: 1, ArrowUp: -1 };
+    if (!(evt.key in steps) && evt.key !== 'Home' && evt.key !== 'End') return;
+    const items = Array.from(evt.currentTarget.querySelectorAll('.wn-annot-item'));
+    const at = items.indexOf(item);
+    const next =
+      evt.key === 'Home'
+        ? items[0]
+        : evt.key === 'End'
+        ? items[items.length - 1]
+        : items[at + steps[evt.key]];
+    if (!next || next === item) return;
+    evt.preventDefault();
+    item.tabIndex = -1;
+    next.tabIndex = 0;
+    next.focus();
+  }
+
+  function emptyNote(message) {
+    const empty = document.createElement('div');
+    empty.className = 'wn-annot-empty';
+    empty.textContent = message;
+    return empty;
+  }
+
+  // Everything a card draws, in one string. Two renders that agree on it would
+  // have built the same card, so the one already on the page is kept: an edit,
+  // a delete, a keystroke in the search box or an answer from the server
+  // rebuilds the cards it changed and leaves a long list alone.
+  function cardKey(ann, number) {
+    const shot = ann.screenshot;
+    return [
+      number,
+      ann.type,
+      ann.status || '',
+      ann.comment || '',
+      ann.snippet || '',
+      ann.createdAt,
+      ann.updatedAt || '',
+      ann.author || '',
+      ann.priority || '',
+      ann.pageUrl || '',
+      isOnThisPage(ann) ? '1' : '0',
+      describeAnnotationTarget(ann),
+      shot ? shot.url || `inline:${(shot.dataUrl || '').length}` : '',
+      syncStateOf(ann)
+    ].join('\u001f');
+  }
+
+  function cardFor(ann, number) {
+    const key = cardKey(ann, number);
+    const held = state.cards.get(ann.id);
+    if (held && held.key === key) return held.node;
+    releaseCard(held);
+    const node = buildCard(ann, number);
+    state.cards.set(ann.id, { key, node, shot: node.querySelector('.wn-annot-shot') });
+    return node;
+  }
+
+  // Put the wanted nodes in the wanted order with the fewest moves, rather
+  // than emptying the list and building it again.
+  function reconcileList(list, wanted) {
+    let node = list.firstChild;
+    for (const next of wanted) {
+      if (node === next) {
+        node = node.nextSibling;
+        continue;
+      }
+      list.insertBefore(next, node);
+    }
+    while (node) {
+      const spent = node;
+      node = node.nextSibling;
+      list.removeChild(spent);
+    }
+  }
+
+  // A card a search hid is worth keeping; a card whose annotation is gone is
+  // not, and holding it would grow the map for the life of the page.
+  function pruneCards() {
+    if (state.cards.size === state.annotations.length) return;
+    const live = new Set(state.annotations.map((ann) => ann.id));
+    state.cards.forEach((entry, id) => {
+      if (live.has(id)) return;
+      releaseCard(entry);
+      state.cards.delete(id);
+    });
+  }
+
   // Rebuild the side panel list with filtering and numbering
   function renderList() {
     const list = state.panel.querySelector('.wn-annot-list');
-      const title = state.panel.querySelector('h3');
-      list.innerHTML = '';
-      if (!state.annotations.length) {
-        const empty = document.createElement('div');
-        empty.className = 'wn-annot-empty';
-      empty.textContent = 'No annotations yet.';
-      list.appendChild(empty);
-      if (title) title.textContent = 'Annotations (0)';
-      const footer = ensureFooter();
-      return;
-    }
+    const title = state.panel.querySelector('h3');
+    // The number on a card is the number on its marker, and the marker counts
+    // from the order the notes were made in. Numbering off the filtered list
+    // would make the card and the mark on the page disagree.
+    const numbers = new Map();
+    state.annotations.forEach((ann, idx) => numbers.set(ann.id, idx + 1));
+    const query = state.filters.query;
+    // The rail holds one column and reads in the order the notes were made
+    // in; sorting and grouping are the full-size view's, where the controls
+    // for them are drawn.
+    const full = isFullView();
+    const sort = (full && LIST_SORTS[state.filters.sort]) || LIST_SORTS.oldest;
+    const group = full ? state.filters.group : 'none';
     const filtered = state.annotations
-      .slice()
-      .sort((a, b) => a.createdAt - b.createdAt)
-      .filter((ann) => {
-        const q = state.filters.query;
-        const haystack = `${ann.comment || ''} ${ann.snippet || ''}`.toLowerCase();
-        return !q || haystack.includes(q);
-  });
+      .filter((ann) => !query || searchHaystack(ann).includes(query))
+      .sort(sort);
     if (title) title.textContent = `Annotations (${filtered.length})`;
-    filtered.forEach((ann, idx) => {
-      const item = document.createElement('div');
-      item.className = 'wn-annot-item';
-      item.dataset.id = ann.id;
-      applyItemAccent(item, getAnnotationColors(ann));
-
-      const top = document.createElement('div');
-      top.className = 'wn-annot-card-top';
-      const topLeft = document.createElement('div');
-      topLeft.className = 'wn-annot-card-top-left';
-      const number = document.createElement('div');
-      number.className = 'wn-annot-number';
-      number.textContent = `#${idx + 1}`;
-      topLeft.appendChild(number);
-      if (ann.status === 'missing') {
-        const missing = document.createElement('div');
-        missing.className = 'wn-annot-missing';
-        missing.textContent = 'Missing';
-        topLeft.appendChild(missing);
-      }
-      const topRight = document.createElement('div');
-      topRight.className = 'wn-annot-card-top-right';
-
-      const editBtn = document.createElement('button');
-      editBtn.type = 'button';
-      editBtn.className = 'wn-annot-edit wn-annotator';
-      editBtn.setAttribute('aria-label', 'Edit this annotation');
-      editBtn.innerHTML = iconEdit();
-      editBtn.addEventListener('click', async (evt) => {
-        evt.stopPropagation();
-        await editAnnotation(ann.id);
+    list.classList.toggle('is-multipage', spansPages());
+    let wanted;
+    if (!state.annotations.length) {
+      wanted = [emptyNote('No annotations yet.')];
+    } else if (!filtered.length) {
+      wanted = [emptyNote('No annotation matches that search.')];
+    } else if (group === 'none') {
+      wanted = filtered.map((ann) => cardFor(ann, numbers.get(ann.id)));
+    } else {
+      const bands = new Map();
+      filtered.forEach((ann) => {
+        const key = bandKey(ann, group);
+        let bucket = bands.get(key);
+        if (!bucket) {
+          bucket = { label: bandLabel(ann, group), items: [] };
+          bands.set(key, bucket);
+        }
+        bucket.items.push(ann);
       });
-      topRight.appendChild(editBtn);
-
-      const deleteBtn = document.createElement('button');
-      deleteBtn.type = 'button';
-      deleteBtn.className = 'wn-annot-delete wn-annotator';
-      deleteBtn.setAttribute('aria-label', 'Delete this annotation');
-      deleteBtn.innerHTML = iconTrash();
-      deleteBtn.addEventListener('click', (evt) => {
-        evt.stopPropagation();
-        deleteAnnotation(ann.id);
+      wanted = [];
+      bands.forEach((bucket, key) => {
+        wanted.push(bandFor(key, bucket.label, bucket.items.length));
+        bucket.items.forEach((ann) => wanted.push(cardFor(ann, numbers.get(ann.id))));
       });
-      topRight.appendChild(deleteBtn);
-      top.appendChild(topLeft);
-      top.appendChild(topRight);
-      const comment = document.createElement('div');
-      comment.className = 'wn-annot-comment';
-      const commentText = ann.comment || '—';
-      comment.textContent = commentText;
-
-      const meta = document.createElement('div');
-      meta.className = 'wn-annot-meta';
-      const createdAt = new Date(ann.createdAt);
-      const createdAtDate = createdAt.toLocaleDateString(undefined, {
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit'
-      });
-      const createdAtTime = createdAt.toLocaleTimeString(undefined, {
-        hour: '2-digit',
-        minute: '2-digit'
-      });
-      meta.textContent = `${createdAtDate} • ${createdAtTime}`;
-      topLeft.appendChild(meta);
-
-      const showMore = document.createElement('button');
-      showMore.type = 'button';
-      showMore.className = 'wn-annot-showmore wn-annotator';
-      showMore.textContent = 'See more';
-      showMore.addEventListener('click', (evt) => {
-        evt.stopPropagation();
-        const expanded = comment.classList.toggle('expanded');
-        showMore.textContent = expanded ? 'See less' : 'See more';
-      });
-      if (commentText.length < 160) {
-        showMore.style.display = 'none';
-      }
-
-      item.appendChild(top);
-      item.appendChild(comment);
-      const shotSrc = screenshotSrc(ann);
-      if (shotSrc) {
-        const shotWrap = document.createElement('div');
-        shotWrap.className = 'wn-annot-shot';
-        const shotImg = document.createElement('img');
-        shotImg.src = shotSrc;
-        shotImg.alt = 'The screenshot of this annotation';
-        shotImg.addEventListener('click', (evt) => {
-          evt.stopPropagation();
-          openScreenshotLightbox(shotSrc);
-        });
-        shotWrap.appendChild(shotImg);
-        item.appendChild(shotWrap);
-      }
-      item.appendChild(showMore);
-      item.addEventListener('click', () => {
-        focusAnnotation(ann.id, true, ann.pageUrl, ann.pageKey);
-        // The sheet covers the page it is pointing at, so it steps aside.
-        if (isCompactLayout()) setPanelOpen(false);
-      });
-      list.appendChild(item);
+    }
+    reconcileList(list, wanted);
+    const cards = wanted.filter((node) => node.classList.contains('wn-annot-item'));
+    const stop = cards.find((node) => node.dataset.id === state.focusedId) || cards[0];
+    cards.forEach((node) => {
+      node.tabIndex = node === stop ? 0 : -1;
     });
-
+    pruneCards();
     ensureFooter();
   }
 
@@ -4745,6 +5930,7 @@
     const idx = state.annotations.findIndex((a) => a.id === id);
     if (idx === -1) return;
     state.annotations.splice(idx, 1);
+    hideNoteBubble();
     saveAnnotations();
     removeRenderedAnnotation(id);
     renderList();
@@ -4759,6 +5945,7 @@
     if (!res) return;
     const { comment } = res;
     ann.comment = comment.trim();
+    ann.updatedAt = Date.now();
     saveAnnotations();
     renderList();
   }
@@ -4768,6 +5955,7 @@
     const confirmDelete = await confirmDialog('Delete all annotations?', 'Delete');
     if (!confirmDelete) return;
     state.annotations = [];
+    hideNoteBubble();
     // The snapshot keeps every id until the server takes the delete, so a
     // reload before it does still owes the server the same request.
     persistAnnotations();
@@ -4957,6 +6145,22 @@
     return iconSvg(`
       <path d="M6 6l12 12" />
       <path d="M18 6l-12 12" />
+    `);
+  }
+  function iconExpand() {
+    return iconSvg(`
+      <path d="M4 9v-4a1 1 0 0 1 1 -1h4" />
+      <path d="M20 9v-4a1 1 0 0 0 -1 -1h-4" />
+      <path d="M4 15v4a1 1 0 0 0 1 1h4" />
+      <path d="M20 15v4a1 1 0 0 1 -1 1h-4" />
+    `);
+  }
+  function iconCollapse() {
+    return iconSvg(`
+      <path d="M9 4v4a1 1 0 0 1 -1 1h-4" />
+      <path d="M15 4v4a1 1 0 0 0 1 1h4" />
+      <path d="M9 20v-4a1 1 0 0 0 -1 -1h-4" />
+      <path d="M15 20v-4a1 1 0 0 1 1 -1h4" />
     `);
   }
   function iconPanel() {
@@ -5373,7 +6577,9 @@
     if (!server) return;
     const next = new Map(state.annotations.map((ann) => [ann.id, JSON.stringify(ann)]));
     next.forEach((body, id) => {
-      if (syncedSnapshot.get(id) !== digestOf(body)) enqueueSync(() => remoteUpsert(id, body));
+      if (syncedSnapshot.get(id) === digestOf(body)) return;
+      state.syncPending.add(id);
+      enqueueSync(() => remoteUpsert(id, body));
     });
     syncedSnapshot.forEach((digest, id) => {
       if (!next.has(id)) enqueueSync(() => remoteDelete(id));
@@ -5448,6 +6654,8 @@
         body
       });
       syncedSnapshot.set(id, digestOf(body));
+      state.syncPending.delete(id);
+      queueListRender();
       syncWarned = false;
       if (uploaded) persistAnnotations();
       else persistSnapshot();
