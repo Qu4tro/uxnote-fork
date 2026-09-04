@@ -56,7 +56,7 @@ test('the toolbar holds one row on a laptop screen', async ({ page }) => {
 });
 
 test('the toolbar offers the mail handoff on its own button', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/?mailto=team%40example.org');
   const mail = page.locator('.wn-annot-toolbar button[data-action="mail"]');
   await expect(mail).toBeVisible();
   await expect(mail).toHaveAttribute('data-tip', 'Send by mail');
@@ -69,8 +69,8 @@ test('the mail handoff survives a page with the JSON export off', async ({ page 
   await expect(page.locator('.wn-annot-toolbar')).toBeVisible();
   await expect(page.locator('.wn-annot-toolbar button[data-action="export"]')).toHaveCount(0);
   await expect(page.locator('.wn-annot-toolbar button[data-action="import"]')).toHaveCount(0);
-  // The mail button carries its own option, so taking the JSON export away
-  // leaves the reviewer a way to hand the annotations over.
+  // The mail button answers to the address alone, so taking the JSON export
+  // away leaves the reviewer a way to hand the annotations over.
   await expect(page.locator('.wn-annot-toolbar button[data-action="mail"]')).toBeVisible();
   await page.locator('.wn-annot-toolbar button[data-action="mail"]').click();
   // The handoff goes straight to the mail client; it opens nothing on the page.
@@ -78,7 +78,7 @@ test('the mail handoff survives a page with the JSON export off', async ({ page 
   expect(errors).toEqual([]);
 });
 
-test('the JSON export survives a page with the mail off', async ({ page }) => {
+test('the JSON export survives a page that names no address', async ({ page }) => {
   await page.goto('/test/fixtures/json-export-without-mail.html');
   await expect(page.locator('.wn-annot-toolbar button[data-action="mail"]')).toHaveCount(0);
   const download = page.waitForEvent('download');
@@ -97,7 +97,9 @@ test('the export button writes the file without asking first', async ({ page }) 
 });
 
 test('the toolbar keeps its full set on a laptop screen', async ({ page }) => {
-  await page.goto('/');
+  // The mail button is the one control that has to be asked for: it is there
+  // when the page names an address to send to, and this is the full set.
+  await page.goto('/?mailto=team%40example.org');
   const names = await page.locator('.wn-annot-toolbar button').evaluateAll((els) =>
     els.map((el) => el.getAttribute('data-mode') || el.getAttribute('data-action'))
   );
@@ -240,9 +242,8 @@ test('the page theme switch sits inside the subtree the widget ignores', async (
 test('the query string sets the widget options', async ({ page }) => {
   await page.goto('/?json-export=false&theme=dark&color-text=%23e04f5f');
   await expect(page.locator('.wn-annot-toolbar button[data-action="export"]')).toHaveCount(0);
-  // Only the requested option changed; the import and mail buttons are untouched.
+  // Only the requested option changed; the import button is untouched.
   await expect(page.locator('.wn-annot-toolbar button[data-action="import"]')).toBeVisible();
-  await expect(page.locator('.wn-annot-toolbar button[data-action="mail"]')).toBeVisible();
   await expect(page.locator('html')).toHaveAttribute('data-wn-theme', 'dark');
   const highlight = await page.evaluate(() =>
     getComputedStyle(document.documentElement).getPropertyValue('--wn-text-highlight').trim()
@@ -250,12 +251,20 @@ test('the query string sets the widget options', async ({ page }) => {
   expect(highlight).toBe('#e04f5f');
 });
 
-test('the mail handoff has an option of its own here too', async ({ page }) => {
-  await page.goto('/?mail-export=false');
+test('the mail button follows the address on the demo page too', async ({ page }) => {
+  await page.goto('/');
   await expect(page.locator('.wn-annot-toolbar button[data-action="mail"]')).toHaveCount(0);
-  // The JSON export answers to a different attribute and is still here.
+  // The JSON export answers to a different attribute and is here either way.
   await expect(page.locator('.wn-annot-toolbar button[data-action="export"]')).toBeVisible();
-  await expect(page.locator('#settings-snippet')).toContainText('data-mail-export="false"');
+  await page.goto('/?mailto=team%40example.org');
+  await expect(page.locator('.wn-annot-toolbar button[data-action="mail"]')).toBeVisible();
+  await expect(page.locator('#settings-snippet')).toContainText('data-mailto="team@example.org"');
+});
+
+test('an address the widget cannot use buys no button', async ({ page }) => {
+  await page.goto('/test/fixtures/mailto-not-an-address.html');
+  await expect(page.locator('.wn-annot-toolbar')).toBeVisible();
+  await expect(page.locator('.wn-annot-toolbar button[data-action="mail"]')).toHaveCount(0);
 });
 
 test('the demo page carries the reversed theme through to the widget', async ({ page }) => {
