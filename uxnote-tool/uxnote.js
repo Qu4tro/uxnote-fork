@@ -97,7 +97,13 @@
   const server = serverUrl ? { url: serverUrl, apiKey: (script && script.dataset.serverApiKey) || '' } : null;
   const jsonExport = parseBoolAttr(script && script.dataset.jsonExport, true);
   const jsonImport = parseBoolAttr(script && script.dataset.jsonImport, true);
-  const mailExport = parseBoolAttr(script && script.dataset.mailExport, true);
+  // A handoff to mail needs somewhere to send it, so the address is the switch.
+  // Name one and the toolbar carries the button; name none, or something that
+  // is not an address, and there is no button to press. The test is a local
+  // part, an @ and a dotted domain -- past that an address is the mail client's
+  // business and not the widget's.
+  const mailTo = mailToDefault.trim();
+  const mailExport = /^[^\s@,;]+@[^\s@,;]+\.[^\s@,;]+$/.test(mailTo);
   const themeAttr = ((script && script.dataset.theme) || '').trim().toLowerCase();
   const theme =
     themeAttr === 'light' || themeAttr === 'dark' || themeAttr === 'reverse-auto' ? themeAttr : 'auto';
@@ -4816,10 +4822,7 @@
     const data = JSON.stringify(payload, null, 2);
     const subject = encodeURIComponent(buildFilename());
     const body = encodeURIComponent(data);
-    const to = (mailToDefault || '').trim();
-    const toPart = to ? encodeURIComponent(to) : '';
-    const sep = toPart ? '?' : '?';
-    window.location.href = `mailto:${toPart}${sep}subject=${subject}&body=${body}`;
+    window.location.href = `mailto:${encodeURIComponent(mailTo)}?subject=${subject}&body=${body}`;
   }
 
   // A uuid, because two browsers that both write while the server is away
