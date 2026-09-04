@@ -217,9 +217,10 @@
       meant for a demo you run locally and may be blocked here.</p>
     <div class="settings-grid">
       <label for="set-theme"><span class="settings-name">data-theme</span>
-        <span class="settings-desc">Theme of the toolbar, panel, and dialogs. auto follows the system and changes with it.</span>
+        <span class="settings-desc">Theme of the toolbar, panel, and dialogs. auto follows the system and changes with it; reverse-auto follows it the other way, so the widget contrasts with a page that follows it too.</span>
         <select id="set-theme">
           <option value="auto">auto</option>
+          <option value="reverse-auto">reverse-auto</option>
           <option value="light">light</option>
           <option value="dark">dark</option>
         </select>
@@ -283,11 +284,11 @@
         <input id="set-mailto" type="email" placeholder="team@example.org">
       </label>
       <label for="set-server-url"><span class="settings-name">data-server-url</span>
-        <span class="settings-desc">Keeps the notes on a server instead of this browser. This page takes a loopback address only. With one set, a dot beside the toolbar wordmark says whether the server is answering.</span>
+        <span class="settings-desc">Keeps the notes on a server instead of this browser. This page takes a loopback address only.</span>
         <input id="set-server-url" type="url" placeholder="http://localhost:8123">
       </label>
       <label for="set-server-api-key"><span class="settings-name">data-server-api-key</span>
-        <span class="settings-desc">Sent as X-Uxnote-Key on every request to that server. It travels in this page's address bar.</span>
+        <span class="settings-desc">Sent as X-Uxnote-Key on every request to that server.</span>
         <input id="set-server-api-key" type="text" placeholder="review-key">
       </label>
     </div>
@@ -340,7 +341,7 @@
       // it appends, so a reload is what applies a change.
       var BOOLS = ['true', 'false'];
       var OPTIONS = [
-        { key: 'theme',           attr: 'data-theme',                 kind: 'choice', values: ['auto', 'light', 'dark'], fallback: 'auto' },
+        { key: 'theme',           attr: 'data-theme',                 kind: 'choice', values: ['auto', 'reverse-auto', 'light', 'dark'], fallback: 'auto' },
         { key: 'json-export',     attr: 'data-json-export',           kind: 'choice', values: BOOLS, fallback: 'true' },
         { key: 'json-import',     attr: 'data-json-import',           kind: 'choice', values: BOOLS, fallback: 'true' },
         { key: 'mail-export',     attr: 'data-mail-export',           kind: 'choice', values: BOOLS, fallback: 'true' },
@@ -351,8 +352,13 @@
         { key: 'color-text',      attr: 'colorForTextHighlight',      kind: 'color',  fallback: '#4e9cf6' },
         { key: 'color-element',   attr: 'colorForElementHighlight',   kind: 'color',  fallback: '#4e9cf6' },
         { key: 'mailto',          attr: 'data-mailto',                kind: 'email',  fallback: '' },
-        { key: 'server-url',      attr: 'data-server-url',            kind: 'url',    fallback: '' },
-        { key: 'server-api-key',  attr: 'data-server-api-key',        kind: 'key',    fallback: '' }
+        // A seed is what the control comes filled with, which is not the same
+        // as what the widget starts on: these two carry the address and key
+        // that server/server.py listens on, so reaching it is one press of
+        // Apply rather than a trip to the README. Their default stays empty,
+        // so a plain load keeps the notes in this browser.
+        { key: 'server-url',      attr: 'data-server-url',            kind: 'url',    fallback: '', seed: 'http://localhost:8123' },
+        { key: 'server-api-key',  attr: 'data-server-api-key',        kind: 'key',    fallback: '', seed: 'review-key' }
       ];
       // A crafted link must not be able to point a visitor's notes at somebody
       // else's server. A server on the loopback address is the visitor's own
@@ -435,7 +441,8 @@
       // Seeded from the query string on every load, so the form shows what the
       // widget received and a dropped value falls back to the default in view.
       OPTIONS.forEach(function (option) {
-        controlFor(option).value = option.key in chosen ? chosen[option.key] : option.fallback;
+        var seeded = 'seed' in option ? option.seed : option.fallback;
+        controlFor(option).value = option.key in chosen ? chosen[option.key] : seeded;
       });
 
       // Read from the controls rather than from the query, so the snippet keeps
