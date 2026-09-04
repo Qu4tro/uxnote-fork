@@ -54,7 +54,7 @@ Then open <http://localhost:4173/>.
   so a note written while the server is down survives a reload and goes up when
   the server comes back.
 - **JSON export and import.** Both are on by default, and each one switches
-  off per site.
+  off per site. A `data-mailto` address adds a mail handoff beside them.
 - **A dark theme.** `auto` by default, following the system.
 - **Comment-first notes.** A note is one comment. On a roomy window the card
   parks beside the toolbar; on a small screen it rises from the bottom edge.
@@ -109,7 +109,6 @@ lines you want.
   data-mailto="team@example.com"
   data-json-export="true"
   data-json-import="true"
-  data-mail-export="true"
   data-server-url="http://localhost:8123"
   data-server-api-key="review-key"
   data-theme="auto"></script>
@@ -126,10 +125,9 @@ lines you want.
 | `isBackdropVisible` | `true` on a mouse, `false` where the pointer is coarse | Dims the page behind the annotations. On a phone the bar is a strip and the page is the whole screen, so the dimmer costs contrast for nothing; naming it brings it back. |
 | `isToolVisibleAtFirstLaunch` | `true` | Shows the toolbar on the first visit. |
 | `isToolOnTopAtLaunch` | `false` | Starts the toolbar at the top instead of the bottom. The control that moves it afterwards is on a wide window only, so on a small screen this is the way to ask for the top. |
-| `data-mailto` | empty | The recipient of the mail handoff. It does nothing while `data-mail-export` is `false`. The handoff is on a wide window only. |
+| `data-mailto` | empty | The recipient of the mail handoff, and the switch for it: an address here puts the mail button in the toolbar, and nothing here means no button. Anything that is not an address counts as nothing. `data-email` and `data-to` are read the same way. The button is on a wide window only. |
 | `data-json-export` | `true` | `false` removes the export control. The export writes every annotation of the site and asks nothing first. The control is in the toolbar on a wide window and in the panel head on a small screen. |
 | `data-json-import` | `true` | `false` removes the import button, its dialog, and its list of imported files. The button is on a wide window only; an annotation imported earlier is drawn either way. |
-| `data-mail-export` | `true` | `false` removes the mail button and the handoff behind it. Independent of `data-json-export`. The button is on a wide window only. |
 | `data-server-url` | unset | The base URL of the server that stores the annotations. Unset means `localStorage`. |
 | `data-server-api-key` | empty | Sent as `X-Uxnote-Key` on every request. Empty sends no header. |
 | `data-theme` | `auto` | `auto` follows the system theme and changes with it, `reverse-auto` takes the other side of it, and `light` and `dark` hold one. |
