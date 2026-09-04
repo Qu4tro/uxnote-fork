@@ -200,8 +200,11 @@
     dimOpacity,
     dimOverlay: null,
     filters: {
-      query: ''
+      query: '',
+      sort: 'oldest',
+      group: 'none'
     },
+    bands: new Map(),
     hidden: false,
     missingObserver: null,
     missingRetryTimer: null,
@@ -722,6 +725,64 @@
         align-items: center;
         gap: 8px;
       }
+      /* Two controls the rail has no room for and no use for: it holds one
+         column in the order the notes were made in. */
+      .wn-annot-arrange {
+        display: none;
+        align-items: center;
+        gap: 10px;
+      }
+      .wn-annot-arrange label {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--wn-text-faint);
+      }
+      .wn-annot-arrange select {
+        height: 34px;
+        border-radius: 12px;
+        border: 1px solid var(--wn-border);
+        background: var(--wn-surface-input);
+        color: var(--wn-text);
+        font-size: 12px;
+        padding: 0 8px;
+        cursor: pointer;
+      }
+      .wn-annot-arrange select:focus {
+        outline: none;
+        border-color: rgba(109, 86, 199, 0.6);
+        box-shadow: 0 0 0 3px rgba(109, 86, 199, 0.14);
+      }
+      .wn-annot-band {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 11px;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--wn-text-faint);
+      }
+      .wn-annot-band-count {
+        color: var(--wn-text-muted);
+        background: rgba(109, 86, 199, 0.1);
+        border-radius: 999px;
+        padding: 1px 8px;
+      }
+      .wn-annot-band::after {
+        content: '';
+        flex: 1 1 auto;
+        height: 1px;
+        background: var(--wn-border);
+      }
+      .wn-annot-item:focus-visible {
+        outline: 2px solid var(--wn-item-accent-strong, var(--wn-accent));
+        outline-offset: 2px;
+      }
       .wn-annot-filters input[type="search"] {
         height: 34px;
         border-radius: 12px;
@@ -1164,6 +1225,14 @@
       .wn-annot-panel.is-full .wn-annot-filter-row {
         flex: 1 1 240px;
         max-width: 420px;
+      }
+      .wn-annot-panel.is-full .wn-annot-arrange {
+        display: inline-flex;
+      }
+      /* A heading owns the width of the grid, not one cell of it. */
+      .wn-annot-panel.is-full .wn-annot-band {
+        grid-column: 1 / -1;
+        margin: 4px 0 -4px;
       }
       .wn-annot-panel.is-full .wn-annot-list {
         display: grid;
@@ -2232,6 +2301,23 @@
           <div class="wn-annot-filter-row wn-annotator">
             <input id="wn-filter-search" class="wn-annotator" type="search" placeholder="Keyword search" />
           </div>
+          <div class="wn-annot-arrange wn-annotator">
+            <label for="wn-filter-sort">Sort
+              <select id="wn-filter-sort" class="wn-annotator">
+                <option value="oldest">Oldest first</option>
+                <option value="newest">Newest first</option>
+                <option value="kind">By kind</option>
+                <option value="page">By page</option>
+              </select>
+            </label>
+            <label for="wn-filter-group">Group
+              <select id="wn-filter-group" class="wn-annotator">
+                <option value="none">Nothing</option>
+                <option value="page">By page</option>
+                <option value="kind">By kind</option>
+              </select>
+            </label>
+          </div>
         </div>
       </div>
       <div class="wn-annot-list"></div>
@@ -2257,6 +2343,8 @@
         panelHead.firstChild
       );
     }
+    const panelList = panel.querySelector('.wn-annot-list');
+    if (panelList) panelList.addEventListener('keydown', onListKey);
     const panelViewBtn = panel.querySelector('.wn-annot-panel-view');
     if (panelViewBtn) {
       panelViewBtn.addEventListener('click', (evt) => {
@@ -2944,6 +3032,23 @@
     };
 
     searchInput.addEventListener('input', trigger);
+
+    const sortInput = state.panel.querySelector('#wn-filter-sort');
+    if (sortInput) {
+      sortInput.value = state.filters.sort;
+      sortInput.addEventListener('change', () => {
+        state.filters.sort = sortInput.value;
+        renderList();
+      });
+    }
+    const groupInput = state.panel.querySelector('#wn-filter-group');
+    if (groupInput) {
+      groupInput.value = state.filters.group;
+      groupInput.addEventListener('change', () => {
+        state.filters.group = groupInput.value;
+        renderList();
+      });
+    }
   }
 
   function setMode(nextMode, options = {}) {
@@ -4956,6 +5061,16 @@
     screenshot: 'Region capture'
   };
 
+  const KIND_ORDER = { text: 0, element: 1, screenshot: 2 };
+
+  const LIST_SORTS = {
+    oldest: (a, b) => a.createdAt - b.createdAt,
+    newest: (a, b) => b.createdAt - a.createdAt,
+    kind: (a, b) => (KIND_ORDER[a.type] ?? 3) - (KIND_ORDER[b.type] ?? 3) || a.createdAt - b.createdAt,
+    page: (a, b) =>
+      String(a.pageKey || '').localeCompare(String(b.pageKey || '')) || a.createdAt - b.createdAt
+  };
+
   function kindIcon(type) {
     if (type === 'text') return iconPen();
     if (type === 'screenshot') return iconCamera();
@@ -5061,6 +5176,7 @@
     const item = document.createElement('div');
     item.className = 'wn-annot-item';
     item.dataset.id = ann.id;
+    item.tabIndex = -1;
     if (state.focusedId === ann.id) item.classList.add('is-focused');
     applyItemAccent(item, getAnnotationColors(ann));
 
@@ -5278,6 +5394,63 @@
     return false;
   }
 
+  function bandKey(ann, group) {
+    return group === 'kind' ? `kind:${ann.type}` : `page:${ann.pageKey || ''}`;
+  }
+
+  function bandLabel(ann, group) {
+    if (group === 'kind') return KIND_LABELS[ann.type] || KIND_LABELS.element;
+    return describeAnnotationPage(ann) || 'This page';
+  }
+
+  function bandFor(key, label, tally) {
+    let node = state.bands.get(key);
+    if (!node) {
+      node = document.createElement('div');
+      node.className = 'wn-annot-band';
+      const name = document.createElement('span');
+      name.className = 'wn-annot-band-name';
+      const count = document.createElement('span');
+      count.className = 'wn-annot-band-count';
+      node.appendChild(name);
+      node.appendChild(count);
+      state.bands.set(key, node);
+    }
+    node.firstChild.textContent = label;
+    node.lastChild.textContent = tally;
+    return node;
+  }
+
+  // A long list is not only a pointer's to walk. One card at a time is in the
+  // tab order -- two hundred tab stops is not a keyboard path -- and the
+  // arrows step from there.
+  function onListKey(evt) {
+    const item = evt.target.closest && evt.target.closest('.wn-annot-item');
+    if (!item) return;
+    if (evt.key === 'Enter' || evt.key === ' ') {
+      // A button inside the card answers for itself.
+      if (evt.target !== item) return;
+      evt.preventDefault();
+      item.click();
+      return;
+    }
+    const steps = { ArrowDown: 1, ArrowUp: -1 };
+    if (!(evt.key in steps) && evt.key !== 'Home' && evt.key !== 'End') return;
+    const items = Array.from(evt.currentTarget.querySelectorAll('.wn-annot-item'));
+    const at = items.indexOf(item);
+    const next =
+      evt.key === 'Home'
+        ? items[0]
+        : evt.key === 'End'
+        ? items[items.length - 1]
+        : items[at + steps[evt.key]];
+    if (!next || next === item) return;
+    evt.preventDefault();
+    item.tabIndex = -1;
+    next.tabIndex = 0;
+    next.focus();
+  }
+
   function emptyNote(message) {
     const empty = document.createElement('div');
     empty.className = 'wn-annot-empty';
@@ -5359,9 +5532,15 @@
     const numbers = new Map();
     state.annotations.forEach((ann, idx) => numbers.set(ann.id, idx + 1));
     const query = state.filters.query;
+    // The rail holds one column and reads in the order the notes were made
+    // in; sorting and grouping are the full-size view's, where the controls
+    // for them are drawn.
+    const full = isFullView();
+    const sort = (full && LIST_SORTS[state.filters.sort]) || LIST_SORTS.oldest;
+    const group = full ? state.filters.group : 'none';
     const filtered = state.annotations
       .filter((ann) => !query || searchHaystack(ann).includes(query))
-      .sort((a, b) => a.createdAt - b.createdAt);
+      .sort(sort);
     if (title) title.textContent = `Annotations (${filtered.length})`;
     list.classList.toggle('is-multipage', spansPages());
     let wanted;
@@ -5369,10 +5548,31 @@
       wanted = [emptyNote('No annotations yet.')];
     } else if (!filtered.length) {
       wanted = [emptyNote('No annotation matches that search.')];
-    } else {
+    } else if (group === 'none') {
       wanted = filtered.map((ann) => cardFor(ann, numbers.get(ann.id)));
+    } else {
+      const bands = new Map();
+      filtered.forEach((ann) => {
+        const key = bandKey(ann, group);
+        let bucket = bands.get(key);
+        if (!bucket) {
+          bucket = { label: bandLabel(ann, group), items: [] };
+          bands.set(key, bucket);
+        }
+        bucket.items.push(ann);
+      });
+      wanted = [];
+      bands.forEach((bucket, key) => {
+        wanted.push(bandFor(key, bucket.label, bucket.items.length));
+        bucket.items.forEach((ann) => wanted.push(cardFor(ann, numbers.get(ann.id))));
+      });
     }
     reconcileList(list, wanted);
+    const cards = wanted.filter((node) => node.classList.contains('wn-annot-item'));
+    const stop = cards.find((node) => node.dataset.id === state.focusedId) || cards[0];
+    cards.forEach((node) => {
+      node.tabIndex = node === stop ? 0 : -1;
+    });
     pruneCards();
     ensureFooter();
   }
