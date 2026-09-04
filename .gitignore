@@ -1,5 +1,6 @@
 dist/
 site/
+uxnote-data/
 node_modules/
 yarn.lock
 pnpm-lock.yaml

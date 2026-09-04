@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tidewatch — demo page for the UxNote reference server</title>
+  <style>
+    * { margin: 0; box-sizing: border-box; }
+    body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; color: #22303c; background: #f6f8f9; line-height: 1.55; }
+    header { display: flex; justify-content: space-between; align-items: center; padding: 1rem 3rem; background: #fff; border-bottom: 1px solid #e2e8ec; }
+    .logo { font-weight: 700; font-size: 1.25rem; color: #14607a; }
+    nav a { margin-left: 1.5rem; color: #4a5c68; text-decoration: none; font-size: 0.95rem; }
+    main { max-width: 60rem; margin: 0 auto; padding: 3.5rem 2rem; }
+    h1 { font-size: 2.3rem; line-height: 1.15; margin-bottom: 1rem; }
+    .lead { color: #4a5c68; font-size: 1.1rem; margin-bottom: 2rem; }
+    .cta { background: #14607a; color: #fff; border: 0; padding: 0.85rem 1.8rem; font-size: 1rem; border-radius: 8px; cursor: pointer; }
+    .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem; margin-top: 3rem; }
+    .card { background: #fff; border: 1px solid #e2e8ec; border-radius: 12px; padding: 1.5rem; }
+    .card h2 { font-size: 1.05rem; margin-bottom: 0.5rem; }
+    .card p { color: #4a5c68; font-size: 0.95rem; }
+    .note { margin-top: 3rem; padding: 1.25rem 1.5rem; background: #e7f2f5; border-radius: 12px; font-size: 0.95rem; }
+    .note code { background: #fff; padding: 0.1rem 0.35rem; border-radius: 4px; }
+    footer { margin-top: 3rem; padding: 2rem 3rem; background: #22303c; color: #b6c2cb; font-size: 0.9rem; }
+    @media (max-width: 800px) { .cards { grid-template-columns: 1fr; } header, footer { padding: 1rem 1.25rem; } }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="logo">Tidewatch</div>
+    <nav>
+      <a href="#">Stations</a>
+      <a href="#">Forecast</a>
+      <a href="#">Pricing</a>
+    </nav>
+  </header>
+
+  <main>
+    <h1 id="title">Every tide, from every station you watch</h1>
+    <p class="lead" id="lead">Tidewatch reads the gauges of 3,400 coastal stations and tells you when the water crosses the line you care about.</p>
+    <button class="cta" id="cta">Watch a station</button>
+
+    <div class="cards">
+      <div class="card" id="card-alerts">
+        <h2>Alerts</h2>
+        <p>Set a height and a station. Tidewatch sends one message when the water crosses it, and one when it falls back.</p>
+      </div>
+      <div class="card" id="card-history">
+        <h2>History</h2>
+        <p>Ten years of readings per station, charted against the prediction, so you can see where the gauge drifts.</p>
+      </div>
+      <div class="card" id="card-api">
+        <h2>API</h2>
+        <p>One JSON route per station. Ask for a day, a month, or the next high water.</p>
+      </div>
+    </div>
+
+    <p class="note" id="note">
+      This page is here to be annotated. The widget below writes to the reference
+      server, so the annotations land in <code>uxnote-data/</code> and a second
+      browser sees them. Start the server with
+      <code>python3 server/server.py --port 8123 --root . --api-key review-key</code>.
+    </p>
+  </main>
+
+  <footer>Tidewatch — a sample page, not a product.</footer>
+
+  <script src="/uxnote-tool/uxnote.js"
+    data-server-url="http://localhost:8123"
+    data-server-api-key="review-key"></script>
+</body>
+</html>

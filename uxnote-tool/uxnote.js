@@ -5,6 +5,10 @@
  * Version: v1.0.0
  * License: MIT (see LICENSE)
  * Built with Codex 5.2
+ *
+ * This fork stores the annotations on the server named by data-server-url,
+ * over the wire protocol of PROTOCOL.md. With no server named it stores them
+ * in localStorage, on the browser that wrote them.
  */
 (() => {
   if (window.Uxnote) {
@@ -70,11 +74,15 @@
   const positionStorageKey = 'wn-toolbar-pos';
   const dockMode = (script && (script.dataset.dock || script.dataset.layout)) || '';
   const storageKey = `uxnote:site:${siteKey}`;
+  const syncedStorageKey = `${storageKey}:synced`;
   const annotatorNameStorageKey = `uxnote:annotator:${siteKey}`;
   const annotatorNamesStorageKey = `uxnote:annotators:${siteKey}`;
   const importFilesStorageKey = `uxnote:import-files:${siteKey}`;
   const visibilityStorageKey = `uxnote:hidden:${siteKey}`;
   const pendingFocusKey = `uxnote:pending:${siteKey}`;
+  // A named server is the annotation store; no name at all means localStorage.
+  const serverUrl = ((script && script.dataset.serverUrl) || '').trim().replace(/\/+$/, '');
+  const server = serverUrl ? { url: serverUrl, apiKey: (script && script.dataset.serverApiKey) || '' } : null;
   const dimConfigAttr =
     getScriptAttr('isBackdropVisible') ||
     getScriptAttr('isbackdropvisible') ||
@@ -115,6 +123,8 @@
     importModal: null,
     exportModal: null,
     markerLayer: null,
+    syncDot: null,
+    syncStatus: null,
     colors: colorPalette,
     customPosition: false,
     dimEnabled,
@@ -165,12 +175,21 @@
     createDimmer();
     setAnnotatorVisibility(state.hidden);
     loadAnnotations();
+    if (server && !loadSyncedSnapshot()) state.annotations = [];
     refreshKnownAnnotatorNames();
     restoreAnnotations();
     retryResolveMissingAnnotations();
     startMissingObserver();
     startLayoutObserver();
-    focusPendingAnnotation();
+    if (!server) focusPendingAnnotation();
+    // The copy in this browser is on the page before the server has said
+    // anything, so a reviewer with a dead server still opens their notes. The
+    // pull settles the two sets, and the probe watches for the server coming
+    // back with nobody writing.
+    if (server) {
+      enqueueSync(remotePull);
+      startHealthLoop();
+    }
     bindGlobalHandlers();
   }
 
@@ -461,6 +480,58 @@
       .wn-annot-btn:hover::after {
         opacity: 1;
         transform: translateX(-50%) translateY(0);
+      }
+      .wn-annot-sync-dot {
+        position: relative;
+        flex: 0 0 auto;
+        width: 10px;
+        height: 10px;
+        margin-left: 10px;
+        border-radius: 50%;
+        background: #8b8794;
+        box-shadow: 0 0 0 3px rgba(139, 135, 148, 0.18);
+        transition: background 0.2s ease, box-shadow 0.2s ease;
+      }
+      .wn-annot-sync-dot[data-sync-status='ok'] {
+        background: #2ea043;
+        box-shadow: 0 0 0 3px rgba(46, 160, 67, 0.22);
+      }
+      .wn-annot-sync-dot[data-sync-status='refused'] {
+        background: #d29922;
+        box-shadow: 0 0 0 3px rgba(210, 153, 34, 0.24);
+      }
+      .wn-annot-sync-dot[data-sync-status='unreachable'] {
+        background: #e5534b;
+        box-shadow: 0 0 0 3px rgba(229, 83, 75, 0.24);
+      }
+      /* The dot sits at the left end of the bar, so its tooltip hangs from
+         that end rather than centring on a 10px target and running off the
+         edge of the screen. */
+      .wn-annot-sync-dot::after {
+        content: attr(data-tip);
+        position: absolute;
+        left: -8px;
+        background: rgba(35, 31, 74, 0.92);
+        color: #fff;
+        padding: 6px 8px;
+        border-radius: 8px;
+        font-size: 11px;
+        white-space: nowrap;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.12s ease, transform 0.12s ease;
+      }
+      .wn-annot-toolbar.wn-pos-bottom .wn-annot-sync-dot::after {
+        bottom: calc(100% + 10px);
+        transform: translateY(2px);
+      }
+      .wn-annot-toolbar.wn-pos-top .wn-annot-sync-dot::after {
+        top: calc(100% + 10px);
+        transform: translateY(-2px);
+      }
+      .wn-annot-sync-dot:hover::after {
+        opacity: 1;
+        transform: translateY(0);
       }
       .wn-annot-toolbar.wn-pos-right {
         left: 50%;
@@ -1436,6 +1507,17 @@
     logo.className = 'wn-annot-logo wn-annotator';
     logo.innerHTML = iconWordmark();
     frag.appendChild(logo);
+
+    // Only a page with a server has a server to report on. Without one the
+    // notes are in this browser and there is nothing the dot could say.
+    if (server) {
+      const dot = document.createElement('div');
+      dot.className = 'wn-annot-sync-dot wn-annotator';
+      dot.setAttribute('role', 'status');
+      frag.appendChild(dot);
+      state.syncDot = dot;
+      applySyncStatus();
+    }
 
   const editButtons = [
       { action: 'mode', mode: 'text', tip: 'Highlight text', icon: iconPen() },
@@ -2890,10 +2972,24 @@
   }
 
   function saveAnnotations() {
+    persistAnnotations();
+    if (server) syncAnnotations();
+  }
+
+  // The set goes to localStorage whether or not a server is named. With one,
+  // the copy is what carries a note across a reload the server was down for,
+  // and the digests beside it are what tell a note the server never saw from
+  // one it already holds.
+  function persistAnnotations() {
     try {
       localStorage.setItem(storageKey, JSON.stringify(state.annotations));
+      if (server) persistSnapshot();
     } catch (err) {
       console.warn('Annotator storage save error', err);
+      // Without a server the set was always only here, and upstream has always
+      // failed this quietly. With one, a refused write is the reload promise
+      // breaking, and the reviewer is the only one who can act on it.
+      if (server) warnStorage();
     }
   }
 
@@ -4282,7 +4378,10 @@
     const confirmDelete = await confirmDialog('Delete all annotations?', 'Delete');
     if (!confirmDelete) return;
     state.annotations = [];
-    saveAnnotations();
+    // The snapshot keeps every id until the server takes the delete, so a
+    // reload before it does still owes the server the same request.
+    persistAnnotations();
+    if (server) remoteDeleteAll();
     clearRenderedAnnotations();
     renderList();
     renumberMarkers();
@@ -4356,8 +4455,19 @@
     window.location.href = `mailto:${toPart}${sep}subject=${subject}&body=${body}`;
   }
 
+  // A uuid, because two browsers that both write while the server is away
+  // settle their sets against each other when it comes back, and an id drawn
+  // from six characters of Math.random collides often enough over a review to
+  // merge one reviewer's note onto another's. crypto.randomUUID wants a secure
+  // context, which an http review host is not, so the same 122 bits come from
+  // getRandomValues there.
   function generateId() {
-    return 'wn-' + Math.random().toString(36).slice(2, 8) + Date.now().toString(36);
+    if (typeof crypto.randomUUID === 'function') return crypto.randomUUID();
+    const bytes = crypto.getRandomValues(new Uint8Array(16));
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
   }
 
   function generateImportFileId() {
@@ -4564,12 +4674,378 @@
     }
   }
 
+  // ------------------------------------------------------------------
+  // Server sync
+  // ------------------------------------------------------------------
+
+  // The set that the server last agreed to. Each change is diffed against it
+  // and travels as one request per annotation, so a note that another reviewer
+  // changed survives a change made here to a different note. PROTOCOL.md holds
+  // the contract.
+  let syncedSnapshot = new Map();
+  let syncQueue = Promise.resolve();
+  let syncWarned = false;
+  let storageWarned = false;
+
+  // How often the server is asked whether it is there, and how the asking
+  // slows down while it is not. A server that comes back has nothing to say
+  // to a browser that never asks again, and a reviewer who is reading rather
+  // than writing gives it no other reason to.
+  const HEALTH_INTERVAL = 300000;
+  const HEALTH_BACKOFF_MIN = 10000;
+  const HEALTH_BACKOFF_MAX = HEALTH_INTERVAL;
+  let healthTimer = null;
+  let healthBackoff = HEALTH_BACKOFF_MIN;
+  // Emptied when a server answers 404 to /health, which a server written
+  // against version 1 of the protocol does, and the probe falls back to the
+  // read that has always been in it.
+  let healthPath = '/health';
+
+  // One line per state, because a single line covering three of them tells a
+  // reviewer nothing about the one they are looking at.
+  const SYNC_STATUS_TIPS = {
+    pending: 'Checking the server',
+    ok: 'Server connected',
+    refused: 'Server refused it: check the address or the key',
+    unreachable: 'Server unreachable: notes are held here until it answers'
+  };
+
+  function applySyncStatus() {
+    const dot = state.syncDot;
+    if (!dot) return;
+    const status = state.syncStatus || 'pending';
+    const tip = SYNC_STATUS_TIPS[status];
+    dot.setAttribute('data-sync-status', status);
+    dot.setAttribute('data-tip', tip);
+    dot.setAttribute('aria-label', tip);
+  }
+
+  function setSyncStatus(next) {
+    if (state.syncStatus === next) return;
+    state.syncStatus = next;
+    applySyncStatus();
+  }
+
+  // Three answers the dot can carry, and they are three different failures:
+  // the request came back and was usable, it came back and was not -- a
+  // refused key, an address that answers as something else -- or it never
+  // came back at all.
+  async function syncFetch(url, options) {
+    let res;
+    try {
+      res = await fetch(url, options);
+    } catch (err) {
+      setSyncStatus('unreachable');
+      throw err;
+    }
+    if (!res.ok) {
+      setSyncStatus('refused');
+      const err = new Error(`HTTP ${res.status}`);
+      err.status = res.status;
+      throw err;
+    }
+    setSyncStatus('ok');
+    return res;
+  }
+
+  function annotationsUrl() {
+    return `${server.url}/annotations?site=${encodeURIComponent(siteKey)}`;
+  }
+
+  function annotationUrl(id) {
+    return `${server.url}/annotations/${encodeURIComponent(id)}?site=${encodeURIComponent(siteKey)}`;
+  }
+
+  function healthUrl() {
+    return healthPath ? `${server.url}${healthPath}` : annotationsUrl();
+  }
+
+  // The key is in the page source, so it keeps a passer-by from writing to a
+  // review server and nothing more. An empty key sends no header.
+  function syncHeaders(headers) {
+    const merged = Object.assign({}, headers);
+    if (server.apiKey) merged['X-Uxnote-Key'] = server.apiKey;
+    return merged;
+  }
+
+  // What the server agreed to, one entry per annotation, kept as a digest and
+  // not as the body it came from. The snapshot is only ever compared, never
+  // sent, and it outlives the tab in localStorage beside the set: holding the
+  // bodies there would put every annotation in storage twice, and an inline
+  // screenshot is large enough that the second copy is what runs the browser
+  // out of room.
+  function snapshotOf(annotations) {
+    return new Map(annotations.map((ann) => [ann.id, digestOf(ann)]));
+  }
+
+  // Length and an FNV-1a hash of the JSON. This settles whether a body changed
+  // under this browser, not whether someone forged one, so 32 bits and the
+  // length behind them are enough.
+  function digestOf(annotation) {
+    const body = typeof annotation === 'string' ? annotation : JSON.stringify(annotation);
+    let hash = 0x811c9dc5;
+    for (let i = 0; i < body.length; i += 1) {
+      hash ^= body.charCodeAt(i);
+      hash = Math.imul(hash, 0x01000193) >>> 0;
+    }
+    return `${body.length}:${hash.toString(36)}`;
+  }
+
+  // Answering a queue of requests moves the snapshot and leaves the set alone,
+  // and the set is the large half. Writing it once per request would put the
+  // whole of a review through JSON.stringify for each note that goes up.
+  function persistSnapshot() {
+    try {
+      localStorage.setItem(syncedStorageKey, JSON.stringify(Array.from(syncedSnapshot)));
+    } catch (err) {
+      console.warn('Annotator storage save error', err);
+      warnStorage();
+    }
+  }
+
+  // False when this browser has no record of ever having synced this site. The
+  // set beside it is then a set written before a server was named, and it is
+  // the reviewer's alone: the pull adopts the server's set rather than pushing
+  // private notes onto a shared one.
+  function loadSyncedSnapshot() {
+    let stored = null;
+    try {
+      stored = localStorage.getItem(syncedStorageKey);
+      const parsed = stored ? JSON.parse(stored) : [];
+      syncedSnapshot = new Map(Array.isArray(parsed) ? parsed : []);
+    } catch (err) {
+      // An unreadable snapshot means every note looks unsent. The set goes up
+      // again, which the server takes, rather than staying here unsent.
+      console.warn('Uxnote sync: the stored server snapshot is unreadable', err);
+      syncedSnapshot = new Map();
+    }
+    return stored !== null;
+  }
+
+  // One toast per run of failures: the second one says nothing the first did
+  // not. The next request that succeeds arms it again.
+  function warnSync(message, err) {
+    console.warn('Uxnote sync:', message, err);
+    if (syncWarned) return;
+    syncWarned = true;
+    showToast(message);
+  }
+
+  // The set no longer fits in this browser. Saying it once is the whole of
+  // what the widget can do: the reviewer decides what to delete or export.
+  function warnStorage() {
+    if (storageWarned) return;
+    storageWarned = true;
+    showToast('Uxnote: this browser has no room left, so notes are not kept for a reload');
+  }
+
+  function enqueueSync(run) {
+    syncQueue = syncQueue.then(run, run);
+    return syncQueue;
+  }
+
+  async function remotePull() {
+    if (!server) return;
+    let payload;
+    try {
+      const res = await syncFetch(annotationsUrl(), { headers: syncHeaders({ Accept: 'application/json' }) });
+      try {
+        payload = await res.json();
+      } catch (err) {
+        // An answer that is not the annotation set means the address is
+        // serving something else, which is the reviewer's to fix.
+        setSyncStatus('refused');
+        throw err;
+      }
+    } catch (err) {
+      // The set that is on the screen came from this browser's copy, and it
+      // stays on the screen. A server that did not answer has said nothing
+      // about it.
+      warnSync('Uxnote: could not read the annotations from the server', err);
+      // The set the hop points into is this browser's copy, and it is already
+      // drawn, so the hop lands on it rather than being spent on nothing.
+      focusPendingAnnotation();
+      return;
+    }
+    const pulled = ((payload && payload.annotations) || []).filter(
+      (ann) => ann && (ann.type === 'text' || ann.type === 'element')
+    );
+    pulled.forEach((ann) => {
+      if (!ann.pageKey) {
+        ann.pageKey = normalizePageKey(ann.pageUrl || window.location.href);
+      }
+    });
+    reconcile(pulled);
+    syncWarned = false;
+    persistAnnotations();
+    refreshKnownAnnotatorNames();
+    clearRenderedAnnotations();
+    restoreAnnotations();
+    renumberMarkers();
+    renderList();
+    // Whatever the reconciliation kept as this browser's own is owed to the
+    // server, and this is the first moment it can be sent.
+    syncAnnotations();
+    // The hop that a card on another page starts lands here, because the set
+    // it points into is only settled once the pull has answered.
+    focusPendingAnnotation();
+  }
+
+  // Three sets meet: what this browser holds, the digests of what it last saw
+  // the server agree to, and what the server holds now. The digests are what
+  // tell the two kinds of difference apart. An id the snapshot knows, matching
+  // the body it knows, gone from the server: another reviewer deleted it, and
+  // it goes. An id the snapshot does not know, or knows with a different body:
+  // this browser wrote it while the server was away, and it stays and is sent.
+  //
+  // The snapshot then becomes the server's set outright, so syncAnnotations
+  // derives every request owed -- a note written here, a note edited here, a
+  // note deleted here that the server still holds -- from the same diff it
+  // runs after any other change.
+  function reconcile(pulled) {
+    const remote = new Map(pulled.map((ann) => [ann.id, ann]));
+    const kept = [];
+    const keptIds = new Set();
+    state.annotations.forEach((ann) => {
+      const agreed = syncedSnapshot.get(ann.id);
+      if (agreed === undefined || agreed !== digestOf(ann)) {
+        kept.push(ann);
+        keptIds.add(ann.id);
+        return;
+      }
+      const fromServer = remote.get(ann.id);
+      if (fromServer) {
+        kept.push(fromServer);
+        keptIds.add(ann.id);
+      }
+    });
+    pulled.forEach((ann) => {
+      if (!keptIds.has(ann.id)) kept.push(ann);
+    });
+    state.annotations = kept;
+    syncedSnapshot = snapshotOf(pulled);
+  }
+
+  // The probe exists for the server that comes back while nobody is writing.
+  // Nothing else would ask it: the queue only moves when a note does, so
+  // without this the dot stays red and the unsent notes stay unsent until the
+  // reviewer happens to type.
+  async function probeHealth() {
+    try {
+      const res = await syncFetch(healthUrl(), { headers: syncHeaders({ Accept: 'application/json' }) });
+      try {
+        await res.json();
+      } catch (err) {
+        // A 200 of HTML is a website at that address, not this API, and a
+        // probe that took the status code alone would paint the dot green
+        // over a read that is failing on the same address.
+        setSyncStatus('refused');
+        return false;
+      }
+      return true;
+    } catch (err) {
+      // A server built against version 1 of the protocol has no /health. It
+      // answers 404 once, and every probe after this one is the read.
+      if (healthPath && err.status === 404) {
+        healthPath = '';
+        return probeHealth();
+      }
+      return false;
+    }
+  }
+
+  async function runHealthCheck(first) {
+    healthTimer = null;
+    const wasReachable = state.syncStatus === 'ok';
+    const reachable = await probeHealth();
+    if (!reachable) {
+      scheduleHealthCheck(healthBackoff);
+      healthBackoff = Math.min(healthBackoff * 2, HEALTH_BACKOFF_MAX);
+      return;
+    }
+    healthBackoff = HEALTH_BACKOFF_MIN;
+    scheduleHealthCheck(HEALTH_INTERVAL);
+    // The pull at boot is init's, so the first probe only reports. Past it, a
+    // server that was not answering and now is has a set this browser has not
+    // read and notes it has not been given.
+    if (!first && !wasReachable) enqueueSync(remotePull);
+  }
+
+  function scheduleHealthCheck(delay) {
+    if (healthTimer) clearTimeout(healthTimer);
+    // On the queue with the writes, so a probe never lands the dot on an
+    // answer that a request in flight is about to contradict.
+    healthTimer = setTimeout(() => enqueueSync(() => runHealthCheck(false)), delay);
+  }
+
+  function startHealthLoop() {
+    if (!server) return;
+    enqueueSync(() => runHealthCheck(true));
+  }
+
+  function syncAnnotations() {
+    if (!server) return;
+    const next = new Map(state.annotations.map((ann) => [ann.id, JSON.stringify(ann)]));
+    next.forEach((body, id) => {
+      if (syncedSnapshot.get(id) !== digestOf(body)) enqueueSync(() => remoteUpsert(id, body));
+    });
+    syncedSnapshot.forEach((digest, id) => {
+      if (!next.has(id)) enqueueSync(() => remoteDelete(id));
+    });
+  }
+
+  // A failed request leaves the snapshot stale, so the next change sends it
+  // again -- and so does the next pull, and the next probe that finds the
+  // server back, and the next load of the page, because the snapshot is in
+  // localStorage beside the set it disagrees with.
+  async function remoteUpsert(id, body) {
+    try {
+      await syncFetch(annotationUrl(id), {
+        method: 'PUT',
+        headers: syncHeaders({ 'Content-Type': 'application/json' }),
+        body
+      });
+      syncedSnapshot.set(id, digestOf(body));
+      syncWarned = false;
+      persistSnapshot();
+    } catch (err) {
+      warnSync('Uxnote: could not save this annotation on the server', err);
+    }
+  }
+
+  async function remoteDelete(id) {
+    try {
+      await syncFetch(annotationUrl(id), { method: 'DELETE', headers: syncHeaders() });
+      syncedSnapshot.delete(id);
+      syncWarned = false;
+      persistSnapshot();
+    } catch (err) {
+      warnSync('Uxnote: could not delete this annotation on the server', err);
+    }
+  }
+
+  // Delete all is one request, never one per annotation.
+  function remoteDeleteAll() {
+    if (!server) return;
+    enqueueSync(async () => {
+      try {
+        await syncFetch(annotationsUrl(), { method: 'DELETE', headers: syncHeaders() });
+        syncedSnapshot = new Map();
+        syncWarned = false;
+        persistSnapshot();
+      } catch (err) {
+        warnSync('Uxnote: could not delete the annotations on the server', err);
+      }
+    });
+  }
+
   document.readyState === 'loading' ? document.addEventListener('DOMContentLoaded', init) : init();
 
   window.Uxnote = {
     refresh: refreshMarkers,
     setHidden: (hidden) => setAnnotatorVisibility(!!hidden),
     toggleVisibility: () => setAnnotatorVisibility(!state.hidden),
-    isHidden: () => !!state.hidden
+    isHidden: () => !!state.hidden,
+    sync: { pull: remotePull, push: syncAnnotations, url: () => (server ? server.url : null) }
   };
 })();
