@@ -5372,11 +5372,13 @@
   // behind one in the queue would never be issued at all.
   function flushSyncNow() {
     if (!server) return;
-    const next = snapshotOf(state.annotations);
+    // The same diff syncAnnotations runs: the snapshot holds digests, so what
+    // is compared and what is sent are not the same string.
+    const next = new Map(state.annotations.map((ann) => [ann.id, JSON.stringify(ann)]));
     next.forEach((body, id) => {
-      if (syncedSnapshot.get(id) !== body) remoteUpsert(id, body, { keepalive: true });
+      if (syncedSnapshot.get(id) !== digestOf(body)) remoteUpsert(id, body, { keepalive: true });
     });
-    syncedSnapshot.forEach((body, id) => {
+    syncedSnapshot.forEach((digest, id) => {
       if (!next.has(id)) remoteDelete(id, { keepalive: true });
     });
   }
