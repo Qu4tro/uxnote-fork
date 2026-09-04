@@ -190,6 +190,7 @@
     markerLayer: null,
     syncDot: null,
     syncStatus: null,
+    syncPending: new Set(),
     colors: colorPalette,
     customPosition: false,
     dimEnabled,
@@ -1023,6 +1024,110 @@
         margin-left: auto;
         margin-top: 4px;
       }
+      /* Which of the three kinds this is, in the kind's own colour, read
+         before any of the words beside it. */
+      .wn-annot-kind {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: 22px;
+        padding: 0 4px;
+        border-radius: 8px;
+        background: var(--wn-item-accent, var(--wn-accent));
+        color: var(--wn-item-accent-text, #ffffff);
+        font-size: 11px;
+        font-weight: 700;
+      }
+      .wn-annot-kind svg {
+        width: 14px;
+        height: 14px;
+      }
+      .wn-annot-kind-label {
+        display: none;
+      }
+      .wn-annot-quote {
+        font-size: 12px;
+        line-height: 1.5;
+        color: var(--wn-text);
+        border-left: 3px solid var(--wn-item-accent, var(--wn-accent));
+        padding: 1px 0 1px 10px;
+        display: -webkit-box;
+        -webkit-line-clamp: 3;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+      }
+      .wn-annot-target {
+        align-self: flex-start;
+        max-width: 100%;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 11px;
+        color: var(--wn-text-muted);
+        background: rgba(109, 86, 199, 0.08);
+        border: 1px solid var(--wn-border);
+        border-radius: 8px;
+        padding: 3px 8px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .wn-annot-fact {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        max-width: 100%;
+        font-size: 11px;
+        color: var(--wn-text-muted);
+        background: rgba(109, 86, 199, 0.06);
+        border: 1px solid var(--wn-border);
+        border-radius: 999px;
+        padding: 3px 9px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      /* The name of the fact is the quieter half of it: a reviewer reads the
+         author, not the word Author. */
+      .wn-annot-fact b {
+        font-weight: 700;
+        color: var(--wn-text-faint);
+      }
+      /* Every note on the page being read makes a page chip on every card
+         that says nothing. It is drawn where the set spans more than the one. */
+      .wn-annot-list:not(.is-multipage) .wn-annot-fact.is-page {
+        display: none;
+      }
+      .wn-annot-fact.is-elsewhere {
+        color: var(--wn-accent);
+        border-color: rgba(109, 86, 199, 0.4);
+        background: rgba(109, 86, 199, 0.12);
+      }
+      .wn-annot-fact.is-sent {
+        color: #2ea043;
+        border-color: rgba(46, 160, 67, 0.35);
+        background: rgba(46, 160, 67, 0.1);
+      }
+      .wn-annot-fact.is-pending {
+        color: #b5820f;
+        border-color: rgba(210, 153, 34, 0.4);
+        background: rgba(210, 153, 34, 0.12);
+      }
+      .wn-annot-fact.is-local {
+        color: var(--wn-danger);
+        border-color: rgba(224, 91, 91, 0.35);
+        background: rgba(224, 91, 91, 0.1);
+      }
+      :root[data-wn-theme="dark"] .wn-annot-fact.is-sent {
+        color: #56d364;
+      }
+      :root[data-wn-theme="dark"] .wn-annot-fact.is-pending {
+        color: #e3b341;
+      }
+      /* The rail has room for the note and little else. Everything the panel
+         used to drop for want of width is built once and drawn full size. */
+      .wn-annot-detail,
+      .wn-annot-facts {
+        display: none;
+      }
       /* The full-size view. Full width, and vertically the room between the
          two toolbar positions: --wn-bar-reserve is the bar's height given up
          at the top and at the bottom at once, so the view clears the bar
@@ -1061,14 +1166,17 @@
         display: grid;
         grid-template-columns: repeat(auto-fill, minmax(330px, 1fr));
         align-content: start;
-        /* Each card is as tall as it needs to be. Stretching them to the
-           tallest of their row gives a one-word note the height of a long one
+        /* Each card is as tall as what it holds. Stretching them to the
+           tallest of their row gives a one-word note the height of a capture
            and fills the difference with nothing. */
         align-items: start;
         gap: 14px;
         padding: 14px 2px 10px;
         overflow-y: auto;
       }
+      /* The cards of a row are as tall as the tallest of them, and the facts
+         sit on the floor of each. A ragged bottom edge reads as a layout that
+         has gone wrong; a row of cards that end together does not. */
       .wn-annot-panel.is-full .wn-annot-item {
         margin-bottom: 0;
         padding: 12px 14px;
@@ -1084,6 +1192,39 @@
       }
       .wn-annot-panel.is-full .wn-annot-showmore {
         margin-top: 0;
+      }
+      .wn-annot-panel.is-full .wn-annot-kind {
+        padding-right: 9px;
+      }
+      .wn-annot-panel.is-full .wn-annot-kind-label {
+        display: inline;
+      }
+      .wn-annot-panel.is-full .wn-annot-comment {
+        font-size: 13px;
+        color: var(--wn-text);
+        background: transparent;
+        border: none;
+        border-radius: 0;
+        padding: 0;
+        -webkit-line-clamp: 5;
+      }
+      .wn-annot-panel.is-full .wn-annot-detail {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .wn-annot-panel.is-full .wn-annot-facts {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        padding-top: 2px;
+      }
+      /* The picture at the size it was taken at, up to the room a card has.
+         A capture taller than it is wide keeps its height rather than being
+         letterboxed down to a strip; full size is still a click away. */
+      .wn-annot-panel.is-full .wn-annot-shot img {
+        max-height: 260px;
+        max-width: 100%;
       }
       .uxnote-textmark {
         display: inline;
@@ -3078,6 +3219,7 @@
   function applyItemAccent(item, palette) {
     if (!item || !palette) return;
     item.style.setProperty('--wn-item-accent', palette.base);
+    item.style.setProperty('--wn-item-accent-text', palette.text);
     item.style.setProperty('--wn-item-accent-strong', palette.strong);
     item.style.setProperty('--wn-item-accent-shadow', palette.shadow);
     item.style.setProperty('--wn-item-accent-soft', palette.soft);
@@ -4792,136 +4934,287 @@
   }
 
 
+  // What each kind is called, and the mark the eye reads before the words.
+  const KIND_LABELS = {
+    text: 'Text highlight',
+    element: 'Element pin',
+    screenshot: 'Region capture'
+  };
+
+  function kindIcon(type) {
+    if (type === 'text') return iconPen();
+    if (type === 'screenshot') return iconCamera();
+    return iconTarget();
+  }
+
+  // The element an element pin points at, in the terms it was stored in.
+  function describeAnnotationTarget(ann) {
+    const target = (ann && ann.target) || {};
+    if (ann.type !== 'element') return '';
+    if (target.css) return truncateText(target.css, 90);
+    if (target.tag) return `<${target.tag}>`;
+    if (target.xpath) return truncateText(target.xpath, 90);
+    return '';
+  }
+
+  // The page a note belongs to, as the part of the address that distinguishes
+  // it. A set can span pages; the panel never used to say which one.
+  function describeAnnotationPage(ann) {
+    const href = (ann && (ann.pageUrl || ann.pageKey)) || '';
+    if (!href) return '';
+    try {
+      const url = new URL(href, window.location.href);
+      return truncateText(`${url.pathname || '/'}${url.search || ''}`, 60);
+    } catch (err) {
+      return truncateText(href, 60);
+    }
+  }
+
+  function isOnThisPage(ann) {
+    return (ann && ann.pageKey) === normalizePageKey(window.location.href);
+  }
+
+  // Where a server is named, whether it has this note. The snapshot holds the
+  // id of everything the server took, and the pending set the ids a change is
+  // still owed for -- an edit leaves the id in the snapshot and the note
+  // unsent, and those are not the same answer.
+  function syncStateOf(ann) {
+    if (!server) return '';
+    if (state.syncPending.has(ann.id)) return 'pending';
+    return syncedSnapshot.has(ann.id) ? 'sent' : 'local';
+  }
+
+  const SYNC_FACTS = {
+    sent: 'On the server',
+    pending: 'Not sent yet',
+    local: 'Only in this browser'
+  };
+
+  function formatStamp(value) {
+    const at = new Date(value);
+    const date = at.toLocaleDateString(undefined, { year: 'numeric', month: '2-digit', day: '2-digit' });
+    const time = at.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+    return `${date} \u2022 ${time}`;
+  }
+
+  function addFact(row, label, value, className) {
+    if (!value) return;
+    const chip = document.createElement('div');
+    chip.className = className ? `wn-annot-fact ${className}` : 'wn-annot-fact';
+    const name = document.createElement('b');
+    name.textContent = label;
+    chip.appendChild(name);
+    chip.appendChild(document.createTextNode(value));
+    chip.title = `${label} ${value}`;
+    row.appendChild(chip);
+  }
+
+  // Everything one annotation holds, in one card. The rail draws the part of
+  // it that fits in 360px and the full-size view draws all of it; which is
+  // which is the stylesheet's to decide, so a change of view moves no DOM.
+  function buildCard(ann, number) {
+    const item = document.createElement('div');
+    item.className = 'wn-annot-item';
+    item.dataset.id = ann.id;
+    applyItemAccent(item, getAnnotationColors(ann));
+
+    const top = document.createElement('div');
+    top.className = 'wn-annot-card-top';
+    const topLeft = document.createElement('div');
+    topLeft.className = 'wn-annot-card-top-left';
+
+    const kindLabel = KIND_LABELS[ann.type] || KIND_LABELS.element;
+    const kind = document.createElement('div');
+    kind.className = 'wn-annot-kind';
+    kind.title = kindLabel;
+    kind.innerHTML = kindIcon(ann.type);
+    const kindName = document.createElement('span');
+    kindName.className = 'wn-annot-kind-label';
+    kindName.textContent = kindLabel;
+    kind.appendChild(kindName);
+    topLeft.appendChild(kind);
+
+    const numberEl = document.createElement('div');
+    numberEl.className = 'wn-annot-number';
+    numberEl.textContent = `#${number}`;
+    topLeft.appendChild(numberEl);
+    if (ann.status === 'missing') {
+      const missing = document.createElement('div');
+      missing.className = 'wn-annot-missing';
+      missing.textContent = 'Missing';
+      topLeft.appendChild(missing);
+    }
+    const meta = document.createElement('div');
+    meta.className = 'wn-annot-meta';
+    meta.textContent = formatStamp(ann.createdAt);
+    topLeft.appendChild(meta);
+
+    const topRight = document.createElement('div');
+    topRight.className = 'wn-annot-card-top-right';
+    const editBtn = document.createElement('button');
+    editBtn.type = 'button';
+    editBtn.className = 'wn-annot-edit wn-annotator';
+    editBtn.setAttribute('aria-label', 'Edit this annotation');
+    editBtn.innerHTML = iconEdit();
+    editBtn.addEventListener('click', async (evt) => {
+      evt.stopPropagation();
+      await editAnnotation(ann.id);
+    });
+    topRight.appendChild(editBtn);
+    const deleteBtn = document.createElement('button');
+    deleteBtn.type = 'button';
+    deleteBtn.className = 'wn-annot-delete wn-annotator';
+    deleteBtn.setAttribute('aria-label', 'Delete this annotation');
+    deleteBtn.innerHTML = iconTrash();
+    deleteBtn.addEventListener('click', (evt) => {
+      evt.stopPropagation();
+      deleteAnnotation(ann.id);
+    });
+    topRight.appendChild(deleteBtn);
+    top.appendChild(topLeft);
+    top.appendChild(topRight);
+    item.appendChild(top);
+
+    const comment = document.createElement('div');
+    comment.className = 'wn-annot-comment';
+    const commentText = ann.comment || '\u2014';
+    comment.textContent = commentText;
+    item.appendChild(comment);
+
+    const showMore = document.createElement('button');
+    showMore.type = 'button';
+    showMore.className = 'wn-annot-showmore wn-annotator';
+    showMore.textContent = 'See more';
+    showMore.addEventListener('click', (evt) => {
+      evt.stopPropagation();
+      const expanded = comment.classList.toggle('expanded');
+      showMore.textContent = expanded ? 'See less' : 'See more';
+    });
+    if (commentText.length < 160) showMore.style.display = 'none';
+    item.appendChild(showMore);
+
+    const detail = document.createElement('div');
+    detail.className = 'wn-annot-detail';
+    const snippet = (ann.snippet || '').trim();
+    if (snippet) {
+      const quote = document.createElement('div');
+      quote.className = 'wn-annot-quote';
+      quote.textContent = snippet;
+      detail.appendChild(quote);
+    }
+    const targetText = describeAnnotationTarget(ann);
+    if (targetText) {
+      const target = document.createElement('div');
+      target.className = 'wn-annot-target';
+      target.textContent = targetText;
+      target.title = targetText;
+      detail.appendChild(target);
+    }
+    item.appendChild(detail);
+
+    const shotSrc = screenshotSrc(ann);
+    if (shotSrc) {
+      const shotWrap = document.createElement('div');
+      shotWrap.className = 'wn-annot-shot';
+      const shotImg = document.createElement('img');
+      shotImg.src = shotSrc;
+      shotImg.alt = 'The screenshot of this annotation';
+      shotImg.addEventListener('click', (evt) => {
+        evt.stopPropagation();
+        openScreenshotLightbox(shotSrc);
+      });
+      shotWrap.appendChild(shotImg);
+      item.appendChild(shotWrap);
+    }
+
+    const facts = document.createElement('div');
+    facts.className = 'wn-annot-facts';
+    addFact(facts, 'Page', describeAnnotationPage(ann), isOnThisPage(ann) ? 'is-page' : 'is-page is-elsewhere');
+    if (ann.updatedAt && ann.updatedAt > ann.createdAt) {
+      addFact(facts, 'Edited', formatStamp(ann.updatedAt));
+    }
+    const sync = syncStateOf(ann);
+    if (sync) addFact(facts, '', SYNC_FACTS[sync], `is-${sync}`);
+    // An import can carry these and the widget reads neither. Showing what
+    // arrived is honest; offering to edit it would not be.
+    if (ann.author) addFact(facts, 'Author', truncateText(String(ann.author), 40));
+    if (ann.priority) addFact(facts, 'Priority', truncateText(String(ann.priority), 20));
+    item.appendChild(facts);
+
+    item.addEventListener('click', () => {
+      focusAnnotation(ann.id, true, ann.pageUrl, ann.pageKey);
+      // The sheet covers the page it is pointing at, so it steps aside. The
+      // full-size view covers it too, and falls back to the rail rather than
+      // closing: the list is still what the reviewer is working through.
+      if (isCompactLayout()) setPanelOpen(false);
+      else if (isFullView()) setPanelView('rail', { remember: false });
+    });
+    return item;
+  }
+
+  // Everything one search reads. The snippet was searchable and invisible; the
+  // rest of it was neither.
+  function searchHaystack(ann) {
+    return `${ann.comment || ''} ${ann.snippet || ''} ${KIND_LABELS[ann.type] || ''} ${
+      describeAnnotationTarget(ann)
+    } ${ann.pageUrl || ''} ${ann.author || ''} ${ann.priority || ''}`.toLowerCase();
+  }
+
+  // A bulk sync answers one request per annotation, and each answer changes
+  // one card. Rendering on every one of them would run the list as many times
+  // as there are notes; this runs it once for the frame.
+  function queueListRender() {
+    if (state.listRenderQueued || !state.panel) return;
+    state.listRenderQueued = true;
+    requestAnimationFrame(() => {
+      state.listRenderQueued = false;
+      if (state.panel) renderList();
+    });
+  }
+
+  // Whether the set is about more than the page being read. The widget
+  // follows route changes, so it can hold notes made anywhere on the site.
+  function spansPages() {
+    const pages = new Set();
+    for (const ann of state.annotations) {
+      if (!isOnThisPage(ann)) return true;
+      pages.add(ann.pageKey);
+      if (pages.size > 1) return true;
+    }
+    return false;
+  }
+
+  function emptyNote(message) {
+    const empty = document.createElement('div');
+    empty.className = 'wn-annot-empty';
+    empty.textContent = message;
+    return empty;
+  }
+
   // Rebuild the side panel list with filtering and numbering
   function renderList() {
     const list = state.panel.querySelector('.wn-annot-list');
-      const title = state.panel.querySelector('h3');
-      list.innerHTML = '';
-      if (!state.annotations.length) {
-        const empty = document.createElement('div');
-        empty.className = 'wn-annot-empty';
-      empty.textContent = 'No annotations yet.';
-      list.appendChild(empty);
-      if (title) title.textContent = 'Annotations (0)';
-      const footer = ensureFooter();
-      return;
-    }
+    const title = state.panel.querySelector('h3');
+    list.innerHTML = '';
+    // The number on a card is the number on its marker, and the marker counts
+    // from the order the notes were made in. A filtered list used to renumber
+    // itself, so the card and the mark on the page disagreed.
+    const numbers = new Map();
+    state.annotations.forEach((ann, idx) => numbers.set(ann.id, idx + 1));
+    const query = state.filters.query;
     const filtered = state.annotations
       .slice()
       .sort((a, b) => a.createdAt - b.createdAt)
-      .filter((ann) => {
-        const q = state.filters.query;
-        const haystack = `${ann.comment || ''} ${ann.snippet || ''}`.toLowerCase();
-        return !q || haystack.includes(q);
-  });
+      .filter((ann) => !query || searchHaystack(ann).includes(query));
     if (title) title.textContent = `Annotations (${filtered.length})`;
-    filtered.forEach((ann, idx) => {
-      const item = document.createElement('div');
-      item.className = 'wn-annot-item';
-      item.dataset.id = ann.id;
-      applyItemAccent(item, getAnnotationColors(ann));
-
-      const top = document.createElement('div');
-      top.className = 'wn-annot-card-top';
-      const topLeft = document.createElement('div');
-      topLeft.className = 'wn-annot-card-top-left';
-      const number = document.createElement('div');
-      number.className = 'wn-annot-number';
-      number.textContent = `#${idx + 1}`;
-      topLeft.appendChild(number);
-      if (ann.status === 'missing') {
-        const missing = document.createElement('div');
-        missing.className = 'wn-annot-missing';
-        missing.textContent = 'Missing';
-        topLeft.appendChild(missing);
-      }
-      const topRight = document.createElement('div');
-      topRight.className = 'wn-annot-card-top-right';
-
-      const editBtn = document.createElement('button');
-      editBtn.type = 'button';
-      editBtn.className = 'wn-annot-edit wn-annotator';
-      editBtn.setAttribute('aria-label', 'Edit this annotation');
-      editBtn.innerHTML = iconEdit();
-      editBtn.addEventListener('click', async (evt) => {
-        evt.stopPropagation();
-        await editAnnotation(ann.id);
-      });
-      topRight.appendChild(editBtn);
-
-      const deleteBtn = document.createElement('button');
-      deleteBtn.type = 'button';
-      deleteBtn.className = 'wn-annot-delete wn-annotator';
-      deleteBtn.setAttribute('aria-label', 'Delete this annotation');
-      deleteBtn.innerHTML = iconTrash();
-      deleteBtn.addEventListener('click', (evt) => {
-        evt.stopPropagation();
-        deleteAnnotation(ann.id);
-      });
-      topRight.appendChild(deleteBtn);
-      top.appendChild(topLeft);
-      top.appendChild(topRight);
-      const comment = document.createElement('div');
-      comment.className = 'wn-annot-comment';
-      const commentText = ann.comment || '—';
-      comment.textContent = commentText;
-
-      const meta = document.createElement('div');
-      meta.className = 'wn-annot-meta';
-      const createdAt = new Date(ann.createdAt);
-      const createdAtDate = createdAt.toLocaleDateString(undefined, {
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit'
-      });
-      const createdAtTime = createdAt.toLocaleTimeString(undefined, {
-        hour: '2-digit',
-        minute: '2-digit'
-      });
-      meta.textContent = `${createdAtDate} • ${createdAtTime}`;
-      topLeft.appendChild(meta);
-
-      const showMore = document.createElement('button');
-      showMore.type = 'button';
-      showMore.className = 'wn-annot-showmore wn-annotator';
-      showMore.textContent = 'See more';
-      showMore.addEventListener('click', (evt) => {
-        evt.stopPropagation();
-        const expanded = comment.classList.toggle('expanded');
-        showMore.textContent = expanded ? 'See less' : 'See more';
-      });
-      if (commentText.length < 160) {
-        showMore.style.display = 'none';
-      }
-
-      item.appendChild(top);
-      item.appendChild(comment);
-      const shotSrc = screenshotSrc(ann);
-      if (shotSrc) {
-        const shotWrap = document.createElement('div');
-        shotWrap.className = 'wn-annot-shot';
-        const shotImg = document.createElement('img');
-        shotImg.src = shotSrc;
-        shotImg.alt = 'The screenshot of this annotation';
-        shotImg.addEventListener('click', (evt) => {
-          evt.stopPropagation();
-          openScreenshotLightbox(shotSrc);
-        });
-        shotWrap.appendChild(shotImg);
-        item.appendChild(shotWrap);
-      }
-      item.appendChild(showMore);
-      item.addEventListener('click', () => {
-        focusAnnotation(ann.id, true, ann.pageUrl, ann.pageKey);
-        // The sheet covers the page it is pointing at, so it steps aside. The
-        // full-size view covers it too, and falls back to the rail rather than
-        // closing: the list is still what the reviewer is working through.
-        if (isCompactLayout()) setPanelOpen(false);
-        else if (isFullView()) setPanelView('rail', { remember: false });
-      });
-      list.appendChild(item);
-    });
-
+    list.classList.toggle('is-multipage', spansPages());
+    if (!state.annotations.length) {
+      list.appendChild(emptyNote('No annotations yet.'));
+    } else if (!filtered.length) {
+      list.appendChild(emptyNote('No annotation matches that search.'));
+    } else {
+      filtered.forEach((ann) => list.appendChild(buildCard(ann, numbers.get(ann.id))));
+    }
     ensureFooter();
   }
 
@@ -4943,6 +5236,7 @@
     if (!res) return;
     const { comment } = res;
     ann.comment = comment.trim();
+    ann.updatedAt = Date.now();
     saveAnnotations();
     renderList();
   }
@@ -5573,7 +5867,9 @@
     if (!server) return;
     const next = new Map(state.annotations.map((ann) => [ann.id, JSON.stringify(ann)]));
     next.forEach((body, id) => {
-      if (syncedSnapshot.get(id) !== digestOf(body)) enqueueSync(() => remoteUpsert(id, body));
+      if (syncedSnapshot.get(id) === digestOf(body)) return;
+      state.syncPending.add(id);
+      enqueueSync(() => remoteUpsert(id, body));
     });
     syncedSnapshot.forEach((digest, id) => {
       if (!next.has(id)) enqueueSync(() => remoteDelete(id));
@@ -5648,6 +5944,8 @@
         body
       });
       syncedSnapshot.set(id, digestOf(body));
+      state.syncPending.delete(id);
+      queueListRender();
       syncWarned = false;
       if (uploaded) persistAnnotations();
       else persistSnapshot();
