@@ -206,6 +206,10 @@
     <p>The widget reads its options from its script tag, once, when the page
       loads. This page carries them in the query string, so applying a change
       reloads the page. The notes you have already taken stay where they are.</p>
+    <p><code>colorForHighlight</code> paints all three kinds at once and is not
+      in the grid: a colour input has no way to say <em>unset</em>, and the three
+      per-kind options below say the same thing one kind at a time. The README
+      carries it.</p>
     <p>Two of the options name a server to keep the notes on instead of this
       browser. A link must not be able to point your notes at somebody else's
       server, so this page takes a loopback address only: <code>localhost</code>,
@@ -267,17 +271,17 @@
           <option value="false">false</option>
         </select>
       </label>
-      <label for="set-color"><span class="settings-name">colorForHighlight</span>
-        <span class="settings-desc">The colour of a text highlight, an element's outline, and a region's frame alike.</span>
-        <input id="set-color" type="color" value="#4e9cf6">
-      </label>
       <label for="set-color-text"><span class="settings-name">colorForTextHighlight</span>
-        <span class="settings-desc">Overrides it for text highlights. Given alone, it becomes the colour of all three.</span>
+        <span class="settings-desc">A text highlight, and nothing else. The three kinds start on three colours so a marker says which it is.</span>
         <input id="set-color-text" type="color" value="#4e9cf6">
       </label>
       <label for="set-color-element"><span class="settings-name">colorForElementHighlight</span>
-        <span class="settings-desc">Overrides it for an element's outline and its marker. Given alone, it becomes the colour of all three.</span>
-        <input id="set-color-element" type="color" value="#4e9cf6">
+        <span class="settings-desc">An element's outline and its marker, and nothing else.</span>
+        <input id="set-color-element" type="color" value="#8b5cf6">
+      </label>
+      <label for="set-color-region"><span class="settings-name">colorForRegionHighlight</span>
+        <span class="settings-desc">The frame of a captured region, and nothing else.</span>
+        <input id="set-color-region" type="color" value="#f59f00">
       </label>
       <label for="set-mailto"><span class="settings-name">data-mailto</span>
         <span class="settings-desc">The recipient of the send-by-mail button's draft. It does nothing while data-mail-export is false.</span>
@@ -348,9 +352,9 @@
         { key: 'backdrop',        attr: 'isBackdropVisible',          kind: 'choice', values: BOOLS, fallback: 'true' },
         { key: 'toolbar-visible', attr: 'isToolVisibleAtFirstLaunch', kind: 'choice', values: BOOLS, fallback: 'true' },
         { key: 'toolbar-top',     attr: 'isToolOnTopAtLaunch',        kind: 'choice', values: BOOLS, fallback: 'false' },
-        { key: 'color',           attr: 'colorForHighlight',          kind: 'color',  fallback: '#4e9cf6' },
         { key: 'color-text',      attr: 'colorForTextHighlight',      kind: 'color',  fallback: '#4e9cf6' },
-        { key: 'color-element',   attr: 'colorForElementHighlight',   kind: 'color',  fallback: '#4e9cf6' },
+        { key: 'color-element',   attr: 'colorForElementHighlight',   kind: 'color',  fallback: '#8b5cf6' },
+        { key: 'color-region',    attr: 'colorForRegionHighlight',    kind: 'color',  fallback: '#f59f00' },
         { key: 'mailto',          attr: 'data-mailto',                kind: 'email',  fallback: '' },
         // A seed is what the control comes filled with, which is not the same
         // as what the widget starts on: these two carry the address and key

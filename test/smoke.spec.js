@@ -238,7 +238,7 @@ test('the page theme switch sits inside the subtree the widget ignores', async (
 });
 
 test('the query string sets the widget options', async ({ page }) => {
-  await page.goto('/?json-export=false&theme=dark&color=%23e04f5f');
+  await page.goto('/?json-export=false&theme=dark&color-text=%23e04f5f');
   await expect(page.locator('.wn-annot-toolbar button[data-action="export"]')).toHaveCount(0);
   // Only the requested option changed; the import and mail buttons are untouched.
   await expect(page.locator('.wn-annot-toolbar button[data-action="import"]')).toBeVisible();
