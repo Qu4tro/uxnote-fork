@@ -1,10 +1,17 @@
 /*
  * Uxnote
  * Author: ninefortyonestudio (https://github.com/ninefortyonestudio)
- * Repository: https://github.com/ninefortyonestudio/uxnote
- * Version: v1.0.0
+ * Fork: https://github.com/Qu4tro/uxnote-fork
+ * Upstream: https://github.com/ninefortyonestudio/uxnote
+ * Version: v2.1.0
  * License: MIT (see LICENSE)
- * Built with Codex 5.2
+ *
+ * This fork stores the annotations on the server named by data-server-url,
+ * over the wire protocol of PROTOCOL.md. With no server named it stores them
+ * in localStorage, on the browser that wrote them.
+ *
+ * An annotation can also be a screenshot of a region of the page. Load snapdom
+ * (window.snapdom, MIT) before this script to offer the capture button.
  */
 (() => {
   if (window.Uxnote) {
@@ -46,19 +53,30 @@
     getScriptAttr('colorForElementHighlight') ||
     getScriptAttr('colorForElementHighligh') ||
     (script && (script.dataset.colorForElementHighlight || script.dataset.colorForElementHighligh));
-  const defaultHighlightColor = '#4e9cf6';
-  const baseHighlightColor = normalizeHexColor(
-    globalHighlightColorAttr ||
-      elementHighlightColorAttr ||
-      textHighlightColorAttr ||
-      defaultHighlightColor,
-    defaultHighlightColor
-  );
-  const textHighlightColor = normalizeHexColor(textHighlightColorAttr || baseHighlightColor, baseHighlightColor);
-  const elementHighlightColor = normalizeHexColor(elementHighlightColorAttr || baseHighlightColor, baseHighlightColor);
+  // The third kind had no name of its own. Without one, the only way to
+  // recolour a region frame was to recolour the other two with it.
+  const regionHighlightColorAttr =
+    getScriptAttr('colorForRegionHighlight') ||
+    (script && script.dataset.colorForRegionHighlight);
+  // Three kinds of annotation, so three colours: a marker, an outline or a
+  // frame says which kind it belongs to before the note is read.
+  const defaultTextHighlightColor = '#4e9cf6';
+  const defaultElementHighlightColor = '#8b5cf6';
+  const defaultRegionHighlightColor = '#f59f00';
+  // `colorForHighlight` still paints all three. What it no longer does is
+  // work the other way round: naming the text colour alone used to make it
+  // the base, and take the element outline and the region frame with it.
+  const baseHighlightColor = parseHexColor(globalHighlightColorAttr);
+  const textFallback = baseHighlightColor || defaultTextHighlightColor;
+  const elementFallback = baseHighlightColor || defaultElementHighlightColor;
+  const textHighlightColor = normalizeHexColor(textHighlightColorAttr || textFallback, textFallback);
+  const elementHighlightColor = normalizeHexColor(elementHighlightColorAttr || elementFallback, elementFallback);
+  const regionFallback = baseHighlightColor || defaultRegionHighlightColor;
+  const regionHighlightColor = normalizeHexColor(regionHighlightColorAttr || regionFallback, regionFallback);
   const colorPalette = {
     text: buildColorSet(textHighlightColor, { overlayAlpha: 0.7, softAlpha: 0.18, softerAlpha: 0.08 }),
-    element: buildColorSet(elementHighlightColor, { overlayAlpha: 0.35, softAlpha: 0.12, softerAlpha: 0.04 })
+    element: buildColorSet(elementHighlightColor, { overlayAlpha: 0.35, softAlpha: 0.12, softerAlpha: 0.04 }),
+    screenshot: buildColorSet(regionHighlightColor, { overlayAlpha: 0.35, softAlpha: 0.12, softerAlpha: 0.04 })
   };
   const initialPosition = (() => {
     if (startTopAttr !== null && startTopAttr !== undefined) {
@@ -70,11 +88,52 @@
   const positionStorageKey = 'wn-toolbar-pos';
   const dockMode = (script && (script.dataset.dock || script.dataset.layout)) || '';
   const storageKey = `uxnote:site:${siteKey}`;
-  const annotatorNameStorageKey = `uxnote:annotator:${siteKey}`;
-  const annotatorNamesStorageKey = `uxnote:annotators:${siteKey}`;
+  const syncedStorageKey = `${storageKey}:synced`;
   const importFilesStorageKey = `uxnote:import-files:${siteKey}`;
   const visibilityStorageKey = `uxnote:hidden:${siteKey}`;
   const pendingFocusKey = `uxnote:pending:${siteKey}`;
+  // A named server is the annotation store; no name at all means localStorage.
+  const serverUrl = ((script && script.dataset.serverUrl) || '').trim().replace(/\/+$/, '');
+  const server = serverUrl ? { url: serverUrl, apiKey: (script && script.dataset.serverApiKey) || '' } : null;
+  const jsonExport = parseBoolAttr(script && script.dataset.jsonExport, true);
+  const jsonImport = parseBoolAttr(script && script.dataset.jsonImport, true);
+  const mailExport = parseBoolAttr(script && script.dataset.mailExport, true);
+  const themeAttr = ((script && script.dataset.theme) || '').trim().toLowerCase();
+  const theme =
+    themeAttr === 'light' || themeAttr === 'dark' || themeAttr === 'reverse-auto' ? themeAttr : 'auto';
+  // Both of these read the system preference, so both follow it as it changes.
+  const followsSystem = theme === 'auto' || theme === 'reverse-auto';
+  const darkQuery = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
+  // Two axes, read separately. The kind of input decides behaviour: with no
+  // hover there is no preview stream and no tooltip, and a finger needs a
+  // bigger target than a pointer. The room decides layout density: which
+  // controls the bar carries, how wide the panel runs. Width alone answers
+  // neither question -- every phone in landscape is wider than 640px, and a
+  // narrow desktop window is not a phone.
+  // `any-pointer` is deliberately not used: it is true on any laptop with a
+  // touchscreen, mouse attached or not, which would strip those machines of
+  // the hover preview they can use.
+  const touchQuery = window.matchMedia ? window.matchMedia('(pointer: coarse) and (hover: none)') : null;
+  const compactQuery = window.matchMedia
+    ? window.matchMedia('(max-width: 640px), (max-height: 480px)')
+    : null;
+
+  function isTouchInput() {
+    if (touchQuery) return touchQuery.matches;
+    return 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+  }
+
+  function isCompactLayout() {
+    if (compactQuery) return compactQuery.matches;
+    return window.innerWidth <= 640 || window.innerHeight <= 480;
+  }
+
+  function subscribeMedia(query, handler) {
+    if (!query) return;
+    if (query.addEventListener) query.addEventListener('change', handler);
+    else if (query.addListener) query.addListener(handler);
+  }
+
   const dimConfigAttr =
     getScriptAttr('isBackdropVisible') ||
     getScriptAttr('isbackdropvisible') ||
@@ -93,36 +152,42 @@
         script.dataset.dimlevel ||
         script.dataset.dimstrength));
   const defaultDimOpacity = 0.2;
-  const dimEnabled = parseBoolAttr(dimConfigAttr, true);
+  // On a desktop the dimmer frames the tool against the page. On a phone the
+  // bar is a strip and the page is the whole screen, so it only costs
+  // contrast; a page that asks for it by name still gets it.
+  const dimEnabled = parseBoolAttr(dimConfigAttr, !isTouchInput());
   const dimOpacity = dimEnabled ? defaultDimOpacity : 0;
 
   // Central state (positions, annotations, DOM elements, filters...)
   const state = {
     mode: null,
     annotations: [],
-    annotatorName: '',
-    annotatorNames: [],
     importFiles: [],
     markers: {},
     highlightSpans: {},
     elementTargets: {},
     outlineBox: null,
+    selectionBar: null,
+    selectionTimer: null,
+    selectionRange: null,
+    elementPicker: null,
+    elementTrail: [],
+    elementTrailIndex: 0,
     toolbar: null,
     panel: null,
     visibilityToggle: null,
     commentModal: null,
     dialogModal: null,
     importModal: null,
-    exportModal: null,
     markerLayer: null,
+    syncDot: null,
+    syncStatus: null,
     colors: colorPalette,
     customPosition: false,
     dimEnabled,
     dimOpacity,
     dimOverlay: null,
     filters: {
-      priority: 'all',
-      author: 'all',
       query: ''
     },
     hidden: false,
@@ -133,12 +198,6 @@
     toast: null,
     toastTimer: null
   };
-  const mobileQuery = window.matchMedia ? window.matchMedia('(max-width: 640px)') : null;
-
-  function isMobileLayout() {
-    if (mobileQuery) return mobileQuery.matches;
-    return window.innerWidth <= 640;
-  }
 
   // Entry point: load config, build UI, restore data
   function init() {
@@ -155,22 +214,29 @@
         : initialHiddenFromVisible !== null
         ? initialHiddenFromVisible
         : parseBoolAttr(startHiddenAttr, false);
-    state.annotatorName = loadAnnotatorName();
-    state.annotatorNames = loadAnnotatorNames();
-    state.importFiles = loadImportFiles();
+    if (jsonImport) state.importFiles = loadImportFiles();
     captureBasePadding();
     applyColorTheme();
+    applyTheme();
     injectStyles();
     createShell();
     createDimmer();
     setAnnotatorVisibility(state.hidden);
     loadAnnotations();
-    refreshKnownAnnotatorNames();
+    if (server && !loadSyncedSnapshot()) state.annotations = [];
     restoreAnnotations();
     retryResolveMissingAnnotations();
     startMissingObserver();
     startLayoutObserver();
-    focusPendingAnnotation();
+    if (!server) focusPendingAnnotation();
+    // The copy in this browser is on the page before the server has said
+    // anything, so a reviewer with a dead server still opens their notes. The
+    // pull settles the two sets, and the probe watches for the server coming
+    // back with nobody writing.
+    if (server) {
+      enqueueSync(remotePull);
+      startHealthLoop();
+    }
     bindGlobalHandlers();
   }
 
@@ -195,16 +261,46 @@
         --wn-text-highlight: #4e9cf6;
         --wn-text-highlight-overlay: rgba(78, 156, 246, 0.2);
         --wn-text-highlight-soft: rgba(78, 156, 246, 0.12);
-        --wn-element-highlight: #4e9cf6;
-        --wn-element-highlight-soft: rgba(78, 156, 246, 0.12);
-        --wn-element-highlight-soft-end: rgba(78, 156, 246, 0.04);
-        --wn-element-highlight-strong: rgba(78, 156, 246, 0.9);
-        --wn-element-highlight-shadow: rgba(78, 156, 246, 0.24);
-        --wn-marker-text: #0b1622;
+        --wn-element-highlight: #8b5cf6;
+        --wn-element-highlight-soft: rgba(139, 92, 246, 0.12);
+        --wn-element-highlight-soft-end: rgba(139, 92, 246, 0.04);
+        --wn-element-highlight-strong: rgba(139, 92, 246, 0.9);
+        --wn-element-highlight-shadow: rgba(139, 92, 246, 0.24);
+        --wn-shot-frame: #f59f00;
+        --wn-marker-text: #ffffff;
+        --wn-accent: #6d56c7;
+        --wn-surface: #f6f2fb;
+        --wn-surface-raised: #fdfcff;
+        --wn-surface-input: #ffffff;
+        --wn-text: #342d43;
+        --wn-text-muted: #5a5266;
+        --wn-text-faint: #7b7588;
+        --wn-border: rgba(109, 86, 199, 0.18);
+        --wn-shadow: rgba(73, 64, 157, 0.16);
+        --wn-backdrop: rgba(28, 22, 48, 0.45);
+        --wn-danger: #b83232;
+      }
+      :root[data-wn-theme="dark"] {
+        --wn-surface: #1e1a2e;
+        --wn-surface-raised: #262138;
+        --wn-surface-input: #15121f;
+        --wn-text: #ece8f6;
+        --wn-text-muted: #b8b1c9;
+        --wn-text-faint: #958ea6;
+        --wn-border: rgba(196, 184, 255, 0.2);
+        --wn-shadow: rgba(0, 0, 0, 0.45);
+        --wn-backdrop: rgba(0, 0, 0, 0.6);
+        --wn-danger: #f08c8c;
+      }
+      /* Native controls inside the chrome follow the theme; the page keeps its own. */
+      :root[data-wn-theme="dark"] .wn-annot-panel,
+      :root[data-wn-theme="dark"] .wn-annot-modal,
+      :root[data-wn-theme="dark"] .wn-annot-sheet,
+      :root[data-wn-theme="dark"] .wn-annot-actionbar,
+      :root[data-wn-theme="dark"] .wn-shot-lightbox {
+        color-scheme: dark;
       }
       .wn-annot-toolbar {
-        --wn-accent: #6d56c7;
-        --wn-bg: #f6f2fb;
         --wn-icon-font: "SF Pro Symbols", "SF Pro Display", "SF Pro Text", -apple-system, system-ui, "Segoe UI", "Inter", sans-serif;
         --wn-group-gap: 12px;
         --wn-spacer: 50px;
@@ -216,22 +312,32 @@
         gap: 10px;
         flex-wrap: wrap;
         padding: 10px 14px;
-        background: var(--wn-bg);
-        color: #4b4557;
+        background: var(--wn-surface);
+        color: var(--wn-text-muted);
         z-index: 2147483647;
         font-family: var(--wn-icon-font);
         left: 50%;
         right: auto;
         transform: translateX(-50%);
-        box-shadow: 0 8px 24px rgba(73, 64, 157, 0.14);
+        /* Centred on left: 50% with no width of its own, the bar can only ever
+           be half the viewport wide, so it wraps long before it runs out of
+           room. It asks for the width of its row instead, and gives that up
+           only against the edges of the viewport. */
+        width: max-content;
+        /* Percent, not vw. A fixed box is positioned against the initial
+           containing block, and on a host page that overflows horizontally
+           that block is wider than 100vw -- so a bar sized in vw and centred
+           on it is not centred on the screen. */
+        max-width: calc(100% - 28px);
+        box-shadow: 0 8px 24px var(--wn-shadow);
         border-radius: 999px;
-        border: 1px solid rgba(109, 86, 199, 0.15);
+        border: 1px solid var(--wn-border);
         backdrop-filter: blur(10px);
       }
       .wn-annot-toolbar button {
         border: none;
         background: transparent;
-        color: #575062;
+        color: var(--wn-text-muted);
         padding: 0;
         cursor: pointer;
         font-size: 0;
@@ -254,8 +360,8 @@
       }
       .wn-annot-visibility-btn {
         position: fixed;
-        left: 12px;
-        bottom: 18px;
+        left: max(12px, env(safe-area-inset-left));
+        bottom: max(18px, env(safe-area-inset-bottom));
         --wn-btn-size: 55px;
         width: var(--wn-btn-size);
         height: var(--wn-btn-size);
@@ -263,10 +369,10 @@
         align-items: center;
         justify-content: center;
         border-radius: 50%;
-        border: 1px solid rgba(109, 86, 199, 0.15);
-        background: #f6f2fb;
-        color: #4b4557;
-        box-shadow: 0 8px 24px rgba(73, 64, 157, 0.18);
+        border: 1px solid var(--wn-border);
+        background: var(--wn-surface);
+        color: var(--wn-text-muted);
+        box-shadow: 0 8px 24px var(--wn-shadow);
         backdrop-filter: blur(10px);
         cursor: pointer;
         transition: all 0.2s ease;
@@ -274,27 +380,31 @@
         padding: 0;
         position: fixed;
       }
-      .wn-annot-visibility-btn::after {
-        content: attr(data-tip);
-        position: absolute;
-        left: 2px;
-        bottom: calc(100% + 10px);
-        background: rgba(35, 31, 74, 0.92);
-        color: #fff;
-        padding: 6px 8px;
-        border-radius: 8px;
-        font-size: 11px;
-        white-space: nowrap;
-        opacity: 0;
-        pointer-events: none;
-        transform: translateY(2px);
-        transition: opacity 0.12s ease, transform 0.12s ease;
+      /* Without a hover stream the tooltip never opens, so on touch it is only
+         a box the layout has to carry. It is drawn where hover exists. */
+      @media (hover: hover) {
+        .wn-annot-visibility-btn::after {
+          content: attr(data-tip);
+          position: absolute;
+          left: 2px;
+          bottom: calc(100% + 10px);
+          background: rgba(35, 31, 74, 0.92);
+          color: #fff;
+          padding: 6px 8px;
+          border-radius: 8px;
+          font-size: 11px;
+          white-space: nowrap;
+          opacity: 0;
+          pointer-events: none;
+          transform: translateY(2px);
+          transition: opacity 0.12s ease, transform 0.12s ease;
+        }
+        .wn-annot-visibility-btn:hover::after { opacity: 1; transform: translateY(0); }
       }
       .wn-annot-visibility-btn:hover {
         background: rgba(109, 86, 199, 0.12);
-        color: #3e384a;
+        color: var(--wn-text);
       }
-      .wn-annot-visibility-btn:hover::after { opacity: 1; transform: translateY(0); }
       .wn-annot-visibility-btn:active {
         background: rgba(109, 86, 199, 0.18);
       }
@@ -319,73 +429,17 @@
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        padding-top:5px;
-        padding-left:15px;
+        padding-left: 15px;
         padding-right: 0px;
       }
       .wn-annot-logo svg {
-        width: 60px;
-        height: 24px;
+        width: 94px;
+        height: auto;
         fill: currentColor;
-      }
-      @media (max-width: 640px) {
-        .wn-annot-toolbar {
-          gap: 4px;
-          padding: 6px 8px;
-          flex-wrap: nowrap;
-          left: 8px;
-          right: 8px;
-          transform: none;
-          width: calc(100vw - 16px);
-          overflow-x: auto;
-          -webkit-overflow-scrolling: touch;
-        }
-        .wn-annot-toolbar button {
-          --wn-btn-size: clamp(30px, 9vw, 36px);
-        }
-        .wn-annot-group {
-          gap: 4px;
-        }
-        .wn-annot-spacer {
-          display: block;
-          flex: 1 1 auto;
-          width: auto;
-          min-width: clamp(8px, 4vw, 22px);
-        }
-        body:not(.wn-annot-hidden) .wn-annot-toolbar .wn-annot-visibility-btn {
-          position: static;
-          top: auto;
-          bottom: auto;
-          left: auto;
-          right: auto;
-          --wn-btn-size: clamp(30px, 9vw, 36px);
-          width: var(--wn-btn-size);
-          height: var(--wn-btn-size);
-          min-width: var(--wn-btn-size);
-          max-width: var(--wn-btn-size);
-          min-height: var(--wn-btn-size);
-          max-height: var(--wn-btn-size);
-          flex: 0 0 var(--wn-btn-size);
-          border: none;
-          background: transparent;
-          box-shadow: none;
-        }
-        body:not(.wn-annot-hidden) .wn-annot-toolbar .wn-annot-visibility-btn::after {
-          display: none;
-        }
-        body.wn-annot-hidden .wn-annot-visibility-btn {
-          opacity: 0.7;
-          background: rgba(246, 242, 251, 0.35);
-          border-color: rgba(109, 86, 199, 0.22);
-          box-shadow: 0 6px 16px rgba(73, 64, 157, 0.16);
-        }
-        .wn-annot-logo {
-          display: none;
-        }
       }
       .wn-annot-toolbar button:hover {
         background: rgba(109, 86, 199, 0.12);
-        color: #3e384a;
+        color: var(--wn-text);
       }
       .wn-annot-toolbar button:active {
         background: rgba(109, 86, 199, 0.18);
@@ -427,7 +481,7 @@
         display: block;
       }
       .wn-annot-logo-img {
-        width: 86px;
+        width: 94px;
         height: auto;
         object-fit: contain;
         display: block;
@@ -436,10 +490,64 @@
       .wn-annot-btn {
         position: relative;
       }
-      .wn-annot-btn::after {
+      @media (hover: hover) {
+        .wn-annot-btn::after {
+          content: attr(data-tip);
+          position: absolute;
+          left: 50%;
+          background: rgba(35, 31, 74, 0.92);
+          color: #fff;
+          padding: 6px 8px;
+          border-radius: 8px;
+          font-size: 11px;
+          white-space: nowrap;
+          opacity: 0;
+          pointer-events: none;
+          transition: opacity 0.12s ease, transform 0.12s ease;
+        }
+        .wn-annot-toolbar.wn-pos-bottom .wn-annot-btn::after {
+          bottom: calc(100% + 10px);
+          transform: translateX(-50%) translateY(2px);
+        }
+        .wn-annot-toolbar.wn-pos-top .wn-annot-btn::after {
+          top: calc(100% + 10px);
+          transform: translateX(-50%) translateY(-2px);
+        }
+        .wn-annot-btn:hover::after {
+          opacity: 1;
+          transform: translateX(-50%) translateY(0);
+        }
+      }
+      .wn-annot-sync-dot {
+        position: relative;
+        flex: 0 0 auto;
+        width: 10px;
+        height: 10px;
+        margin-left: 10px;
+        border-radius: 50%;
+        background: #8b8794;
+        box-shadow: 0 0 0 3px rgba(139, 135, 148, 0.18);
+        transition: background 0.2s ease, box-shadow 0.2s ease;
+      }
+      .wn-annot-sync-dot[data-sync-status='ok'] {
+        background: #2ea043;
+        box-shadow: 0 0 0 3px rgba(46, 160, 67, 0.22);
+      }
+      .wn-annot-sync-dot[data-sync-status='refused'] {
+        background: #d29922;
+        box-shadow: 0 0 0 3px rgba(210, 153, 34, 0.24);
+      }
+      .wn-annot-sync-dot[data-sync-status='unreachable'] {
+        background: #e5534b;
+        box-shadow: 0 0 0 3px rgba(229, 83, 75, 0.24);
+      }
+      /* The dot sits at the left end of the bar, so its tooltip hangs from
+         that end rather than centring on a 10px target and running off the
+         edge of the screen. */
+      .wn-annot-sync-dot::after {
         content: attr(data-tip);
         position: absolute;
-        left: 50%;
+        left: -8px;
         background: rgba(35, 31, 74, 0.92);
         color: #fff;
         padding: 6px 8px;
@@ -450,17 +558,17 @@
         pointer-events: none;
         transition: opacity 0.12s ease, transform 0.12s ease;
       }
-      .wn-annot-toolbar.wn-pos-bottom .wn-annot-btn::after {
+      .wn-annot-toolbar.wn-pos-bottom .wn-annot-sync-dot::after {
         bottom: calc(100% + 10px);
-        transform: translateX(-50%) translateY(2px);
+        transform: translateY(2px);
       }
-      .wn-annot-toolbar.wn-pos-top .wn-annot-btn::after {
+      .wn-annot-toolbar.wn-pos-top .wn-annot-sync-dot::after {
         top: calc(100% + 10px);
-        transform: translateX(-50%) translateY(-2px);
+        transform: translateY(-2px);
       }
-      .wn-annot-btn:hover::after {
+      .wn-annot-sync-dot:hover::after {
         opacity: 1;
-        transform: translateX(-50%) translateY(0);
+        transform: translateY(0);
       }
       .wn-annot-toolbar.wn-pos-right {
         left: 50%;
@@ -504,18 +612,66 @@
         justify-content: center;
         border-radius: 32px;
       }
+      /* One shell for every surface that is a panel or a dialog on a compact
+         layout. Everything here is inert on a desktop: the rules that make it
+         a sheet live in the compact media query at the end of this sheet, so
+         a wide window keeps its side panel and its centred modals. */
+      .wn-annot-sheet-grip {
+        display: none;
+        position: relative;
+        flex: 0 0 auto;
+        align-items: center;
+        justify-content: center;
+        height: 44px;
+        /* The gesture is ours; without this the browser pans the page instead. */
+        touch-action: none;
+      }
+      .wn-annot-sheet-handle {
+        display: block;
+        width: 44px;
+        height: 5px;
+        border-radius: 999px;
+        background: var(--wn-border);
+      }
+      .wn-annot-sheet-close {
+        position: absolute;
+        top: 0;
+        right: 0;
+        width: 44px;
+        height: 44px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0;
+        border: none;
+        border-radius: 999px;
+        background: transparent;
+        color: var(--wn-text-muted);
+        cursor: pointer;
+      }
+      .wn-annot-sheet-close:hover {
+        background: rgba(109, 86, 199, 0.12);
+        color: var(--wn-text);
+      }
+      .wn-annot-sheet-close svg {
+        width: 20px;
+        height: 20px;
+      }
       .wn-annot-panel {
         position: fixed;
         top: 18px;
         right: 18px;
         bottom: 18px;
-        width: min(360px, calc(100vw - 36px));
+        width: min(360px, calc(100% - 36px));
         max-height: calc(100vh - 36px);
-        background: #fdfcff;
-        color: #342d43;
-        border: 1px solid rgba(109, 86, 199, 0.16);
+        /* On iOS Safari 100vh is the tall viewport, so a panel measured in it
+           runs under the browser's own bottom bar. dvh is the one on screen. */
+        max-height: calc(100dvh - 36px);
+        background: var(--wn-surface-raised);
+        color: var(--wn-text);
+        border: 1px solid var(--wn-border);
         border-radius: 18px;
-        box-shadow: 0 10px 26px rgba(73, 64, 157, 0.16);
+        box-shadow: 0 10px 26px var(--wn-shadow);
         padding: 18px;
         overflow-y: auto;
         z-index: 2147483000;
@@ -528,7 +684,7 @@
         margin: 0 0 14px;
         font-size: 15px;
         letter-spacing: 0.2px;
-        color: #3f3852;
+        color: var(--wn-text);
         font-weight: 700;
       }
       .wn-annot-panel-head {
@@ -553,61 +709,63 @@
         align-items: center;
         gap: 8px;
       }
-      .wn-annot-filters select,
       .wn-annot-filters input[type="search"] {
         height: 34px;
         border-radius: 12px;
-        border: 1px solid rgba(109, 86, 199, 0.18);
-        background: #fff;
+        border: 1px solid var(--wn-border);
+        background: var(--wn-surface-input);
         padding: 6px 10px;
         font-size: 12px;
-        color: #342d43;
-      }
-      .wn-annot-filter-row select {
-        flex: 1 1 auto;
-        min-width: 0;
+        color: var(--wn-text);
       }
       .wn-annot-filter-row input[type="search"] {
         width: 100%;
       }
-      .wn-annot-filter-clear {
-        border: 1px solid rgba(109, 86, 199, 0.25);
-        background: rgba(109, 86, 199, 0.08);
-        color: #5a5266;
-        width: 26px;
-        height: 26px;
-        border-radius: 50%;
-        display: none;
-        align-items: center;
-        justify-content: center;
-        cursor: pointer;
-        font-size: 12px;
-        line-height: 1;
-        padding: 0;
-      }
-      .wn-annot-filter-clear:hover {
-        background: rgba(109, 86, 199, 0.16);
-      }
-      .wn-annot-filters select:focus,
       .wn-annot-filters input[type="search"]:focus {
         outline: none;
         border-color: rgba(109, 86, 199, 0.6);
         box-shadow: 0 0 0 3px rgba(109, 86, 199, 0.14);
       }
-      .wn-annot-filters .wn-annot-filter-label {
-        font-size: 12px;
-        color: #5a5266;
-        font-weight: 600;
-        margin-right: 4px;
-      }
       .wn-annot-panel .wn-annot-empty {
-        color: #7b7588;
+        color: var(--wn-text-faint);
         font-size: 13px;
         padding: 10px 0;
         background: rgba(109, 86, 199, 0.04);
-        border: 1px dashed rgba(109, 86, 199, 0.18);
+        border: 1px dashed var(--wn-border);
         border-radius: 12px;
         text-align: center;
+      }
+      .wn-annot-panel-tools {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+      }
+      /* The bar has no room for export on compact, so the panel carries it
+         there, beside the delete-all it already holds. */
+      .wn-annot-panel-export {
+        display: none;
+        align-items: center;
+        gap: 6px;
+        background: rgba(109, 86, 199, 0.12);
+        border: 1px solid var(--wn-border);
+        color: var(--wn-text-muted);
+        padding: 6px 10px;
+        border-radius: 10px;
+        font-weight: 700;
+        font-size: 12px;
+        cursor: pointer;
+        transition: all 0.12s ease;
+      }
+      .wn-annot-panel-export:hover {
+        background: rgba(109, 86, 199, 0.18);
+        color: var(--wn-text);
+      }
+      .wn-annot-panel-export:active {
+        transform: translateY(1px);
+      }
+      .wn-annot-panel-export svg {
+        width: 16px;
+        height: 16px;
       }
       .wn-annot-delete-all {
         display: inline-flex;
@@ -615,7 +773,7 @@
         gap: 6px;
         background: rgba(209, 59, 59, 0.1);
         border: 1px solid rgba(209, 59, 59, 0.25);
-        color: #b83232;
+        color: var(--wn-danger);
         padding: 6px 10px;
         border-radius: 10px;
         font-weight: 700;
@@ -641,19 +799,19 @@
         padding-bottom: 4px;
       }
       .wn-annot-item {
-        background: #ffffff;
-        border: 1px solid rgba(109, 86, 199, 0.14);
+        background: var(--wn-surface-raised);
+        border: 1px solid var(--wn-border);
         border-radius: 14px;
-        padding: 14px;
-        margin-bottom: 12px;
+        padding: 10px 12px;
+        margin-bottom: 10px;
         cursor: pointer;
         transition: border-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
-        box-shadow: 0 2px 8px rgba(73, 64, 157, 0.08);
+        box-shadow: 0 2px 8px var(--wn-shadow);
       }
       .wn-annot-item:hover {
         border-color: rgba(109, 86, 199, 0.32);
         transform: translateY(-1px);
-        box-shadow: 0 4px 12px rgba(73, 64, 157, 0.12);
+        box-shadow: 0 4px 12px var(--wn-shadow);
       }
       .wn-annot-item.is-focused {
         border-color: var(--wn-item-accent-strong, var(--wn-element-highlight-strong));
@@ -669,29 +827,30 @@
         display: flex;
         align-items: center;
         justify-content: space-between;
-        gap: 10px;
+        gap: 8px;
         margin-bottom: 8px;
-        align-items: flex-start;
       }
       .wn-annot-card-top-left {
         display: inline-flex;
         align-items: center;
-        gap: 10px;
+        flex-wrap: wrap;
+        gap: 8px;
+        row-gap: 4px;
         min-width: 0;
       }
       .wn-annot-card-top-right {
         display: inline-flex;
         align-items: center;
-        gap: 8px;
+        gap: 6px;
         margin-left: auto;
         min-width: 0;
       }
       .wn-annot-delete {
         border: 1px solid rgba(209, 59, 59, 0.2);
         background: rgba(209, 59, 59, 0.08);
-        color: #d13b3b;
-        width: 30px;
-        height: 30px;
+        color: var(--wn-danger);
+        width: 28px;
+        height: 28px;
         border-radius: 8px;
         display: inline-flex;
         align-items: center;
@@ -703,17 +862,17 @@
       .wn-annot-delete:hover {
         background: rgba(209, 59, 59, 0.14);
         border-color: rgba(209, 59, 59, 0.3);
-        color: #b83232;
+        color: var(--wn-danger);
       }
       .wn-annot-delete:active {
         transform: translateY(1px);
       }
       .wn-annot-edit {
-        border: 1px solid rgba(109, 86, 199, 0.22);
+        border: 1px solid var(--wn-border);
         background: rgba(109, 86, 199, 0.08);
-        color: #4b4557;
-        width: 30px;
-        height: 30px;
+        color: var(--wn-text-muted);
+        width: 28px;
+        height: 28px;
         border-radius: 8px;
         display: inline-flex;
         align-items: center;
@@ -725,7 +884,7 @@
       .wn-annot-edit:hover {
         background: rgba(109, 86, 199, 0.14);
         border-color: rgba(109, 86, 199, 0.3);
-        color: #352f46;
+        color: var(--wn-text);
       }
       .wn-annot-edit:active {
         transform: translateY(1px);
@@ -744,8 +903,8 @@
         margin-top: auto;
         text-align: center;
         font-size: 12px;
-        color: #7b7588;
-        background: linear-gradient(180deg, transparent, rgba(255,255,255,0.75));
+        color: var(--wn-text-faint);
+        background: linear-gradient(180deg, transparent, var(--wn-surface-raised));
         position: sticky;
         bottom: 0;
         padding-bottom: 6px;
@@ -756,13 +915,13 @@
         font-weight: 700;
       }
       .wn-annot-number {
-        min-width: 32px;
-        height: 32px;
-        padding: 0 10px;
-        border-radius: 12px;
+        min-width: 26px;
+        height: 22px;
+        padding: 0 8px;
+        border-radius: 8px;
         background: var(--wn-item-number-bg, rgba(109, 86, 199, 0.12));
         border: 1px solid var(--wn-item-number-border, rgba(109, 86, 199, 0.24));
-        color: var(--wn-item-number-text, #000000);
+        color: var(--wn-text);
         font-weight: 800;
         font-size: 12px;
         display: inline-flex;
@@ -772,54 +931,21 @@
       }
       .wn-annot-meta {
         font-size: 11px;
-        color: #7f7891;
+        color: var(--wn-text-faint);
         text-transform: uppercase;
         letter-spacing: 0.3px;
         max-width: 220px;
-        text-align: right;
-        word-break: break-word;
+        text-align: left;
+        white-space: nowrap;
         line-height: 1.4;
       }
-      .wn-annot-meta-bottom {
-        display: flex;
-        flex-direction: column;
-        align-items: flex-end;
-        gap: 2px;
-        margin-left: auto;
-        margin-top: 10px;
-        width: 100%;
-        text-align: right;
-      }
-      .wn-annot-priority {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        font-size: 12px;
-        font-weight: 700;
-        color: #4b4557;
-        padding: 8px 10px;
-        border-radius: 12px;
-        border: 1px solid rgba(109, 86, 199, 0.2);
-        background: rgba(109, 86, 199, 0.06);
-      }
-      .wn-annot-priority .dot {
-        width: 10px;
-        height: 10px;
-        border-radius: 50%;
-      }
-      .wn-annot-priority.low { border-color: rgba(47,191,113,0.35); background: rgba(47,191,113,0.08); color: #1f7a4c; }
-      .wn-annot-priority.low .dot { background: #2fbf71; }
-      .wn-annot-priority.medium { border-color: rgba(227,178,60,0.35); background: rgba(227,178,60,0.08); color: #8a6b1f; }
-      .wn-annot-priority.medium .dot { background: #e3b23c; }
-      .wn-annot-priority.high { border-color: rgba(224,91,91,0.35); background: rgba(224,91,91,0.1); color: #a03232; }
-      .wn-annot-priority.high .dot { background: #e05b5b; }
       .wn-annot-missing {
         display: inline-flex;
         align-items: center;
         gap: 6px;
         font-size: 11px;
         font-weight: 700;
-        color: #a03232;
+        color: var(--wn-danger);
         padding: 6px 10px;
         border-radius: 999px;
         border: 1px solid rgba(224, 91, 91, 0.35);
@@ -830,12 +956,12 @@
       .wn-annot-title {
         font-size: 13px;
         font-weight: 700;
-        color: #352f46;
+        color: var(--wn-text);
         margin-bottom: 8px;
       }
       .wn-annot-comment {
         font-size: 12px;
-        color: #5a5266;
+        color: var(--wn-text-muted);
         background: rgba(109, 86, 199, 0.06);
         border: 1px dashed rgba(109, 86, 199, 0.3);
         border-radius: 12px;
@@ -854,12 +980,12 @@
       .wn-annot-showmore {
         border: none;
         background: transparent;
-        color: #6d56c7;
+        color: var(--wn-accent);
         font-weight: 700;
         font-size: 12px;
         cursor: pointer;
         margin-left: auto;
-        margin-top: 6px;
+        margin-top: 4px;
       }
       .uxnote-textmark {
         display: inline;
@@ -872,9 +998,9 @@
         position: relative;
       }
       .uxnote-annotated {
-        outline: 2px solid var(--wn-element-highlight, #4e9cf6);
+        outline: 2px solid var(--wn-element-highlight, #8b5cf6);
         outline-offset: 2px;
-        box-shadow: 0 0 0 3px var(--wn-element-highlight-soft, rgba(78,156,246,0.08));
+        box-shadow: 0 0 0 3px var(--wn-element-highlight-soft, rgba(139,92,246,0.08));
       }
       .wn-annot-marker-layer {
         position: fixed;
@@ -905,8 +1031,8 @@
       .wn-annot-marker:hover { background: var(--wn-marker-bg, var(--wn-element-highlight)); filter: brightness(1.05); }
       .wn-annot-outline {
         position: absolute;
-        border: 2px dashed var(--wn-element-highlight, #4e9cf6);
-        background: var(--wn-element-highlight-soft, rgba(78,156,246,0.1));
+        border: 2px dashed var(--wn-element-highlight, #8b5cf6);
+        background: var(--wn-element-highlight-soft, rgba(139,92,246,0.1));
         pointer-events: none;
         z-index: 2147482800;
       }
@@ -915,13 +1041,13 @@
         left: 50%;
         bottom: 26px;
         transform: translateX(-50%);
-        background: #f6f2fb;
-        color: #3f3852;
+        background: var(--wn-surface);
+        color: var(--wn-text);
         padding: 10px 14px;
         border-radius: 999px;
         font-size: 12px;
-        border: 1px solid rgba(109, 86, 199, 0.2);
-        box-shadow: 0 12px 28px rgba(73, 64, 157, 0.18);
+        border: 1px solid var(--wn-border);
+        box-shadow: 0 12px 28px var(--wn-shadow);
         opacity: 0;
         pointer-events: none;
         transition: opacity 0.2s ease, transform 0.2s ease;
@@ -935,16 +1061,16 @@
         position: fixed;
         left: 50%;
         transform: translateX(-50%);
-        background: #f6f2fb;
-        color: #342d43;
+        background: var(--wn-surface);
+        color: var(--wn-text);
         padding: 10px 14px;
         border-radius: 999px;
         font-size: 12px;
         z-index: 2147483100;
         pointer-events: none;
         opacity: 0;
-        border: 1px solid rgba(109, 86, 199, 0.16);
-        box-shadow: 0 10px 24px rgba(73, 64, 157, 0.15);
+        border: 1px solid var(--wn-border);
+        box-shadow: 0 10px 24px var(--wn-shadow);
         transition: opacity 0.2s ease, transform 0.2s ease;
       }
       .wn-annot-tip.show { opacity: 1; }
@@ -961,8 +1087,7 @@
       .wn-annot-modal-backdrop {
         position: fixed;
         inset: 0;
-        background: rgba(28, 22, 48, 0.35);
-        backdrop-filter: blur(4px);
+        background: var(--wn-backdrop);
         display: none;
         align-items: center;
         justify-content: center;
@@ -971,13 +1096,13 @@
       }
       .wn-annot-modal-backdrop.show { display: flex; }
       .wn-annot-modal {
-        background: #f6f2fb;
-        color: #342d43;
-        border: 1px solid rgba(109, 86, 199, 0.18);
+        background: var(--wn-surface);
+        color: var(--wn-text);
+        border: 1px solid var(--wn-border);
         border-radius: 16px;
-        box-shadow: 0 16px 38px rgba(73, 64, 157, 0.2);
+        box-shadow: 0 16px 38px var(--wn-shadow);
         padding: 18px;
-        min-width: min(440px, calc(100vw - 40px));
+        min-width: min(440px, 100%);
         max-width: 520px;
         display: flex;
         flex-direction: column;
@@ -988,54 +1113,45 @@
         margin: 0;
         font-size: 15px;
         font-weight: 700;
-        color: #3f3852;
+        color: var(--wn-text);
+      }
+      .wn-annot-comment-card {
+        position: fixed;
+        left: 50%;
+        transform: translateX(-50%);
+        min-width: 0;
+        width: min(420px, calc(100% - 36px));
+        max-width: 420px;
+      }
+      /* The card is parked over the page it is about, so it is translucent
+         until it is pointed at -- hover alone, because the textarea holds
+         focus for the whole life of the card. Both halves want a pointer that
+         can hover. Without one the card never came back, and the page read
+         straight through the comment being written. */
+      @media (hover: hover) {
+        .wn-annot-comment-card {
+          opacity: 0.55;
+          transition: opacity 0.15s ease;
+        }
+        .wn-annot-comment-card:hover {
+          opacity: 1;
+        }
       }
       .wn-annot-dialog-message {
         font-size: 13px;
         line-height: 1.6;
-        color: #3f3852;
-      }
-      .wn-annot-name-row {
-        display: flex;
-        flex-direction: column;
-        gap: 6px;
-        margin-top: 4px;
-      }
-      .wn-annot-name-row label {
-        font-size: 13px;
-        color: #4b4557;
-        font-weight: 600;
-      }
-      .wn-annot-name-inputs {
-        display: flex;
-        gap: 8px;
-        align-items: center;
-        flex-wrap: wrap;
-      }
-      .wn-annot-name-select {
-        min-width: 140px;
+        color: var(--wn-text);
       }
       .wn-annot-modal textarea {
         width: 100%;
         min-height: 90px;
         border-radius: 12px;
-        border: 1px solid rgba(109, 86, 199, 0.22);
-        background: #fff;
+        border: 1px solid var(--wn-border);
+        background: var(--wn-surface-input);
         padding: 10px 12px;
         font-size: 14px;
-        color: #342d43;
+        color: var(--wn-text);
         resize: vertical;
-        outline: none;
-        box-shadow: inset 0 1px 2px rgba(0,0,0,0.05);
-      }
-      .wn-annot-modal input[type="text"] {
-        width: 100%;
-        border-radius: 12px;
-        border: 1px solid rgba(109, 86, 199, 0.22);
-        background: #fff;
-        padding: 10px 12px;
-        font-size: 14px;
-        color: #342d43;
         outline: none;
         box-shadow: inset 0 1px 2px rgba(0,0,0,0.05);
       }
@@ -1043,95 +1159,8 @@
         border-color: rgba(109, 86, 199, 0.55);
         box-shadow: 0 0 0 3px rgba(109, 86, 199, 0.15);
       }
-      .wn-annot-modal input[type="text"]:focus {
-        border-color: rgba(109, 86, 199, 0.55);
-        box-shadow: 0 0 0 3px rgba(109, 86, 199, 0.15);
-      }
-      @media (max-width: 640px) {
-        .wn-annot-modal textarea,
-        .wn-annot-modal input[type="text"],
-        .wn-annot-modal select {
-          font-size: 16px;
-        }
-      }
-      .wn-annot-export-modal {
-        min-width: min(640px, calc(100vw - 40px));
-        max-width: 860px;
-      }
-      .wn-annot-export-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-        gap: 12px;
-      }
-      .wn-annot-export-panel {
-        border: 1px solid rgba(109, 86, 199, 0.12);
-        border-radius: 14px;
-        padding: 12px;
-        background: #fff;
-        display: flex;
-        flex-direction: column;
-        gap: 10px;
-        min-height: 220px;
-      }
-      .wn-annot-export-panel h5 {
-        margin: 0;
-        font-size: 13px;
-        font-weight: 700;
-        color: #3f3852;
-      }
-      .wn-annot-export-panel p {
-        margin: 0;
-        font-size: 12px;
-        color: #5a5266;
-      }
-      .wn-annot-export-list {
-        display: grid;
-        gap: 8px;
-        overflow-y: auto;
-        padding-right: 4px;
-      }
-      .wn-annot-export-item {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        font-size: 14px;
-        font-weight: 600;
-        color: #3f3852;
-      }
-      .wn-annot-export-item input {
-        appearance: none;
-        width: 20px;
-        height: 20px;
-        border-radius: 6px;
-        border: 1.5px solid rgba(109, 86, 199, 0.5);
-        background: #fff;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        position: relative;
-        transition: all 0.2s ease;
-      }
-      .wn-annot-export-item input:checked {
-        background: #6d56c7;
-        border-color: #6d56c7;
-        box-shadow: 0 0 0 3px rgba(109, 86, 199, 0.18);
-      }
-      .wn-annot-export-item input:checked::after {
-        content: '';
-        width: 8px;
-        height: 5px;
-        border-left: 2px solid #fff;
-        border-bottom: 2px solid #fff;
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -55%) rotate(-45deg);
-      }
-      .wn-annot-export-item span {
-        font-size: 14px;
-      }
       .wn-annot-import-modal {
-        min-width: min(760px, calc(100vw - 40px));
+        min-width: min(760px, 100%);
         max-width: 960px;
       }
       .wn-annot-import-body {
@@ -1145,7 +1174,7 @@
         border: 1.5px dashed rgba(109, 86, 199, 0.32);
         border-radius: 14px;
         padding: 14px;
-        background: linear-gradient(135deg, rgba(109, 86, 199, 0.08), rgba(246, 242, 251, 0.95));
+        background: linear-gradient(135deg, rgba(109, 86, 199, 0.08), var(--wn-surface));
         cursor: pointer;
         transition: border 0.2s ease, transform 0.2s ease;
       }
@@ -1155,7 +1184,7 @@
       }
       .wn-annot-import-drop.dragover {
         border-color: rgba(109, 86, 199, 0.9);
-        background: linear-gradient(135deg, rgba(109, 86, 199, 0.16), rgba(246, 242, 251, 0.95));
+        background: linear-gradient(135deg, rgba(109, 86, 199, 0.16), var(--wn-surface));
       }
       .wn-annot-import-drop input {
         position: absolute;
@@ -1166,23 +1195,18 @@
       .wn-annot-import-drop-title {
         font-size: 13px;
         font-weight: 700;
-        color: #3f3852;
+        color: var(--wn-text);
       }
       .wn-annot-import-drop-sub {
         font-size: 12px;
-        color: #5a5266;
+        color: var(--wn-text-muted);
         margin-top: 4px;
       }
-      .wn-annot-import-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-        gap: 12px;
-      }
       .wn-annot-import-panel {
-        border: 1px solid rgba(109, 86, 199, 0.12);
+        border: 1px solid var(--wn-border);
         border-radius: 14px;
         padding: 12px;
-        background: #fff;
+        background: var(--wn-surface-input);
         display: flex;
         flex-direction: column;
         gap: 10px;
@@ -1192,7 +1216,7 @@
         margin: 0;
         font-size: 13px;
         font-weight: 700;
-        color: #3f3852;
+        color: var(--wn-text);
       }
       .wn-annot-import-title-row {
         display: flex;
@@ -1202,17 +1226,17 @@
       }
       .wn-annot-import-count {
         background: rgba(109, 86, 199, 0.16);
-        color: #4b4557;
+        color: var(--wn-text-muted);
         border-radius: 999px;
         padding: 4px 8px;
         font-weight: 600;
         font-size: 11px;
-        border: 1px solid rgba(109, 86, 199, 0.2);
+        border: 1px solid var(--wn-border);
       }
       .wn-annot-import-panel p {
         margin: 0;
         font-size: 12px;
-        color: #5a5266;
+        color: var(--wn-text-muted);
       }
       .wn-annot-import-list {
         display: grid;
@@ -1222,8 +1246,8 @@
         padding-right: 4px;
       }
       .wn-annot-import-card {
-        border: 1px solid rgba(109, 86, 199, 0.14);
-        background: #f8f6fd;
+        border: 1px solid var(--wn-border);
+        background: var(--wn-surface);
         border-radius: 12px;
         padding: 10px 12px;
         display: flex;
@@ -1242,14 +1266,14 @@
       .wn-annot-import-name {
         font-size: 13px;
         font-weight: 600;
-        color: #3f3852;
+        color: var(--wn-text);
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
       }
       .wn-annot-import-sub {
         font-size: 11px;
-        color: #5a5266;
+        color: var(--wn-text-muted);
         font-family: "SF Mono", "SFMono-Regular", ui-monospace, monospace;
         white-space: nowrap;
         overflow: hidden;
@@ -1262,17 +1286,17 @@
       }
       .wn-annot-import-badge {
         background: rgba(109, 86, 199, 0.16);
-        color: #4b4557;
+        color: var(--wn-text-muted);
         border-radius: 999px;
         padding: 4px 8px;
         font-weight: 600;
         font-size: 11px;
-        border: 1px solid rgba(109, 86, 199, 0.2);
+        border: 1px solid var(--wn-border);
       }
       .wn-annot-import-remove {
         border: 1px solid rgba(209, 59, 59, 0.35);
         background: rgba(209, 59, 59, 0.12);
-        color: #b83232;
+        color: var(--wn-danger);
         width: 26px;
         height: 26px;
         padding: 0;
@@ -1285,35 +1309,10 @@
         justify-content: center;
         cursor: pointer;
       }
-      .wn-annot-import-stats {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
-        gap: 8px;
-      }
-      .wn-annot-import-stat {
-        background: rgba(109, 86, 199, 0.08);
-        border: 1px solid rgba(109, 86, 199, 0.12);
-        border-radius: 12px;
-        padding: 8px;
-        display: flex;
-        flex-direction: column;
-        gap: 4px;
-      }
-      .wn-annot-import-stat span:first-child {
-        font-size: 11px;
-        color: #5a5266;
-        text-transform: uppercase;
-        letter-spacing: 0.12em;
-      }
-      .wn-annot-import-stat span:last-child {
-        font-size: 16px;
-        font-weight: 700;
-        color: #3f3852;
-      }
       .wn-annot-import-empty {
         font-size: 12px;
-        color: #5a5266;
-        border: 1px dashed rgba(109, 86, 199, 0.18);
+        color: var(--wn-text-muted);
+        border: 1px dashed var(--wn-border);
         border-radius: 10px;
         padding: 10px;
         text-align: center;
@@ -1334,14 +1333,14 @@
       }
       .wn-annot-modal .wn-annot-pill.cancel {
         background: transparent;
-        color: #5a5563;
-        border: 1px solid rgba(109, 86, 199, 0.25);
+        color: var(--wn-text-muted);
+        border: 1px solid var(--wn-border);
       }
       .wn-annot-modal .wn-annot-pill.cancel:hover {
         background: rgba(109, 86, 199, 0.08);
       }
       .wn-annot-modal .wn-annot-pill.primary {
-        background: #6d56c7;
+        background: var(--wn-accent);
         color: #fdfdff;
         box-shadow: 0 10px 24px rgba(109, 86, 199, 0.35);
       }
@@ -1351,61 +1350,498 @@
       }
       .wn-annot-modal .wn-annot-pill.secondary {
         background: rgba(109, 86, 199, 0.12);
-        color: #4b4557;
-        border: 1px solid rgba(109, 86, 199, 0.22);
+        color: var(--wn-text-muted);
+        border: 1px solid var(--wn-border);
       }
       .wn-annot-modal .wn-annot-pill.secondary:hover {
         background: rgba(109, 86, 199, 0.18);
       }
-      .wn-annot-modal .wn-annot-prio {
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
+      .wn-annot-shot-frame {
+        position: absolute;
+        box-sizing: border-box;
+        border: 2px dashed var(--wn-shot-frame, #f59f00);
+        border-radius: 6px;
+        pointer-events: none;
       }
-      .wn-annot-modal .wn-annot-prio label {
-        font-size: 13px;
-        color: #4b4557;
-        font-weight: 600;
+      .wn-shot-overlay {
+        position: fixed;
+        inset: 0;
+        cursor: crosshair;
+        z-index: 2147483651;
       }
-      .wn-annot-modal .wn-annot-prio-options {
+      .wn-shot-rect {
+        position: absolute;
+        box-sizing: border-box;
+        border: 2px solid var(--wn-accent);
+        border-radius: 4px;
+        /* The dim outside the frame is one huge spread, so no second element
+           has to track the four bands around the rectangle. */
+        box-shadow: 0 0 0 100000px rgba(18, 14, 32, 0.45);
+      }
+      .wn-shot-hint {
+        position: fixed;
+        top: 18px;
+        left: 50%;
+        transform: translateX(-50%);
         display: flex;
+        align-items: center;
         gap: 10px;
+        padding: 8px 10px 8px 16px;
+        background: var(--wn-surface);
+        color: var(--wn-text);
+        font: 12px/1.4 "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+        border: 1px solid var(--wn-border);
+        border-radius: 999px;
+        box-shadow: 0 12px 28px var(--wn-shadow);
+        z-index: 2147483652;
       }
-      .wn-annot-modal .wn-annot-prio-btn {
-        flex: 1 1 0;
+      .wn-shot-hint button {
+        border: 1px solid var(--wn-border);
+        border-radius: 999px;
+        padding: 6px 14px;
+        font: inherit;
+        font-weight: 600;
+        background: var(--wn-surface-input);
+        color: var(--wn-text);
+        cursor: pointer;
+      }
+      .wn-annot-shot {
+        margin: 8px 0 4px;
+      }
+      .wn-annot-shot img {
+        display: block;
+        max-width: 100%;
+        max-height: 140px;
+        border: 1px solid var(--wn-border);
+        border-radius: 10px;
+        cursor: zoom-in;
+      }
+      .wn-shot-lightbox {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(18, 14, 32, 0.82);
+        cursor: zoom-out;
+        z-index: 2147483653;
+      }
+      .wn-shot-lightbox img {
+        max-width: 92%;
+        max-height: 92vh;
+        max-height: 92dvh;
+        border-radius: 8px;
+        box-shadow: 0 18px 48px rgba(0, 0, 0, 0.5);
+      }
+      /* Escape closed this and nothing else did. There is no Escape on a
+         phone, and a full-screen image gives no clue that it is dismissable. */
+      .wn-shot-lightbox-close {
+        position: absolute;
+        top: max(12px, env(safe-area-inset-top));
+        right: max(12px, env(safe-area-inset-right));
+        width: 44px;
+        height: 44px;
         display: inline-flex;
         align-items: center;
-        gap: 8px;
-        padding: 10px 12px;
-        border-radius: 12px;
-        border: 1px solid rgba(109, 86, 199, 0.22);
-        background: #fff;
+        justify-content: center;
+        padding: 0;
+        border: 1px solid var(--wn-border);
+        border-radius: 999px;
+        background: var(--wn-surface);
+        color: var(--wn-text);
         cursor: pointer;
-        transition: all 0.15s ease;
-        font-size: 13px;
+      }
+      .wn-shot-lightbox-close svg {
+        width: 22px;
+        height: 22px;
+      }
+
+      /* The two bars a finger drives a capture from, both raised just clear of
+         the toolbar and never anchored to the selection: iOS puts its own
+         Copy / Look Up callout directly above one, and that is a fight nobody
+         wins. Neither bar is built where a pointer can hover -- there the
+         release commits a highlight and the hover previews an element. */
+      .wn-annot-actionbar {
+        position: fixed;
+        left: max(10px, env(safe-area-inset-left));
+        right: max(10px, env(safe-area-inset-right));
+        display: none;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 8px;
+        background: var(--wn-surface);
+        color: var(--wn-text);
+        border: 1px solid var(--wn-border);
+        border-radius: 18px;
+        box-shadow: 0 12px 28px var(--wn-shadow);
+        font: 13px/1.4 "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+        /* Above the notes panel, below the comment sheet that answers it. */
+        z-index: 2147483150;
+      }
+      .wn-annot-actionbar.show { display: flex; }
+      .wn-annot-actionbar button {
+        flex: 1 1 auto;
+        min-height: 48px;
+        min-width: 48px;
+        padding: 10px 12px;
+        border: 1px solid var(--wn-border);
+        border-radius: 14px;
+        background: var(--wn-surface-input);
+        color: var(--wn-text);
+        font: inherit;
         font-weight: 600;
-        color: #3e384a;
+        cursor: pointer;
       }
-      .wn-annot-modal .wn-annot-prio-btn .dot {
-        width: 12px;
-        height: 12px;
-        border-radius: 50%;
+      .wn-annot-actionbar button.primary {
+        background: var(--wn-accent);
+        border-color: var(--wn-accent);
+        color: #fdfdff;
       }
-      .wn-annot-modal .wn-annot-prio-btn[data-priority="low"] .dot { background: #2fbf71; }
-      .wn-annot-modal .wn-annot-prio-btn[data-priority="medium"] .dot { background: #e3b23c; }
-      .wn-annot-modal .wn-annot-prio-btn[data-priority="high"] .dot { background: #e05b5b; }
-      .wn-annot-modal .wn-annot-prio-btn.active {
-        border-color: rgba(109, 86, 199, 0.6);
-        box-shadow: 0 0 0 3px rgba(109, 86, 199, 0.16);
+      .wn-annot-actionbar button[disabled] {
+        opacity: 0.4;
+        cursor: default;
+      }
+      /* The name of the element under the finger takes a row of its own: three
+         thumb-sized controls already fill the width of a 320px screen. */
+      .wn-annot-pick-name {
+        flex: 1 0 100%;
+        min-width: 0;
+        text-align: center;
+        font-weight: 600;
+        color: var(--wn-text-muted);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      /* How much room the layout has. Both arms carry weight: every phone in
+         landscape is wider than 640px, so the width arm alone leaves it on the
+         desktop layout with a bar that eats a fifth of the screen. */
+      @media (max-width: 640px), (max-height: 480px) {
+        /* A media query adds no specificity, so a rule naming the toolbar
+           class alone loses to the two-class .wn-pos-* rules above and the bar
+           stays centre-anchored. These name the position classes and come last
+           on purpose; keep this block at the end of the sheet. */
+        .wn-annot-toolbar.wn-pos-bottom,
+        .wn-annot-toolbar.wn-pos-top,
+        .wn-annot-toolbar.wn-pos-left,
+        .wn-annot-toolbar.wn-pos-right {
+          /* Insets, never a width in vw: on a host page that overflows
+             horizontally the containing block is wider than the screen, and a
+             bar sized in vw and centred on it walks off one edge. */
+          left: max(8px, env(safe-area-inset-left));
+          right: max(8px, env(safe-area-inset-right));
+          transform: none;
+          width: auto;
+          max-width: none;
+          gap: 4px;
+          padding: 6px 8px;
+          flex-wrap: nowrap;
+          overflow: visible;
+          border-radius: 32px;
+        }
+        .wn-annot-toolbar.wn-pos-bottom,
+        .wn-annot-toolbar.wn-pos-left,
+        .wn-annot-toolbar.wn-pos-right {
+          top: auto;
+          bottom: max(12px, env(safe-area-inset-bottom));
+        }
+        .wn-annot-toolbar.wn-pos-top {
+          bottom: auto;
+          top: max(12px, env(safe-area-inset-top));
+        }
+        .wn-annot-toolbar button {
+          --wn-btn-size: 48px;
+        }
+        .wn-annot-group {
+          gap: 4px;
+        }
+        /* The spacers do the spreading, so five controls sit evenly across the
+           bar and give up their room first when there is little of it. */
+        .wn-annot-spacer {
+          display: block;
+          flex: 1 1 auto;
+          width: auto;
+          min-width: 4px;
+        }
+        .wn-annot-logo {
+          display: none;
+        }
+        body:not(.wn-annot-hidden) .wn-annot-toolbar .wn-annot-visibility-btn {
+          position: static;
+          top: auto;
+          bottom: auto;
+          left: auto;
+          right: auto;
+          border: none;
+          background: transparent;
+          box-shadow: none;
+        }
+        body.wn-annot-hidden .wn-annot-visibility-btn {
+          opacity: 0.7;
+          background: var(--wn-surface);
+          border-color: var(--wn-border);
+          box-shadow: 0 6px 16px var(--wn-shadow);
+        }
+        .wn-annot-panel-export {
+          display: inline-flex;
+        }
+
+        /* The sheet. Insets rather than a width, because a host page that
+           overflows horizontally makes the containing block wider than the
+           screen. The bottom clears the toolbar, which paints above every one
+           of these and used to sit on the panel's own footer with no way to
+           move either. */
+        .wn-annot-sheet {
+          position: fixed;
+          left: 0;
+          right: 0;
+          top: auto;
+          bottom: var(--wn-sheet-bottom, 0px);
+          width: auto;
+          min-width: 0;
+          max-width: none;
+          height: auto;
+          transform: none;
+          opacity: 1;
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
+          border-radius: 18px 18px 0 0;
+          border-bottom: none;
+          overflow: hidden;
+          overscroll-behavior: contain;
+          padding-top: 8px;
+          padding-left: max(16px, env(safe-area-inset-left));
+          padding-right: max(16px, env(safe-area-inset-right));
+          padding-bottom: max(18px, env(safe-area-inset-bottom));
+          /* 85% of the viewport, and never more room than the toolbar leaves.
+             dvh is the viewport that is on the screen; where it is not
+             understood the declaration above it stands. */
+          max-height: min(85vh, calc(100vh - var(--wn-sheet-bottom, 0px) - var(--wn-sheet-top-guard, 0px)));
+          max-height: min(85dvh, calc(100dvh - var(--wn-sheet-bottom, 0px) - var(--wn-sheet-top-guard, 0px)));
+        }
+        .wn-annot-sheet-grip {
+          display: flex;
+        }
+        /* The sheet holds its own edges and the list scrolls inside it. */
+        .wn-annot-panel.wn-annot-sheet .wn-annot-list {
+          overflow-y: auto;
+          overscroll-behavior: contain;
+          -webkit-overflow-scrolling: touch;
+        }
+        .wn-annot-modal.wn-annot-sheet .wn-annot-actions {
+          justify-content: stretch;
+        }
+        .wn-annot-modal.wn-annot-sheet .wn-annot-pill {
+          flex: 1 1 0;
+          min-height: 48px;
+        }
+        .wn-annot-modal.wn-annot-sheet textarea {
+          flex: 0 1 auto;
+        }
+      }
+
+      /* What kind of input is driving the widget. A finger has the same reach
+         on a tablet as on a phone, and a mouse in a narrow window keeps its
+         precision, so this is not a question of width. */
+      @media (pointer: coarse) and (hover: none) {
+        .wn-annot-marker {
+          width: 44px;
+          height: 44px;
+          font-size: 15px;
+        }
+        .wn-annot-edit,
+        .wn-annot-delete {
+          width: 44px;
+          height: 44px;
+        }
+        .wn-annot-edit svg,
+        .wn-annot-delete svg {
+          width: 18px;
+          height: 18px;
+        }
+        .wn-annot-delete-all,
+        .wn-annot-panel-export {
+          min-height: 44px;
+          padding: 8px 14px;
+          font-size: 13px;
+        }
+        .wn-annot-modal .wn-annot-pill {
+          min-height: 44px;
+          padding: 12px 18px;
+        }
+        .wn-shot-hint button {
+          min-height: 44px;
+          padding: 10px 18px;
+        }
+        /* Under 16px iOS Safari zooms the page in when the field takes focus,
+           and does not zoom back out when it loses it. Every field, at every
+           width, because the trigger is the keyboard and not the room. */
+        .wn-annot-panel input,
+        .wn-annot-panel select,
+        .wn-annot-panel textarea,
+        .wn-annot-modal input,
+        .wn-annot-modal select,
+        .wn-annot-modal textarea {
+          font-size: 16px;
+        }
+        .wn-annot-filters input[type="search"] {
+          height: 44px;
+          border-radius: 14px;
+          padding: 8px 12px;
+          font-size: 16px;
+        }
       }
     `;
     document.head.appendChild(style);
   }
 
-  function createShell() {
-    // Build toolbar, panel, and annotation layers
-    const toolbar = document.createElement('div');
-    toolbar.className = `wn-annot-toolbar wn-annotator wn-pos-${position}`;
+  // The surfaces that become sheets. A sheet is a panel or a dialog anchored
+  // to the bottom edge on a compact layout; the class is carried at all times
+  // and the compact media query is what turns it into one.
+  const sheetModals = ['commentModal', 'dialogModal'];
+
+  // The handle and the close button a sheet needs. The notes panel had no way
+  // to dismiss itself at all -- the only exit was the toolbar button it was
+  // painted over.
+  function buildSheetGrip(label, onClose) {
+    const grip = document.createElement('div');
+    grip.className = 'wn-annot-sheet-grip wn-annotator';
+    const handle = document.createElement('span');
+    handle.className = 'wn-annot-sheet-handle wn-annotator';
+    handle.setAttribute('aria-hidden', 'true');
+    const close = document.createElement('button');
+    close.type = 'button';
+    close.className = 'wn-annot-sheet-close wn-annotator';
+    close.setAttribute('aria-label', label);
+    close.innerHTML = iconClose();
+    close.addEventListener('click', (evt) => {
+      evt.stopPropagation();
+      onClose();
+    });
+    grip.appendChild(handle);
+    grip.appendChild(close);
+    bindSheetDrag(grip, onClose);
+    return grip;
+  }
+
+  // A handle that only looks draggable is a lie, so it drags. Past a third of
+  // its own height, or on a quick flick, the sheet goes; anything shorter
+  // springs back. Pointer events rather than touch ones, because this shell is
+  // a sheet in a narrow desktop window too.
+  function bindSheetDrag(grip, onClose) {
+    let sheet = null;
+    let startY = 0;
+    let startedAt = 0;
+    let travel = 0;
+
+    const onMove = (evt) => {
+      if (!sheet) return;
+      travel = Math.max(0, evt.clientY - startY);
+      sheet.style.transform = `translateY(${travel}px)`;
+    };
+    const onEnd = () => {
+      if (!sheet) return;
+      grip.removeEventListener('pointermove', onMove);
+      grip.removeEventListener('pointerup', onEnd);
+      grip.removeEventListener('pointercancel', onEnd);
+      const height = sheet.getBoundingClientRect().height || 1;
+      const speed = travel / Math.max(1, Date.now() - startedAt);
+      sheet.style.transform = '';
+      sheet.style.transition = '';
+      sheet = null;
+      if (travel > height / 3 || (travel > 40 && speed > 0.5)) onClose();
+    };
+
+    grip.addEventListener('pointerdown', (evt) => {
+      // Capturing the pointer sends the click that follows to the grip rather
+      // than to whatever was pressed, which swallowed the close button whole.
+      // Nobody drags a sheet by its close button anyway.
+      if (evt.target.closest('.wn-annot-sheet-close')) return;
+      sheet = grip.closest('.wn-annot-sheet');
+      if (!sheet) return;
+      startY = evt.clientY;
+      startedAt = Date.now();
+      travel = 0;
+      sheet.style.transition = 'none';
+      if (grip.setPointerCapture) grip.setPointerCapture(evt.pointerId);
+      grip.addEventListener('pointermove', onMove);
+      grip.addEventListener('pointerup', onEnd);
+      grip.addEventListener('pointercancel', onEnd);
+    });
+  }
+
+  function isSheetOpen() {
+    // Hiding the widget takes every surface off the screen with a display
+    // rule, and a page held still for a sheet nobody can see is a page that
+    // cannot be scrolled at all.
+    if (state.hidden || !isCompactLayout()) return false;
+    if (state.panel && state.panel.style.display !== 'none') return true;
+    return sheetModals.some((key) => {
+      const modalState = state[key];
+      return modalState && modalState.backdrop.classList.contains('show');
+    });
+  }
+
+  // Hold the page still under a sheet. Nothing did this before, so a flick
+  // that ran off the end of the notes list carried on into the host page.
+  // Hiding the root's overflow leaves programmatic scrolling alone -- measured
+  // -- so focusing an annotation from the list still moves the page to it.
+  // On iOS Safari this is weaker than it looks; `overscroll-behavior` on the
+  // sheet itself is what stops the chaining there.
+  function syncPageScrollLock() {
+    const locked = isSheetOpen();
+    if (locked === !!state.scrollLocked) return;
+    const root = document.documentElement;
+    state.scrollLocked = locked;
+    if (locked) {
+      state.scrollLockPrev = root.style.overflow;
+      root.style.overflow = 'hidden';
+    } else {
+      root.style.overflow = state.scrollLockPrev || '';
+      state.scrollLockPrev = '';
+    }
+  }
+
+  // How much room at each end a sheet has to give up. The toolbar paints above
+  // every one of them, and on a phone it used to cover the bottom 50px of the
+  // notes panel -- its footer, and the only control that could close it.
+  function applySheetInset() {
+    const root = document.documentElement;
+    const setInsets = (bottom, top) => {
+      root.style.setProperty('--wn-sheet-bottom', `${bottom}px`);
+      root.style.setProperty('--wn-sheet-top-guard', `${top}px`);
+    };
+    if (!state.toolbar || !isCompactLayout() || state.hidden) {
+      setInsets(0, 0);
+      return;
+    }
+    const rect = state.toolbar.getBoundingClientRect();
+    const gap = 8;
+    const height = root.clientHeight;
+    if (position === 'top') {
+      setInsets(0, Math.max(0, Math.round(rect.bottom + gap)));
+      return;
+    }
+    setInsets(Math.max(0, Math.round(height - rect.top + gap)), 0);
+  }
+
+  function setPanelOpen(open) {
+    if (!state.panel) return;
+    state.panel.style.display = open ? '' : 'none';
+    updateToggleActive();
+    syncPageScrollLock();
+  }
+
+  // The bar carries a different set of controls on a compact layout, so it is
+  // filled by a function that can run again when the form factor changes.
+  function buildToolbar() {
+    const toolbar = state.toolbar;
+    if (!toolbar) return;
+    const compact = isCompactLayout();
 
     const makeButton = (btn) => {
       const b = document.createElement('button');
@@ -1430,67 +1866,111 @@
       return s;
     };
 
-  const frag = document.createDocumentFragment();
+    // The visibility button belongs to state and is mounted inside the bar on
+    // compact, so it comes out before the rebuild and is remounted after.
+    const toggle = state.visibilityToggle;
+    if (toggle && toggle.parentNode === toolbar) toolbar.removeChild(toggle);
+    toolbar.innerHTML = '';
+
+    const frag = document.createDocumentFragment();
 
     const logo = document.createElement('div');
     logo.className = 'wn-annot-logo wn-annotator';
     logo.innerHTML = iconWordmark();
     frag.appendChild(logo);
 
-  const editButtons = [
+    // Only a page with a server has a server to report on. Without one the
+    // notes are in this browser and there is nothing the dot could say.
+    if (server) {
+      const dot = document.createElement('div');
+      dot.className = 'wn-annot-sync-dot wn-annotator';
+      dot.setAttribute('role', 'status');
+      frag.appendChild(dot);
+      state.syncDot = dot;
+      applySyncStatus();
+    }
+
+    const editButtons = [
       { action: 'mode', mode: 'text', tip: 'Highlight text', icon: iconPen() },
       { action: 'mode', mode: 'element', tip: 'Annotate an element', icon: iconTarget() }
     ];
-    const exportButtons = [
-      { action: 'import', tip: 'Import JSON', icon: iconUpload() },
-      { action: 'export', tip: 'Export JSON', icon: iconDownload() }
-    ];
-    const controlButtons = [
-      { action: 'toggle-pos', tip: 'Toolbar top / bottom', icon: iconSwap() },
-      { action: 'toggle-panel', tip: 'Show / hide annotations', icon: iconPanel() }
-    ];
+    if (captureAvailable()) {
+      editButtons.push({ action: 'mode', mode: 'screenshot', tip: 'Capture a region', icon: iconCamera() });
+    }
+    // Compact keeps five controls -- hide, highlight, element, camera, notes --
+    // so each is a thumb-sized target and none of them scrolls out of reach.
+    // Import needs the file on the device and is unusable at this size, the
+    // position toggle has no second answer where the bar belongs in thumb
+    // reach, and export moves to the panel head. The mail button goes with
+    // them: on a phone the export path already opens the system share sheet,
+    // which is where a handoff to mail belongs.
+    const exportButtons = [];
+    if (jsonImport && !compact) exportButtons.push({ action: 'import', tip: 'Import JSON', icon: iconUpload() });
+    if (jsonExport && !compact) exportButtons.push({ action: 'export', tip: 'Export JSON', icon: iconDownload() });
+    if (mailExport && !compact) exportButtons.push({ action: 'mail', tip: 'Send by mail', icon: iconMail() });
+    const controlButtons = [];
+    if (!compact) controlButtons.push({ action: 'toggle-pos', tip: 'Toolbar top / bottom', icon: iconSwap() });
+    controlButtons.push({ action: 'toggle-panel', tip: 'Show / hide annotations', icon: iconPanel() });
 
     frag.appendChild(makeSpacer());
     frag.appendChild(makeGroup(editButtons));
-    frag.appendChild(makeSpacer());
-    frag.appendChild(makeGroup(exportButtons));
+    if (exportButtons.length) {
+      frag.appendChild(makeSpacer());
+      frag.appendChild(makeGroup(exportButtons));
+    }
     frag.appendChild(makeSpacer());
     frag.appendChild(makeGroup(controlButtons));
 
     toolbar.appendChild(frag);
+    updatePositionIcon();
+    updateToolbarActive();
+    updateToggleActive();
+    mountVisibilityToggle();
+  }
+
+  // One entry point for a change of form factor. The bar's button set differs
+  // between the two, so a rotation has to rebuild it, not merely reposition it.
+  function applyFormFactor() {
+    buildToolbar();
+    positionVisibilityToggle();
+    positionPanel();
+    positionTip();
+    positionCommentCard();
+    applyPageOffset();
+    applySheetInset();
+    positionActionBars();
+    syncPageScrollLock();
+    refreshMarkers();
+  }
+
+  function createShell() {
+    // Build toolbar, panel, and annotation layers
+    const toolbar = document.createElement('div');
+    toolbar.className = `wn-annot-toolbar wn-annotator wn-pos-${position}`;
     document.body.appendChild(toolbar);
     state.toolbar = toolbar;
+    buildToolbar();
 
     const panel = document.createElement('div');
-    panel.className = 'wn-annot-panel wn-annotator';
+    panel.className = 'wn-annot-panel wn-annot-sheet wn-annotator';
     panel.innerHTML = `
       <div class="wn-annot-panel-head wn-annotator">
         <div class="wn-annot-panel-top wn-annotator">
           <h3>Annotations (0)</h3>
-          <button class="wn-annot-delete-all wn-annotator" type="button">
-            ${iconTrash()}<span>All</span>
-          </button>
+          <div class="wn-annot-panel-tools wn-annotator">
+            ${
+              jsonExport
+                ? `<button class="wn-annot-panel-export wn-annotator" type="button">${iconDownload()}<span>Export</span></button>`
+                : ''
+            }
+            <button class="wn-annot-delete-all wn-annotator" type="button">
+              ${iconTrash()}<span>All</span>
+            </button>
+          </div>
         </div>
         <div class="wn-annot-filters wn-annotator">
           <div class="wn-annot-filter-row wn-annotator">
             <input id="wn-filter-search" class="wn-annotator" type="search" placeholder="Keyword search" />
-          </div>
-          <div class="wn-annot-filter-row wn-annotator">
-            <label class="wn-annot-filter-label wn-annotator" for="wn-filter-priority">Priority</label>
-            <select id="wn-filter-priority" class="wn-annotator">
-              <option value="all">All</option>
-              <option value="high">High</option>
-              <option value="medium">Medium</option>
-              <option value="low">Low</option>
-            </select>
-            <button class="wn-annot-filter-clear wn-annotator" type="button" data-filter-clear="priority" aria-label="Clear priority filter">✕</button>
-          </div>
-          <div class="wn-annot-filter-row wn-annotator">
-            <label class="wn-annot-filter-label wn-annotator" for="wn-filter-author">Reviewer</label>
-            <select id="wn-filter-author" class="wn-annotator">
-              <option value="all">All</option>
-            </select>
-            <button class="wn-annot-filter-clear wn-annotator" type="button" data-filter-clear="author" aria-label="Clear reviewer filter">✕</button>
           </div>
         </div>
       </div>
@@ -1502,14 +1982,26 @@
     }
     document.body.appendChild(panel);
     state.panel = panel;
-    if (isMobileLayout()) {
-      panel.style.display = 'none';
-    }
+    panel.style.display = 'none';
     const deleteAllBtn = panel.querySelector('.wn-annot-delete-all');
     if (deleteAllBtn) {
       deleteAllBtn.addEventListener('click', async (evt) => {
         evt.stopPropagation();
         await deleteAllAnnotations();
+      });
+    }
+    const panelHead = panel.querySelector('.wn-annot-panel-head');
+    if (panelHead) {
+      panelHead.insertBefore(
+        buildSheetGrip('Close the annotations', () => setPanelOpen(false)),
+        panelHead.firstChild
+      );
+    }
+    const panelExportBtn = panel.querySelector('.wn-annot-panel-export');
+    if (panelExportBtn) {
+      panelExportBtn.addEventListener('click', (evt) => {
+        evt.stopPropagation();
+        requestExport();
       });
     }
 
@@ -1533,6 +2025,7 @@
     toolbar.addEventListener('click', onToolbarClick);
     renderList();
     applyPageOffset();
+    applySheetInset();
     positionPanel();
     positionTip();
     updateToggleActive();
@@ -1564,7 +2057,7 @@
   function mountVisibilityToggle() {
     if (!state.visibilityToggle) return;
     const btn = state.visibilityToggle;
-    const inlineTarget = isMobileLayout() && state.toolbar && !state.hidden;
+    const inlineTarget = isCompactLayout() && state.toolbar && !state.hidden;
     const target = inlineTarget ? state.toolbar : document.body;
     if (btn.parentNode !== target) {
       if (btn.parentNode) {
@@ -1584,8 +2077,8 @@
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'wn-annot-visibility-btn wn-annotator';
-    btn.setAttribute('aria-label', 'Masquer Uxnote');
-    btn.setAttribute('data-tip', 'Masquer Uxnote');
+    btn.setAttribute('aria-label', 'Hide Uxnote');
+    btn.setAttribute('data-tip', 'Hide Uxnote');
     btn.innerHTML = iconEyeOpen();
     btn.addEventListener('click', toggleAnnotatorVisibility);
     state.visibilityToggle = btn;
@@ -1599,49 +2092,14 @@
     const backdrop = document.createElement('div');
     backdrop.className = 'wn-annot-modal-backdrop wn-annotator';
     const modal = document.createElement('div');
-    modal.className = 'wn-annot-modal wn-annotator';
+    modal.className = 'wn-annot-modal wn-annot-comment-card wn-annot-sheet wn-annotator';
 
     const title = document.createElement('h4');
     title.textContent = 'Add a comment';
 
-    const nameRow = document.createElement('div');
-    nameRow.className = 'wn-annot-name-row wn-annotator';
-    const nameLabel = document.createElement('label');
-    nameLabel.textContent = 'Reviewer name';
-    const nameInputs = document.createElement('div');
-    nameInputs.className = 'wn-annot-name-inputs wn-annotator';
-    const nameInput = document.createElement('input');
-    nameInput.type = 'text';
-    nameInput.className = 'wn-annotator';
-    nameInput.placeholder = 'Reviewer name';
-    nameInputs.appendChild(nameInput);
-    nameRow.appendChild(nameLabel);
-    nameRow.appendChild(nameInputs);
-
     const textarea = document.createElement('textarea');
     textarea.className = 'wn-annotator';
     textarea.placeholder = 'Your comment...';
-
-    const prioWrapper = document.createElement('div');
-    prioWrapper.className = 'wn-annot-prio wn-annotator';
-    const prioLabel = document.createElement('label');
-    prioLabel.textContent = 'Priority';
-    const prioOptions = document.createElement('div');
-    prioOptions.className = 'wn-annot-prio-options wn-annotator';
-
-    const makePrioBtn = (value, label) => {
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'wn-annot-prio-btn wn-annotator';
-      btn.setAttribute('data-priority', value);
-      btn.innerHTML = `<span class="dot wn-annotator"></span><span class="wn-annotator">${label}</span>`;
-      return btn;
-    };
-
-    const prioButtons = [makePrioBtn('low', 'Low'), makePrioBtn('medium', 'Medium'), makePrioBtn('high', 'High')];
-    prioButtons.forEach((b) => prioOptions.appendChild(b));
-    prioWrapper.appendChild(prioLabel);
-    prioWrapper.appendChild(prioOptions);
 
     const actions = document.createElement('div');
     actions.className = 'wn-annot-actions wn-annotator';
@@ -1656,10 +2114,9 @@
 
     actions.appendChild(cancelBtn);
     actions.appendChild(okBtn);
+    modal.appendChild(buildSheetGrip('Discard this comment', () => cancelBtn.click()));
     modal.appendChild(title);
-    modal.appendChild(nameRow);
     modal.appendChild(textarea);
-    modal.appendChild(prioWrapper);
     modal.appendChild(actions);
     backdrop.appendChild(modal);
     document.body.appendChild(backdrop);
@@ -1670,67 +2127,65 @@
       textarea,
       title,
       okBtn,
-      cancelBtn,
-      prioButtons,
-      nameInput
+      cancelBtn
     };
     return state.commentModal;
   }
 
-  function askForComment(label, defaultValue = '', defaultPriority = 'medium', defaultAuthor = '') {
+  // Park the card against the toolbar, 0.75em clear of it, so the page it is
+  // about stays in view while the comment is written.
+  function positionCommentCard() {
+    const modalState = state.commentModal;
+    if (!modalState || !state.toolbar) return;
+    if (!modalState.backdrop.classList.contains('show')) return;
+    const card = modalState.modal;
+    if (isCompactLayout()) {
+      // The sheet is placed against the viewport edges by the stylesheet, and
+      // an inline left and bottom from the parked-card path would beat it.
+      card.style.left = '';
+      card.style.top = '';
+      card.style.bottom = '';
+      return;
+    }
+    const barRect = state.toolbar.getBoundingClientRect();
+    const gap = 0.75 * (parseFloat(getComputedStyle(card).fontSize) || 16);
+    card.style.left = `${barRect.left + barRect.width / 2}px`;
+    if (position === 'top') {
+      card.style.top = `${barRect.bottom + gap}px`;
+      card.style.bottom = '';
+    } else {
+      card.style.top = '';
+      card.style.bottom = `${window.innerHeight - barRect.top + gap}px`;
+    }
+  }
+
+  function askForComment(label, defaultValue = '') {
     return new Promise((resolve) => {
       const modalState = ensureCommentModal();
-      const { backdrop, textarea, title, okBtn, cancelBtn, prioButtons, nameInput } = modalState;
+      const { backdrop, textarea, title, okBtn, cancelBtn } = modalState;
       title.textContent = label || 'Add a comment';
       textarea.value = defaultValue || '';
       textarea.placeholder = 'Your comment...';
-      prioButtons.forEach((b) => b.classList.toggle('active', b.getAttribute('data-priority') === defaultPriority));
-      const onPrioClick = (btn) => {
-        prioButtons.forEach((bb) => bb.classList.remove('active'));
-        btn.classList.add('active');
-      };
-      const prioHandlers = prioButtons.map((b) => (evt) => onPrioClick(b));
-      prioButtons.forEach((b, idx) => b.addEventListener('click', prioHandlers[idx]));
-
-      const names = state.annotatorNames || [];
-      const defaultName = defaultAuthor || state.annotatorName || names[0] || '';
-      nameInput.value = defaultName || '';
-      nameInput.disabled = false;
-      nameInput.placeholder = 'Reviewer name';
 
       backdrop.classList.add('show');
-      if (defaultName) {
-        textarea.focus();
-        textarea.select();
-      } else {
-        nameInput.focus();
-        nameInput.select();
-      }
+      positionCommentCard();
+      syncPageScrollLock();
+      textarea.focus();
+      textarea.select();
 
       const close = (val) => {
         backdrop.classList.remove('show');
+        syncPageScrollLock();
         okBtn.removeEventListener('click', onOk);
         cancelBtn.removeEventListener('click', onCancel);
-        backdrop.removeEventListener('click', onBackdrop);
         document.removeEventListener('keydown', onKey);
-        prioButtons.forEach((b, idx) => b.removeEventListener('click', prioHandlers[idx]));
+        window.removeEventListener('resize', positionCommentCard);
         resolve(val);
       };
-      const onOk = async () => {
-        const selected = prioButtons.find((b) => b.classList.contains('active'));
-        const priority = selected ? selected.getAttribute('data-priority') : defaultPriority;
-        const author = nameInput.value.trim();
-        if (!author) {
-          await alertDialog('Please enter a reviewer name.', 'Reviewer name required');
-          return;
-        }
-        recordAnnotatorName(author);
-        close({ comment: textarea.value.trim(), priority, author });
+      const onOk = () => {
+        close({ comment: textarea.value.trim() });
       };
       const onCancel = () => close(null);
-      const onBackdrop = (evt) => {
-        if (evt.target === backdrop) close(null);
-      };
       const onKey = (evt) => {
         if (evt.key === 'Escape') close(null);
         if (evt.key === 'Enter' && !(evt.shiftKey || evt.altKey)) {
@@ -1743,8 +2198,8 @@
       cancelBtn.textContent = 'Cancel';
       okBtn.addEventListener('click', onOk);
       cancelBtn.addEventListener('click', onCancel);
-      backdrop.addEventListener('click', onBackdrop);
       document.addEventListener('keydown', onKey);
+      window.addEventListener('resize', positionCommentCard);
     });
   }
 
@@ -1754,180 +2209,18 @@
     return val;
   }
 
-  function ensureExportModal() {
-    if (state.exportModal) return state.exportModal;
-    const backdrop = document.createElement('div');
-    backdrop.className = 'wn-annot-modal-backdrop wn-annotator';
-    const modal = document.createElement('div');
-    modal.className = 'wn-annot-modal wn-annotator wn-annot-export-modal';
-
-    const title = document.createElement('h4');
-    title.textContent = 'Export annotations';
-
-    const body = document.createElement('div');
-    body.className = 'wn-annot-export-grid wn-annotator';
-
-    const reviewerPanel = document.createElement('div');
-    reviewerPanel.className = 'wn-annot-export-panel wn-annotator';
-    const reviewerTitle = document.createElement('h5');
-    reviewerTitle.textContent = 'Reviewers';
-    const reviewerDesc = document.createElement('p');
-    reviewerDesc.textContent = 'Choose reviewers to include.';
-    const reviewerList = document.createElement('div');
-    reviewerList.className = 'wn-annot-export-list wn-annotator';
-    reviewerPanel.appendChild(reviewerTitle);
-    reviewerPanel.appendChild(reviewerDesc);
-    reviewerPanel.appendChild(reviewerList);
-
-    const prioPanel = document.createElement('div');
-    prioPanel.className = 'wn-annot-export-panel wn-annotator';
-    const prioTitle = document.createElement('h5');
-    prioTitle.textContent = 'Criticality';
-    const prioDesc = document.createElement('p');
-    prioDesc.textContent = 'Select priority levels.';
-    const prioList = document.createElement('div');
-    prioList.className = 'wn-annot-export-list wn-annotator';
-    prioPanel.appendChild(prioTitle);
-    prioPanel.appendChild(prioDesc);
-    prioPanel.appendChild(prioList);
-
-    body.appendChild(reviewerPanel);
-    body.appendChild(prioPanel);
-
-    const actions = document.createElement('div');
-    actions.className = 'wn-annot-actions wn-annotator';
-    const cancelBtn = document.createElement('button');
-    cancelBtn.type = 'button';
-    cancelBtn.className = 'wn-annot-pill cancel wn-annotator';
-    cancelBtn.textContent = 'Cancel';
-    const mailBtn = document.createElement('button');
-    mailBtn.type = 'button';
-    mailBtn.className = 'wn-annot-pill secondary wn-annotator';
-    mailBtn.textContent = 'Send by mail';
-    const exportBtn = document.createElement('button');
-    exportBtn.type = 'button';
-    exportBtn.className = 'wn-annot-pill primary wn-annotator';
-    exportBtn.textContent = 'Export file';
-    actions.appendChild(cancelBtn);
-    actions.appendChild(mailBtn);
-    actions.appendChild(exportBtn);
-
-    modal.appendChild(title);
-    modal.appendChild(body);
-    modal.appendChild(actions);
-    backdrop.appendChild(modal);
-    document.body.appendChild(backdrop);
-
-    const close = () => {
-      backdrop.classList.remove('show');
-      document.removeEventListener('keydown', onKey);
-    };
-    const onKey = (evt) => {
-      if (evt.key === 'Escape') close();
-    };
-    const onBackdrop = (evt) => {
-      if (evt.target === backdrop) close();
-    };
-
-    cancelBtn.addEventListener('click', close);
-    backdrop.addEventListener('click', onBackdrop);
-
-    exportBtn.addEventListener('click', () => {
-      const reviewers = getCheckedValues(reviewerList);
-      const priorities = getCheckedValues(prioList);
-      exportAnnotationsFiltered({
-        reviewers,
-        priorities
-      });
-      close();
-    });
-
-    mailBtn.addEventListener('click', () => {
-      const reviewers = getCheckedValues(reviewerList);
-      const priorities = getCheckedValues(prioList);
-      emailAnnotationsFiltered({
-        reviewers,
-        priorities
-      });
-      close();
-    });
-
-    state.exportModal = {
-      backdrop,
-      reviewerList,
-      prioList,
-      onKey
-    };
-    return state.exportModal;
-  }
-
-  function openExportModal() {
-    const modalState = ensureExportModal();
-    renderExportModal();
-    modalState.backdrop.classList.add('show');
-    document.addEventListener('keydown', modalState.onKey);
-  }
-
-  function renderExportModal() {
-    if (!state.exportModal) return;
-    const { reviewerList, prioList } = state.exportModal;
-
-    reviewerList.innerHTML = '';
-    getExportReviewers().forEach((reviewer) => {
-      reviewerList.appendChild(makeExportCheckbox(reviewer.value, reviewer.label, true));
-    });
-
-    prioList.innerHTML = '';
-    getExportPriorities().forEach((prio) => {
-      prioList.appendChild(makeExportCheckbox(prio.value, prio.label, true));
-    });
-  }
-
-  function getExportReviewers() {
-    const reviewers = Array.from(
-      new Set(
-        state.annotations.map((ann) => {
-          const name = (ann.author || '').trim();
-          return name || '__unknown';
-        })
-      )
-    )
-      .filter(Boolean)
-      .sort((a, b) => getAuthorLabel(a).localeCompare(getAuthorLabel(b)));
-
-    return reviewers.map((value) => ({
-      value,
-      label: getAuthorLabel(value)
-    }));
-  }
-
-  function getExportPriorities() {
-    return [
-      { value: 'high', label: 'High' },
-      { value: 'medium', label: 'Medium' },
-      { value: 'low', label: 'Low' }
-    ];
-  }
-
-  function makeExportCheckbox(value, label, checked) {
-    const row = document.createElement('label');
-    row.className = 'wn-annot-export-item wn-annotator';
-    const input = document.createElement('input');
-    input.type = 'checkbox';
-    input.value = value;
-    input.checked = checked;
-    input.className = 'wn-annotator';
-    const text = document.createElement('span');
-    text.textContent = label;
-    row.appendChild(input);
-    row.appendChild(text);
-    return row;
-  }
-
-  function getCheckedValues(container) {
-    return Array.from(container.querySelectorAll('input[type="checkbox"]'))
-      .filter((input) => input.checked)
-      .map((input) => input.value);
+  // One action wherever it is pressed. On a compact layout the file goes to
+  // the share sheet, which is how a phone hands a file to another
+  // application; on a desktop it goes to the download anchor the widget has
+  // always used. Neither asks anything first -- the file holds every
+  // annotation of the site either way.
+  function requestExport() {
+    if (!jsonExport) return;
+    if (isCompactLayout()) {
+      shareAnnotations();
+      return;
+    }
+    exportAnnotations();
   }
 
   function ensureImportModal() {
@@ -1962,9 +2255,6 @@
     dropzone.appendChild(fileInput);
     dropzone.appendChild(dropContent);
 
-    const grid = document.createElement('div');
-    grid.className = 'wn-annot-import-grid wn-annotator';
-
     const filesPanel = document.createElement('div');
     filesPanel.className = 'wn-annot-import-panel wn-annotator';
     const filesTitleRow = document.createElement('div');
@@ -1984,42 +2274,6 @@
     filesPanel.appendChild(filesDesc);
     filesPanel.appendChild(fileList);
 
-    const reviewersPanel = document.createElement('div');
-    reviewersPanel.className = 'wn-annot-import-panel wn-annotator';
-    const reviewersTitle = document.createElement('h5');
-    reviewersTitle.textContent = 'Reviewer summary';
-    const reviewersDesc = document.createElement('p');
-    reviewersDesc.textContent = 'Counts based on imported files.';
-    const stats = document.createElement('div');
-    stats.className = 'wn-annot-import-stats wn-annotator';
-    const statReviewers = document.createElement('div');
-    statReviewers.className = 'wn-annot-import-stat wn-annotator';
-    const statReviewersLabel = document.createElement('span');
-    statReviewersLabel.textContent = 'Reviewers';
-    const statReviewersValue = document.createElement('span');
-    statReviewersValue.textContent = '0';
-    statReviewers.appendChild(statReviewersLabel);
-    statReviewers.appendChild(statReviewersValue);
-    const statComments = document.createElement('div');
-    statComments.className = 'wn-annot-import-stat wn-annotator';
-    const statCommentsLabel = document.createElement('span');
-    statCommentsLabel.textContent = 'Comments';
-    const statCommentsValue = document.createElement('span');
-    statCommentsValue.textContent = '0';
-    statComments.appendChild(statCommentsLabel);
-    statComments.appendChild(statCommentsValue);
-    stats.appendChild(statReviewers);
-    stats.appendChild(statComments);
-    const reviewerList = document.createElement('div');
-    reviewerList.className = 'wn-annot-import-list wn-annotator';
-    reviewersPanel.appendChild(reviewersTitle);
-    reviewersPanel.appendChild(reviewersDesc);
-    reviewersPanel.appendChild(stats);
-    reviewersPanel.appendChild(reviewerList);
-
-    grid.appendChild(filesPanel);
-    grid.appendChild(reviewersPanel);
-
     const actions = document.createElement('div');
     actions.className = 'wn-annot-actions wn-annotator';
     const closeBtn = document.createElement('button');
@@ -2029,7 +2283,7 @@
     actions.appendChild(closeBtn);
 
     body.appendChild(dropzone);
-    body.appendChild(grid);
+    body.appendChild(filesPanel);
     modal.appendChild(title);
     modal.appendChild(body);
     modal.appendChild(actions);
@@ -2090,10 +2344,7 @@
       modal,
       fileInput,
       fileList,
-      reviewerList,
       filesCount,
-      statReviewersValue,
-      statCommentsValue,
       onKey,
       close
     };
@@ -2101,6 +2352,7 @@
   }
 
   function openImportModal() {
+    if (!jsonImport) return;
     const modalState = ensureImportModal();
     renderImportModal();
     modalState.backdrop.classList.add('show');
@@ -2109,8 +2361,8 @@
 
   function renderImportModal() {
     if (!state.importModal) return;
-    const { fileList, reviewerList, filesCount, statReviewersValue, statCommentsValue } = state.importModal;
-    const { fileCounts, reviewerCounts, totalComments } = buildImportSummary();
+    const { fileList, filesCount } = state.importModal;
+    const { fileCounts } = buildImportSummary();
 
     fileList.innerHTML = '';
     if (!state.importFiles.length) {
@@ -2155,61 +2407,17 @@
       });
     }
 
-    reviewerList.innerHTML = '';
-    if (!reviewerCounts.size) {
-      const empty = document.createElement('div');
-      empty.className = 'wn-annot-import-empty wn-annotator';
-      empty.textContent = 'No reviewers yet.';
-      reviewerList.appendChild(empty);
-    } else {
-      Array.from(reviewerCounts.entries())
-        .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-        .forEach(([name, count]) => {
-          const card = document.createElement('div');
-          card.className = 'wn-annot-import-card wn-annotator';
-
-          const meta = document.createElement('div');
-          meta.className = 'wn-annot-import-meta wn-annotator';
-          const reviewerName = document.createElement('div');
-          reviewerName.className = 'wn-annot-import-name wn-annotator';
-          reviewerName.textContent = name;
-          const reviewerCount = document.createElement('div');
-          reviewerCount.className = 'wn-annot-import-sub wn-annotator';
-          reviewerCount.textContent = `${count} comments`;
-          meta.appendChild(reviewerName);
-          meta.appendChild(reviewerCount);
-
-          const badge = document.createElement('div');
-          badge.className = 'wn-annot-import-badge wn-annotator';
-          badge.textContent = String(count);
-
-          card.appendChild(meta);
-          card.appendChild(badge);
-          reviewerList.appendChild(card);
-        });
-    }
-
     filesCount.textContent = String(state.importFiles.length);
-    statReviewersValue.textContent = String(reviewerCounts.size);
-    statCommentsValue.textContent = String(totalComments);
   }
 
   function buildImportSummary() {
     const fileCounts = new Map();
-    const reviewerCounts = new Map();
-    const imported = state.annotations.filter((ann) => ann.importFileId);
-    imported.forEach((ann) => {
+    state.annotations.forEach((ann) => {
       if (ann.importFileId) {
         fileCounts.set(ann.importFileId, (fileCounts.get(ann.importFileId) || 0) + 1);
       }
-      const reviewer = (ann.author || '').trim() || 'Unknown reviewer';
-      reviewerCounts.set(reviewer, (reviewerCounts.get(reviewer) || 0) + 1);
     });
-    return {
-      fileCounts,
-      reviewerCounts,
-      totalComments: imported.length
-    };
+    return { fileCounts };
   }
 
   async function handleImportFiles(files) {
@@ -2231,7 +2439,6 @@
     }
     saveAnnotations();
     saveImportFiles();
-    refreshKnownAnnotatorNames();
     clearRenderedAnnotations();
     restoreAnnotations();
     renumberMarkers();
@@ -2254,18 +2461,14 @@
       return null;
     }
 
-    const fallbackAuthor = Array.isArray(parsed)
-      ? ''
-      : parsed.exportedBy || parsed.annotator || parsed.author || '';
     const payloadCreatedAt = Array.isArray(parsed) ? file.lastModified : parsed.createdAt;
     const pageUrl = Array.isArray(parsed) ? '' : parsed.pageUrl || '';
     const fileId = generateImportFileId();
 
     const normalized = annotations
-      .filter((ann) => ann && (ann.type === 'text' || ann.type === 'element'))
+      .filter(isStoredAnnotation)
       .map((ann) =>
         normalizeImportedAnnotation(ann, {
-          fallbackAuthor,
           createdAt: payloadCreatedAt,
           pageUrl,
           fileId,
@@ -2287,15 +2490,12 @@
 
   function normalizeImportedAnnotation(annotation, options) {
     const ann = annotation && typeof annotation === 'object' ? annotation : {};
-    const author = (ann.author || options.fallbackAuthor || '').trim();
     const pageUrl = ann.pageUrl || options.pageUrl || window.location.href;
     const id = ensureUniqueImportId(ann.id, options.existingIds);
     const normalized = {
       ...ann,
       id,
       createdAt: ann.createdAt || options.createdAt || Date.now(),
-      priority: ann.priority || 'medium',
-      author,
       pageUrl,
       importFileId: options.fileId
     };
@@ -2325,7 +2525,6 @@
     state.annotations = state.annotations.filter((ann) => ann.importFileId !== fileId);
     saveAnnotations();
     saveImportFiles();
-    refreshKnownAnnotatorNames();
     clearRenderedAnnotations();
     restoreAnnotations();
     renumberMarkers();
@@ -2351,7 +2550,7 @@
     const backdrop = document.createElement('div');
     backdrop.className = 'wn-annot-modal-backdrop wn-annotator';
     const modal = document.createElement('div');
-    modal.className = 'wn-annot-modal wn-annotator';
+    modal.className = 'wn-annot-modal wn-annot-sheet wn-annotator';
     const title = document.createElement('h4');
     title.className = 'wn-annotator';
     const message = document.createElement('div');
@@ -2367,6 +2566,7 @@
 
     actions.appendChild(cancelBtn);
     actions.appendChild(okBtn);
+    modal.appendChild(buildSheetGrip('Dismiss', () => cancelBtn.click()));
     modal.appendChild(title);
     modal.appendChild(message);
     modal.appendChild(actions);
@@ -2389,6 +2589,7 @@
 
       const close = (val) => {
         backdrop.classList.remove('show');
+        syncPageScrollLock();
         okBtn.removeEventListener('click', onOk);
         cancelBtn.removeEventListener('click', onCancel);
         backdrop.removeEventListener('click', onBackdrop);
@@ -2412,6 +2613,7 @@
       backdrop.addEventListener('click', onBackdrop);
       document.addEventListener('keydown', onKey);
       backdrop.classList.add('show');
+      syncPageScrollLock();
       okBtn.focus();
     });
   }
@@ -2429,109 +2631,41 @@
     document.addEventListener('mouseup', handleTextSelection);
     document.addEventListener('touchend', handleTextSelection);
     document.addEventListener('pointerup', handleTextSelection);
+    document.addEventListener('selectionchange', handleSelectionChange);
     document.addEventListener('mousemove', handleElementHover);
     document.addEventListener('click', handleElementClick, true);
     window.addEventListener('resize', refreshMarkers);
     window.addEventListener('resize', applyPageOffset);
     window.addEventListener('resize', positionPanel);
+    window.addEventListener('resize', applySheetInset);
     window.addEventListener('resize', positionTip);
     window.addEventListener('resize', positionVisibilityToggle);
+    window.addEventListener('resize', positionActionBars);
     window.addEventListener('scroll', refreshMarkers, { passive: true });
-  }
-
-  function getAuthorLabel(value) {
-    return value === '__unknown' ? 'Unknown' : value;
-  }
-
-  function updateFilterClearButtons() {
-    if (!state.panel) return;
-    const prioritySelect = state.panel.querySelector('#wn-filter-priority');
-    const authorSelect = state.panel.querySelector('#wn-filter-author');
-    const priorityClear = state.panel.querySelector('[data-filter-clear="priority"]');
-    const authorClear = state.panel.querySelector('[data-filter-clear="author"]');
-    if (priorityClear && prioritySelect) {
-      priorityClear.style.display = prioritySelect.value === 'all' ? 'none' : 'inline-flex';
-    }
-    if (authorClear && authorSelect) {
-      authorClear.style.display = authorSelect.value === 'all' ? 'none' : 'inline-flex';
-    }
-  }
-
-  function updateAuthorFilterOptions() {
-    if (!state.panel) return;
-    const select = state.panel.querySelector('#wn-filter-author');
-    if (!select) return;
-    const current = state.filters.author || 'all';
-    const authors = Array.from(
-      new Set(
-        state.annotations.map((ann) => {
-          const name = (ann.author || '').trim();
-          return name || '__unknown';
-        })
-      )
-    ).filter((v) => v);
-
-    select.innerHTML = '';
-    const allOption = document.createElement('option');
-    allOption.value = 'all';
-    allOption.textContent = 'All';
-    select.appendChild(allOption);
-
-    authors
-      .sort((a, b) => getAuthorLabel(a).localeCompare(getAuthorLabel(b)))
-      .forEach((value) => {
-        const opt = document.createElement('option');
-        opt.value = value;
-        opt.textContent = getAuthorLabel(value);
-        select.appendChild(opt);
-      });
-
-    const values = ['all', ...authors];
-    select.value = values.includes(current) ? current : 'all';
-    state.filters.author = select.value;
-    updateFilterClearButtons();
+    bindSyncFlush();
+    watchRouteChanges();
+    // A rotation crosses the compact boundary without always firing a resize
+    // the layout functions can read, and the bar's button set differs across
+    // it, so both queries are subscribed rather than polled.
+    subscribeMedia(touchQuery, applyFormFactor);
+    subscribeMedia(compactQuery, applyFormFactor);
+    if (followsSystem) subscribeMedia(darkQuery, applyTheme);
   }
 
   function initFilters() {
-    // Install filters (priority + author + search) and re-render on change
+    // Install the keyword search and re-render on change
     if (!state.panel) return;
-    const prioritySelect = state.panel.querySelector('#wn-filter-priority');
-    const authorSelect = state.panel.querySelector('#wn-filter-author');
     const searchInput = state.panel.querySelector('#wn-filter-search');
-    const priorityClear = state.panel.querySelector('[data-filter-clear="priority"]');
-    const authorClear = state.panel.querySelector('[data-filter-clear="author"]');
-    if (!prioritySelect || !authorSelect || !searchInput) return;
+    if (!searchInput) return;
 
-    prioritySelect.value = state.filters.priority;
-    authorSelect.value = state.filters.author;
     searchInput.value = state.filters.query;
 
     const trigger = () => {
-      state.filters.priority = prioritySelect.value;
-      state.filters.author = authorSelect.value;
       state.filters.query = searchInput.value.trim().toLowerCase();
       renderList();
-      updateFilterClearButtons();
     };
 
-    prioritySelect.addEventListener('change', trigger);
-    authorSelect.addEventListener('change', trigger);
     searchInput.addEventListener('input', trigger);
-    if (priorityClear) {
-      priorityClear.addEventListener('click', () => {
-        prioritySelect.value = 'all';
-        trigger();
-      });
-    }
-    if (authorClear) {
-      authorClear.addEventListener('click', () => {
-        authorSelect.value = 'all';
-        trigger();
-      });
-    }
-
-    updateAuthorFilterOptions();
-    updateFilterClearButtons();
   }
 
   function setMode(nextMode, options = {}) {
@@ -2541,15 +2675,28 @@
       state.mode = null;
       updateToolbarActive();
       hideTip();
+      closeTouchCapture();
       if (!keepOutline) hideOutline();
       return;
     }
     state.mode = nextMode;
     updateToolbarActive();
     showTipForMode(nextMode);
+    closeTouchCapture();
     if (nextMode !== 'element') {
       hideOutline();
     }
+  }
+
+  // Leaving a mode takes its bar with it. Both are built only on a coarse
+  // pointer, so on a mouse this is two null checks.
+  function closeTouchCapture() {
+    if (state.selectionTimer) {
+      clearTimeout(state.selectionTimer);
+      state.selectionTimer = null;
+    }
+    hideSelectionBar();
+    closeElementPicker();
   }
 
   function updateToolbarActive() {
@@ -2565,11 +2712,12 @@
   }
 
   function showTipForMode(mode) {
+    const touch = isTouchInput();
     let text = '';
     if (mode === 'text') {
-      text = 'Select text then release to add a note.';
+      text = touch ? 'Select text, then tap Add note.' : 'Select text then release to add a note.';
     } else if (mode === 'element') {
-      text = 'Hover an element, click to annotate.';
+      text = touch ? 'Tap an element to preview it, then pin it.' : 'Hover an element, click to annotate.';
     }
     if (!text) return hideTip();
     state.tip.textContent = text;
@@ -2632,6 +2780,19 @@
     }
   }
 
+  function applyTheme() {
+    const systemDark = !!(darkQuery && darkQuery.matches);
+    // A site that is itself on auto leaves the widget wearing the same theme as
+    // the page it annotates. 'reverse-auto' reads the same preference and takes
+    // the other side of it, so the two stay apart on either setting rather than
+    // holding one fixed side that collides on one of them.
+    const dark =
+      theme === 'dark' ||
+      (theme === 'auto' && systemDark) ||
+      (theme === 'reverse-auto' && !systemDark);
+    document.documentElement.setAttribute('data-wn-theme', dark ? 'dark' : 'light');
+  }
+
   function applyColorTheme() {
     if (!document || !document.documentElement) return;
     const root = document.documentElement;
@@ -2650,6 +2811,7 @@
     setVar('--wn-element-highlight-soft-end', elem.softer);
     setVar('--wn-element-highlight-strong', elem.strong);
     setVar('--wn-element-highlight-shadow', elem.shadow);
+    setVar('--wn-shot-frame', palette.screenshot.base);
     setVar('--wn-marker-text', elem.text);
   }
 
@@ -2714,7 +2876,10 @@
 
   function getAnnotationColors(annotation) {
     const palette = state.colors || colorPalette;
-    return annotation && annotation.type === 'text' ? palette.text : palette.element;
+    const type = annotation && annotation.type;
+    if (type === 'text') return palette.text;
+    if (type === 'screenshot') return palette.screenshot;
+    return palette.element;
   }
 
   function applyMarkerPalette(marker, palette) {
@@ -2733,7 +2898,6 @@
     item.style.setProperty('--wn-item-accent-soft-end', palette.softer);
     item.style.setProperty('--wn-item-number-bg', palette.pill);
     item.style.setProperty('--wn-item-number-border', palette.pillBorder);
-    item.style.setProperty('--wn-item-number-text', '#000000');
   }
 
   function parseBoolAttr(val, fallback = false) {
@@ -2742,43 +2906,6 @@
     if (v === 'true' || v === '1' || v === 'yes' || v === 'on') return true;
     if (v === 'false' || v === '0' || v === 'no' || v === 'off') return false;
     return fallback;
-  }
-
-  function loadAnnotatorName() {
-    try {
-      return localStorage.getItem(annotatorNameStorageKey) || '';
-    } catch (err) {
-      return '';
-    }
-  }
-
-  function saveAnnotatorName(name) {
-    try {
-      localStorage.setItem(annotatorNameStorageKey, name);
-    } catch (err) {
-      // ignore storage errors
-    }
-  }
-
-  function loadAnnotatorNames() {
-    try {
-      const stored = localStorage.getItem(annotatorNamesStorageKey);
-      const parsed = stored ? JSON.parse(stored) : [];
-      if (Array.isArray(parsed)) {
-        return parsed.filter((n) => typeof n === 'string' && n.trim()).map((n) => n.trim());
-      }
-      return [];
-    } catch (err) {
-      return [];
-    }
-  }
-
-  function saveAnnotatorNames(names) {
-    try {
-      localStorage.setItem(annotatorNamesStorageKey, JSON.stringify(names || []));
-    } catch (err) {
-      // ignore storage errors
-    }
   }
 
   function loadImportFiles() {
@@ -2808,44 +2935,6 @@
     }
   }
 
-  function recordAnnotatorName(name) {
-    const trimmed = (name || '').trim();
-    if (!trimmed) return;
-    state.annotatorName = trimmed;
-    const next = [trimmed, ...state.annotatorNames.filter((n) => n !== trimmed)];
-    state.annotatorNames = next;
-    saveAnnotatorName(trimmed);
-    saveAnnotatorNames(next);
-  }
-
-  function refreshKnownAnnotatorNames() {
-    const existing = Array.from(
-      new Set(
-        (state.annotations || [])
-          .map((a) => (a.author || '').trim())
-          .filter(Boolean)
-      )
-    );
-    const merged = Array.from(new Set([...(state.annotatorNames || []), ...existing]));
-    state.annotatorNames = merged;
-    if (!state.annotatorName) {
-      state.annotatorName = loadAnnotatorName() || merged[0] || '';
-    }
-  }
-
-  function applyAnnotatorNameToAnnotations(name, options = {}) {
-    if (!name) return false;
-    const force = options.force || false;
-    let changed = false;
-    state.annotations.forEach((ann) => {
-      if (!force && ann.author) return;
-      if (ann.author !== name) changed = true;
-      ann.author = name;
-    });
-    if (changed) saveAnnotations();
-    return changed;
-  }
-
   function positionTip() {
     if (!state.tip || !state.toolbar) return;
     const barRect = state.toolbar.getBoundingClientRect();
@@ -2871,12 +2960,16 @@
     }
   }
 
+  function isStoredAnnotation(ann) {
+    return !!ann && (ann.type === 'text' || ann.type === 'element' || ann.type === 'screenshot');
+  }
+
   // Local storage helpers
   function loadAnnotations() {
     try {
       const stored = localStorage.getItem(storageKey);
       const parsed = stored ? JSON.parse(stored) : [];
-      state.annotations = (parsed || []).filter((ann) => ann.type === 'text' || ann.type === 'element');
+      state.annotations = (parsed || []).filter(isStoredAnnotation);
       // Backward compatibility: add pageKey if missing
       state.annotations.forEach((ann) => {
         if (!ann.pageKey) {
@@ -2890,10 +2983,26 @@
   }
 
   function saveAnnotations() {
+    persistAnnotations();
+    if (server) syncAnnotations();
+  }
+
+  // The set goes to localStorage whether or not a server is named. With one,
+  // the copy is what carries a note across a reload the server was down for,
+  // and the digests beside it are what tell a note the server never saw from
+  // one it already holds.
+  function persistAnnotations() {
     try {
       localStorage.setItem(storageKey, JSON.stringify(state.annotations));
+      if (server) persistSnapshot();
     } catch (err) {
       console.warn('Annotator storage save error', err);
+      // A capture on a coarse pointer is the whole viewport rather than a
+      // hand-framed corner of it, so the store fills faster than it used to,
+      // and it says so now whether or not a server is named. warnStorage says
+      // it once: a refused write repeats for every note after it, and the
+      // reviewer only needs telling that the browser is full.
+      warnStorage();
     }
   }
 
@@ -2904,15 +3013,23 @@
     if (!action) return;
     if (action === 'mode') {
       const mode = btn.getAttribute('data-mode');
+      if (mode === 'screenshot') {
+        await captureRegionAnnotation();
+        return;
+      }
       setMode(mode);
       return;
     }
     if (action === 'export') {
-      openExportModal();
+      requestExport();
       return;
     }
     if (action === 'import') {
       openImportModal();
+      return;
+    }
+    if (action === 'mail') {
+      await emailAnnotations();
       return;
     }
     if (action === 'toggle-panel') {
@@ -2927,10 +3044,8 @@
   }
 
   function togglePanel() {
-    const isHidden = state.panel.style.display === 'none';
     // Restore default flex layout when re-opening so the footer stays pinned
-    state.panel.style.display = isHidden ? '' : 'none';
-    updateToggleActive();
+    setPanelOpen(state.panel.style.display === 'none');
   }
 
   function toggleAnnotatorVisibility() {
@@ -2950,11 +3065,12 @@
     updateDimmer();
     positionVisibilityToggle();
     applyPageOffset();
+    applySheetInset();
+    syncPageScrollLock();
     if (!hidden) {
       refreshMarkers();
       positionPanel();
       positionTip();
-      // BMC widget intentionally left independent of visibility toggle
     }
     document.dispatchEvent(new CustomEvent('uxnote:visibility', { detail: { hidden } }));
   }
@@ -2974,10 +3090,11 @@
     if (!btn) return;
     mountVisibilityToggle();
     const inset = 18;
-    if (isMobileLayout()) {
+    if (isCompactLayout()) {
       if (state.hidden) {
-        btn.style.bottom = `${inset}px`;
-        btn.style.left = `${inset}px`;
+        // Clear of the home indicator and of the curve of the screen.
+        btn.style.bottom = `max(${inset}px, env(safe-area-inset-bottom))`;
+        btn.style.left = `max(${inset}px, env(safe-area-inset-left))`;
         btn.style.top = '';
         btn.style.right = '';
       } else {
@@ -3013,26 +3130,37 @@
     const inset = 18;
     const barRect = state.toolbar.getBoundingClientRect();
 
-    if (isMobileLayout()) {
-      p.style.width = '100vw';
-      p.style.maxHeight = '100vh';
-      p.style.height = '100vh';
-      p.style.left = '0';
-      p.style.right = '0';
-      p.style.top = '0';
-      p.style.bottom = '0';
-      p.style.borderRadius = '0';
+    if (isCompactLayout()) {
+      // The sheet is placed by the stylesheet, against the viewport edges and
+      // clear of the toolbar. Every inline value the desktop branch leaves
+      // behind would beat those rules, so they come off here.
+      p.style.width = '';
+      p.style.height = '';
+      p.style.maxHeight = '';
+      p.style.left = '';
+      p.style.right = '';
+      p.style.top = '';
+      p.style.bottom = '';
+      p.style.borderRadius = '';
+      p.style.paddingTop = '';
+      p.style.paddingBottom = '';
+      applySheetInset();
       return;
     }
 
-    p.style.width = `min(360px, calc(100vw - ${inset * 2}px))`;
+    p.style.width = `min(360px, calc(100% - ${inset * 2}px))`;
     p.style.maxHeight = `calc(100vh - ${inset * 2}px)`;
+    // Where dvh is understood it replaces the line above; where it is not, the
+    // assignment is dropped and the vh value stands.
+    p.style.maxHeight = `calc(100dvh - ${inset * 2}px)`;
     p.style.left = 'auto';
     p.style.right = `${inset}px`;
     p.style.top = `${inset}px`;
     p.style.bottom = `${inset}px`;
     p.style.height = '';
     p.style.borderRadius = '';
+    p.style.paddingTop = '';
+    p.style.paddingBottom = '';
 
     if (position === 'left') {
       p.style.left = `${barRect.width + inset}px`;
@@ -3058,8 +3186,10 @@
     updatePositionIcon();
     positionVisibilityToggle();
     positionTip();
+    positionCommentCard();
     positionPanel();
     applyPageOffset();
+    applySheetInset();
   }
 
   function updatePositionIcon() {
@@ -3105,38 +3235,49 @@
     body.style.paddingLeft = `${next.left}px`;
   }
 
+  function isRangeAnnotatable(range) {
+    return (
+      isAnnotatableTarget(range.commonAncestorContainer) &&
+      isAnnotatableTarget(range.startContainer) &&
+      isAnnotatableTarget(range.endContainer)
+    );
+  }
+
   // Capture a text selection and convert to annotation (text mode)
   async function handleTextSelection() {
     if (state.mode !== 'text') return;
+    // Where a finger is driving, the release is the wrong moment to read the
+    // selection: a long press picks one word and every drag of a handle after
+    // it is another release. The action bar commits there instead.
+    if (isTouchInput()) return;
     const selection = window.getSelection();
     if (!selection || selection.rangeCount === 0 || selection.isCollapsed) return;
     const range = selection.getRangeAt(0);
     if (!range) return;
-    const isAllowed =
-      isAnnotatableTarget(range.commonAncestorContainer) &&
-      isAnnotatableTarget(range.startContainer) &&
-      isAnnotatableTarget(range.endContainer);
-    if (!isAllowed) {
+    if (!isRangeAnnotatable(range)) {
       selection.removeAllRanges();
-      showToast('Cette zone est une popup/overlay, annotation bloquée.');
+      showToast('This area is a popup or overlay. It cannot be annotated.');
       return;
     }
     const snippet = selection.toString().trim();
     if (!snippet) return;
+    await commitTextAnnotation(range, snippet);
+  }
+
+  async function commitTextAnnotation(range, snippet) {
     const res = await awaitComment('Comment for this highlight?');
     if (!res) return;
-    const { comment, priority, author } = res;
+    const { comment } = res;
     const id = generateId();
     const payload = serializeRange(range, snippet);
     const span = applyTextHighlight(range, id);
-    selection.removeAllRanges();
+    const selection = window.getSelection();
+    if (selection) selection.removeAllRanges();
     const annotation = {
       id,
       type: 'text',
       target: payload,
       comment: comment.trim(),
-      author: author || state.annotatorName || '',
-      priority: priority || 'medium',
       snippet: snippet.slice(0, 180),
       pageUrl: window.location.href,
       pageKey: normalizePageKey(window.location.href),
@@ -3157,7 +3298,22 @@
       hideOutline();
       return;
     }
-    const rect = el.getBoundingClientRect();
+    outlineElement(el);
+  }
+
+  // The outline is a box in the page's own flow, so one that runs past what a
+  // clipping ancestor actually shows widens the document -- and fixed chrome
+  // is positioned against that width, so the toolbar walks off the screen with
+  // it. Measured on this repo's own demo page: outlining a row of the pricing
+  // table, which sits in a scroller narrower than itself, took the document
+  // from 375px to 459px and carried the bar with it. The visible rect is what
+  // the marker for the same element is placed by.
+  function outlineElement(el) {
+    const rect = getVisibleRect(el);
+    if (!rect) {
+      hideOutline();
+      return;
+    }
     showOutline(rect);
   }
 
@@ -3165,15 +3321,30 @@
   async function handleElementClick(evt) {
     if (state.mode !== 'element') return;
     const el = evt.target;
+    // The widget's own controls are not a target and never were. Saying so
+    // out loud on every tap of the toolbar -- which the picker bar now sits
+    // beside -- is noise, and it named the bar an overlay to its own user.
+    if (isWithinAnnotator(el)) return;
     if (!el || !isAnnotatableTarget(el)) {
-      showToast('Cette zone est une popup/overlay, annotation bloquée.');
+      showToast('This area is a popup or overlay. It cannot be annotated.');
       return;
     }
     evt.preventDefault();
     evt.stopPropagation();
+    // Without a hover stream there is no preview at all: the outline that says
+    // what is about to be annotated only ever appeared once the tap had
+    // committed it. The tap previews, and `Pin here` commits.
+    if (isTouchInput()) {
+      openElementPicker(el);
+      return;
+    }
+    await commitElementAnnotation(el);
+  }
+
+  async function commitElementAnnotation(el) {
     const res = await awaitComment('Comment for this element?');
     if (!res) return;
-    const { comment, priority, author } = res;
+    const { comment } = res;
     const id = generateId();
     const targetXPath = getXPath(el);
     const targetCss = buildCssSelector(el);
@@ -3183,8 +3354,6 @@
       type: 'element',
       target: { xpath: targetXPath, css: targetCss, tag: el.tagName.toLowerCase() },
       comment: comment.trim(),
-      author: author || state.annotatorName || '',
-      priority: priority || 'medium',
       snippet: el.innerText ? el.innerText.trim().slice(0, 120) : el.tagName,
       pageUrl: window.location.href,
       pageKey: normalizePageKey(window.location.href),
@@ -3198,6 +3367,249 @@
     applyElementHighlight(el, id);
     renderList();
     setMode(null, { keepOutline: true });
+  }
+
+  // ------------------------------------------------------------------
+  // Capture on a coarse pointer
+  // ------------------------------------------------------------------
+
+  // Long enough that dragging a selection handle from one word to the next
+  // does not raise the bar between them, short enough that letting go of the
+  // handle answers straight away.
+  const SELECTION_SETTLE_MS = 400;
+
+  // Both bars are raised clear of the toolbar, which paints above everything
+  // the widget owns and sits in thumb reach at the bottom of a phone.
+  function positionActionBar(bar) {
+    if (!bar || !state.toolbar || !bar.classList.contains('show')) return;
+    const root = document.documentElement;
+    const rect = state.toolbar.getBoundingClientRect();
+    const gap = 8;
+    if (position === 'top') {
+      bar.style.top = `${Math.round(rect.bottom + gap)}px`;
+      bar.style.bottom = 'auto';
+      return;
+    }
+    bar.style.top = 'auto';
+    bar.style.bottom = `${Math.round(root.clientHeight - rect.top + gap)}px`;
+  }
+
+  function positionActionBars() {
+    positionActionBar(state.selectionBar);
+    const picker = state.elementPicker;
+    if (!picker || !picker.bar.classList.contains('show')) return;
+    // A hover outline is redrawn by the next move. A previewed one is pinned,
+    // so a reflow leaves it on the geometry the element used to have -- and a
+    // box in the page's flow that no longer fits the page widens it.
+    syncElementPicker();
+  }
+
+  function isCommentOpen() {
+    const modalState = state.commentModal;
+    return !!(modalState && modalState.backdrop.classList.contains('show'));
+  }
+
+  // The selection the reviewer has settled on, or nothing. A range that runs
+  // into the widget's own chrome, or into a part of the page the host marked
+  // off, is not one.
+  function settledSelectionRange() {
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0 || selection.isCollapsed) return null;
+    const range = selection.getRangeAt(0);
+    if (!range || !range.toString().trim()) return null;
+    if (!isRangeAnnotatable(range)) return null;
+    return range;
+  }
+
+  // `selectionchange` rather than the release. On a phone the first release
+  // comes with one word selected and every handle drag after it is another
+  // one, so committing on a release commits the first word and clears the
+  // selection out from under the reviewer mid-gesture.
+  function handleSelectionChange() {
+    if (!isTouchInput()) return;
+    if (state.selectionTimer) clearTimeout(state.selectionTimer);
+    state.selectionTimer = null;
+    if (state.mode !== 'text' || isCommentOpen()) {
+      hideSelectionBar();
+      return;
+    }
+    state.selectionTimer = setTimeout(reviewSelection, SELECTION_SETTLE_MS);
+  }
+
+  function reviewSelection() {
+    state.selectionTimer = null;
+    if (state.mode !== 'text' || isCommentOpen()) return hideSelectionBar();
+    const range = settledSelectionRange();
+    if (!range) return hideSelectionBar();
+    // Held as a copy: tapping the bar collapses the live selection before the
+    // click lands, and the range is what the annotation is made from.
+    state.selectionRange = range.cloneRange();
+    showSelectionBar();
+  }
+
+  function ensureSelectionBar() {
+    if (state.selectionBar) return state.selectionBar;
+    const bar = document.createElement('div');
+    bar.className = 'wn-annot-actionbar wn-annot-selection-bar wn-annotator';
+    const add = document.createElement('button');
+    add.type = 'button';
+    add.className = 'primary wn-annotator';
+    add.textContent = 'Add note';
+    add.addEventListener('click', (evt) => {
+      evt.preventDefault();
+      evt.stopPropagation();
+      addNoteForSelection();
+    });
+    bar.appendChild(add);
+    document.body.appendChild(bar);
+    state.selectionBar = bar;
+    return bar;
+  }
+
+  function showSelectionBar() {
+    const bar = ensureSelectionBar();
+    // The mode tip is drawn on the same strip of screen, just clear of the
+    // toolbar. The bar is the instruction while it is up.
+    hideTip();
+    bar.classList.add('show');
+    positionActionBar(bar);
+  }
+
+  function hideSelectionBar() {
+    state.selectionRange = null;
+    const bar = state.selectionBar;
+    if (!bar || !bar.classList.contains('show')) return;
+    bar.classList.remove('show');
+    if (state.mode && !state.hidden) showTipForMode(state.mode);
+  }
+
+  async function addNoteForSelection() {
+    const range = state.selectionRange;
+    hideSelectionBar();
+    if (!range) return;
+    // The page can have moved on while the bar stood there.
+    if (!isNodeConnected(range.startContainer) || !isNodeConnected(range.endContainer)) {
+      showToast('That text is no longer on the page.');
+      return;
+    }
+    const snippet = range.toString().trim();
+    if (!snippet) return;
+    await commitTextAnnotation(range, snippet);
+  }
+
+  // What the chip calls the element under the finger. The full selector runs
+  // four levels deep and does not fit a phone; the last step of it is what
+  // tells a reviewer whether they have the paragraph or the card.
+  function describeElement(el) {
+    if (!el || el.nodeType !== 1) return '';
+    const tag = el.tagName.toLowerCase();
+    if (el.id) return `${tag}#${el.id}`;
+    const classes = Array.from(el.classList || []).filter(
+      (name) => name && !name.startsWith('wn-') && !name.startsWith('uxnote-')
+    );
+    if (!classes.length) return tag;
+    return `${tag}.${classes.slice(0, 2).join('.')}`;
+  }
+
+  function ensureElementPicker() {
+    if (state.elementPicker) return state.elementPicker;
+    const bar = document.createElement('div');
+    bar.className = 'wn-annot-actionbar wn-annot-pick-bar wn-annotator';
+    const name = document.createElement('span');
+    name.className = 'wn-annot-pick-name wn-annotator';
+    const make = (label, className, onTap) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = `${className} wn-annotator`;
+      btn.textContent = label;
+      btn.addEventListener('click', (evt) => {
+        evt.preventDefault();
+        evt.stopPropagation();
+        onTap();
+      });
+      return btn;
+    };
+    // Wider and narrower walk the chain the tap started on, which is also the
+    // answer to a fat finger: start anywhere inside the block and climb to it.
+    const wider = make('Wider', 'wn-annot-pick-wider', () => stepElementPicker(1));
+    const narrower = make('Narrower', 'wn-annot-pick-narrower', () => stepElementPicker(-1));
+    const pin = make('Pin here', 'primary wn-annot-pick-pin', pinElementPicker);
+    bar.appendChild(name);
+    bar.appendChild(narrower);
+    bar.appendChild(wider);
+    bar.appendChild(pin);
+    document.body.appendChild(bar);
+    state.elementPicker = { bar, name, wider, narrower, pin };
+    return state.elementPicker;
+  }
+
+  function openElementPicker(el) {
+    state.elementTrail = [el];
+    state.elementTrailIndex = 0;
+    const picker = ensureElementPicker();
+    hideTip();
+    picker.bar.classList.add('show');
+    syncElementPicker();
+  }
+
+  function pickedElement() {
+    return state.elementTrail[state.elementTrailIndex] || null;
+  }
+
+  function nextWiderElement() {
+    const el = pickedElement();
+    if (state.elementTrailIndex < state.elementTrail.length - 1) {
+      return state.elementTrail[state.elementTrailIndex + 1];
+    }
+    if (!el || el === document.body) return null;
+    const parent = el.parentElement;
+    if (!parent || !isAnnotatableTarget(parent)) return null;
+    return parent;
+  }
+
+  function stepElementPicker(direction) {
+    if (direction > 0) {
+      const wider = nextWiderElement();
+      if (!wider) return;
+      if (state.elementTrailIndex === state.elementTrail.length - 1) {
+        state.elementTrail.push(wider);
+      }
+      state.elementTrailIndex += 1;
+    } else {
+      if (state.elementTrailIndex === 0) return;
+      state.elementTrailIndex -= 1;
+    }
+    syncElementPicker();
+  }
+
+  function syncElementPicker() {
+    const picker = state.elementPicker;
+    const el = pickedElement();
+    if (!picker || !el) return;
+    picker.name.textContent = describeElement(el);
+    picker.narrower.disabled = state.elementTrailIndex === 0;
+    picker.wider.disabled = !nextWiderElement();
+    outlineElement(el);
+    positionActionBar(picker.bar);
+  }
+
+  function closeElementPicker() {
+    state.elementTrail = [];
+    state.elementTrailIndex = 0;
+    const picker = state.elementPicker;
+    if (!picker || !picker.bar.classList.contains('show')) return;
+    picker.bar.classList.remove('show');
+    if (state.mode && !state.hidden) showTipForMode(state.mode);
+  }
+
+  async function pinElementPicker() {
+    const el = pickedElement();
+    closeElementPicker();
+    if (!el || !isNodeConnected(el)) {
+      showToast('That element is no longer on the page.');
+      return;
+    }
+    await commitElementAnnotation(el);
   }
 
   function unwrapHighlightSpan(span) {
@@ -3255,6 +3667,9 @@
     const markerEntry = state.markers[id];
     if (markerEntry && markerEntry.el && markerEntry.el.parentNode) {
       markerEntry.el.parentNode.removeChild(markerEntry.el);
+    }
+    if (markerEntry && markerEntry.frame && markerEntry.frame.parentNode) {
+      markerEntry.frame.parentNode.removeChild(markerEntry.frame);
     }
     delete state.markers[id];
     removeElementHighlight(id);
@@ -3693,6 +4108,10 @@
 
   function renderResolvedAnnotation(annotation, resolved) {
     if (!resolved) return;
+    if (resolved.type === 'screenshot') {
+      addMarkerForAnnotation(annotation, null);
+      return;
+    }
     if (resolved.type === 'text' && resolved.range) {
       const span = applyTextHighlight(resolved.range, annotation.id);
       addMarkerForAnnotation(annotation, span);
@@ -3720,7 +4139,11 @@
   }
 
   function resolveTarget(annotation) {
-    if (!annotation || !annotation.target) return null;
+    if (!annotation) return null;
+    if (annotation.type === 'screenshot') {
+      return annotation.rect ? { type: 'screenshot' } : null;
+    }
+    if (!annotation.target) return null;
     if (annotation.type === 'text') {
       return resolveTextTarget(annotation);
     }
@@ -3912,6 +4335,7 @@
     applyMarkerPalette(marker, palette);
     marker.addEventListener('click', () => focusAnnotation(annotation.id));
     const rect = getViewportRect(annotation, targetNode);
+    const frame = syncShotFrame(annotation, rect);
     const host = getMarkerHost(rect && rect.anchor ? rect.anchor : targetNode);
     if (marker.parentNode !== host) {
       host.appendChild(marker);
@@ -3919,12 +4343,36 @@
     marker.style.zIndex = isGlobalMarkerHost(host) ? '' : '9999';
     if (!rect) {
       marker.style.display = 'none';
-      state.markers[annotation.id] = { el: marker, rect: null };
+      state.markers[annotation.id] = { el: marker, rect: null, frame };
       return;
     }
     marker.style.display = '';
     positionMarker(marker, rect, annotation);
-    state.markers[annotation.id] = { el: marker, rect };
+    state.markers[annotation.id] = { el: marker, rect, frame };
+  }
+
+  // A region has no node to anchor on, so the frame is what shows on the page
+  // where the picture was taken. It lives in the marker layer, which the
+  // visibility toggle takes off the page and a capture leaves out of its copy.
+  function syncShotFrame(annotation, rect) {
+    const entry = state.markers[annotation.id];
+    let frame = entry ? entry.frame : null;
+    if (annotation.type !== 'screenshot' || !rect) {
+      if (frame && frame.parentNode) frame.parentNode.removeChild(frame);
+      return null;
+    }
+    if (!frame) {
+      frame = document.createElement('div');
+      frame.className = 'wn-annot-shot-frame wn-annotator';
+    }
+    const host = state.markerLayer || document.body;
+    if (frame.parentNode !== host) host.appendChild(frame);
+    frame.style.setProperty('--wn-shot-frame', getAnnotationColors(annotation).base);
+    frame.style.left = `${rect.x}px`;
+    frame.style.top = `${rect.y}px`;
+    frame.style.width = `${rect.w}px`;
+    frame.style.height = `${rect.h}px`;
+    return frame;
   }
 
   function getViewportRect(annotation, targetNode) {
@@ -3946,6 +4394,11 @@
       if (!r) return null;
       return { x: r.x, y: r.y, w: r.width, h: r.height, anchor: el };
     }
+    if (annotation.type === 'screenshot') {
+      const r = annotation.rect;
+      if (!r) return null;
+      return { x: r.x - window.scrollX, y: r.y - window.scrollY, w: r.w, h: r.h, anchor: null };
+    }
     return null;
   }
 
@@ -3957,7 +4410,17 @@
     const parentDocY = parentRect.y + window.scrollY;
     const targetDocX = rect.x + window.scrollX;
     const targetDocY = rect.y + window.scrollY;
-    marker.style.left = `${targetDocX - parentDocX + rect.w + offset.x + 4}px`;
+    const left = targetDocX - parentDocX + rect.w + offset.x + 4;
+    // The marker is centred on `left`, so it parks half its width past the
+    // right edge of its target. On a block that runs the full width of the
+    // screen that half hangs outside the document, which widens the document
+    // -- and a wider document moves every fixed element on the page, the
+    // toolbar included. It is a touch-sized marker that makes this bite.
+    const bound = isGlobalMarkerHost(offsetParent)
+      ? document.documentElement.clientWidth
+      : offsetParent.clientWidth;
+    const half = (marker.offsetWidth || 25) / 2;
+    marker.style.left = `${bound ? Math.min(left, bound - half - 2) : left}px`;
     marker.style.top = `${targetDocY - parentDocY + offset.y - 4}px`;
   }
 
@@ -3984,12 +4447,8 @@
     Object.entries(state.markers).forEach(([id, entry]) => {
       const ann = state.annotations.find((a) => a.id === id);
       if (!ann) return;
-      if (ann.status === 'missing') {
-        entry.el.style.display = 'none';
-        entry.rect = null;
-        return;
-      }
-      const rect = getViewportRect(ann);
+      const rect = ann.status === 'missing' ? null : getViewportRect(ann);
+      entry.frame = syncShotFrame(ann, rect);
       if (!rect) {
         entry.el.style.display = 'none';
         entry.rect = null;
@@ -4009,11 +4468,7 @@
 
   function ensurePanelVisible() {
     if (!state.panel) return;
-    const isHidden = state.panel.style.display === 'none';
-    if (isHidden) {
-      state.panel.style.display = '';
-      updateToggleActive();
-    }
+    if (state.panel.style.display === 'none') setPanelOpen(true);
   }
 
   function focusListItem(id) {
@@ -4041,7 +4496,7 @@
         renderResolvedAnnotation(ann, resolved);
         renderList();
       } else {
-        showToast('Annotation introuvable sur cette page.');
+        showToast('This annotation is not on this page.');
         return;
       }
     }
@@ -4084,14 +4539,21 @@
         el.scrollIntoView({ behavior: 'smooth', block: 'center' });
         flash(el, getAnnotationColors(ann).base);
       }
+    } else if (ann.type === 'screenshot' && ann.rect) {
+      window.scrollTo({
+        top: Math.max(0, ann.rect.y + ann.rect.h / 2 - window.innerHeight / 2),
+        behavior: 'smooth'
+      });
+      const entry = state.markers[ann.id];
+      if (entry && entry.frame) flash(entry.frame, getAnnotationColors(ann).base);
     }
   }
 
   function flash(el, accentColor) {
     el.style.transition = 'box-shadow 0.2s ease';
     const prev = el.style.boxShadow;
-    const accent = accentColor || (state.colors?.element?.base || '#4e9cf6');
-    const flashColor = rgbaFromHex(accent, 0.6, 'rgba(78,156,246,0.6)');
+    const accent = accentColor || (state.colors?.element?.base || '#8b5cf6');
+    const flashColor = rgbaFromHex(accent, 0.6, 'rgba(139,92,246,0.6)');
     el.style.boxShadow = `0 0 0 3px ${flashColor}`;
     setTimeout(() => {
       el.style.boxShadow = prev;
@@ -4105,10 +4567,10 @@
       footer = document.createElement('div');
       footer.className = 'wn-annot-footer wn-annotator';
       const link = document.createElement('a');
-      link.href = 'https://uxnote.ninefortyone.studio';
+      link.href = 'https://github.com/Qu4tro/uxnote-fork';
       link.target = '_blank';
       link.rel = 'noreferrer noopener';
-      link.textContent = '© UxNote – by NineFortyOne.Studio';
+      link.textContent = 'uxnote-fork on GitHub';
       footer.appendChild(link);
       state.panel.appendChild(footer);
     }
@@ -4121,7 +4583,6 @@
     const list = state.panel.querySelector('.wn-annot-list');
       const title = state.panel.querySelector('h3');
       list.innerHTML = '';
-      updateAuthorFilterOptions();
       if (!state.annotations.length) {
         const empty = document.createElement('div');
         empty.className = 'wn-annot-empty';
@@ -4135,14 +4596,9 @@
       .slice()
       .sort((a, b) => a.createdAt - b.createdAt)
       .filter((ann) => {
-    const prioOk = state.filters.priority === 'all' || (ann.priority || 'medium') === state.filters.priority;
         const q = state.filters.query;
-        const haystack = `${ann.comment || ''} ${ann.snippet || ''} ${ann.author || ''}`.toLowerCase();
-        const searchOk = !q || haystack.includes(q);
-        const authorFilter = state.filters.author || 'all';
-        const authorValue = (ann.author || '').trim() || '__unknown';
-        const authorOk = authorFilter === 'all' || authorValue === authorFilter;
-    return prioOk && searchOk && authorOk;
+        const haystack = `${ann.comment || ''} ${ann.snippet || ''}`.toLowerCase();
+        return !q || haystack.includes(q);
   });
     if (title) title.textContent = `Annotations (${filtered.length})`;
     filtered.forEach((ann, idx) => {
@@ -4151,9 +4607,6 @@
       item.dataset.id = ann.id;
       applyItemAccent(item, getAnnotationColors(ann));
 
-      const priority = ann.priority || 'medium';
-      const priorityLabel = priority === 'high' ? 'High' : priority === 'low' ? 'Low' : 'Medium';
-
       const top = document.createElement('div');
       top.className = 'wn-annot-card-top';
       const topLeft = document.createElement('div');
@@ -4161,19 +4614,13 @@
       const number = document.createElement('div');
       number.className = 'wn-annot-number';
       number.textContent = `#${idx + 1}`;
-      const prioChip = document.createElement('div');
-      prioChip.className = `wn-annot-priority ${priority}`;
-      prioChip.innerHTML = `<span class="dot"></span><span>${priorityLabel}</span>`;
       topLeft.appendChild(number);
-      topLeft.appendChild(prioChip);
       if (ann.status === 'missing') {
         const missing = document.createElement('div');
         missing.className = 'wn-annot-missing';
         missing.textContent = 'Missing';
         topLeft.appendChild(missing);
       }
-      const metaWrap = document.createElement('div');
-      metaWrap.className = 'wn-annot-meta-bottom';
       const topRight = document.createElement('div');
       topRight.className = 'wn-annot-card-top-right';
 
@@ -4207,8 +4654,6 @@
 
       const meta = document.createElement('div');
       meta.className = 'wn-annot-meta';
-      const authorName = (ann.author || '').trim();
-      const authorLabel = (authorName || 'Unknown reviewer').toUpperCase();
       const createdAt = new Date(ann.createdAt);
       const createdAtDate = createdAt.toLocaleDateString(undefined, {
         year: 'numeric',
@@ -4219,8 +4664,8 @@
         hour: '2-digit',
         minute: '2-digit'
       });
-      meta.textContent = `${authorLabel} • ${createdAtDate} • ${createdAtTime}`;
-      metaWrap.appendChild(meta);
+      meta.textContent = `${createdAtDate} • ${createdAtTime}`;
+      topLeft.appendChild(meta);
 
       const showMore = document.createElement('button');
       showMore.type = 'button';
@@ -4237,14 +4682,25 @@
 
       item.appendChild(top);
       item.appendChild(comment);
+      const shotSrc = screenshotSrc(ann);
+      if (shotSrc) {
+        const shotWrap = document.createElement('div');
+        shotWrap.className = 'wn-annot-shot';
+        const shotImg = document.createElement('img');
+        shotImg.src = shotSrc;
+        shotImg.alt = 'The screenshot of this annotation';
+        shotImg.addEventListener('click', (evt) => {
+          evt.stopPropagation();
+          openScreenshotLightbox(shotSrc);
+        });
+        shotWrap.appendChild(shotImg);
+        item.appendChild(shotWrap);
+      }
       item.appendChild(showMore);
-      item.appendChild(metaWrap);
       item.addEventListener('click', () => {
         focusAnnotation(ann.id, true, ann.pageUrl, ann.pageKey);
-        if (isMobileLayout() && state.panel) {
-          state.panel.style.display = 'none';
-          updateToggleActive();
-        }
+        // The sheet covers the page it is pointing at, so it steps aside.
+        if (isCompactLayout()) setPanelOpen(false);
       });
       list.appendChild(item);
     });
@@ -4266,13 +4722,10 @@
   async function editAnnotation(id) {
     const ann = state.annotations.find((a) => a.id === id);
     if (!ann) return;
-    const res = await askForComment('Edit this annotation', ann.comment || '', ann.priority || 'medium', ann.author || state.annotatorName || '');
+    const res = await askForComment('Edit this annotation', ann.comment || '');
     if (!res) return;
-    const { comment, priority, author } = res;
+    const { comment } = res;
     ann.comment = comment.trim();
-    ann.priority = priority || 'medium';
-    ann.author = author || ann.author || state.annotatorName || '';
-    recordAnnotatorName(ann.author);
     saveAnnotations();
     renderList();
   }
@@ -4282,7 +4735,10 @@
     const confirmDelete = await confirmDialog('Delete all annotations?', 'Delete');
     if (!confirmDelete) return;
     state.annotations = [];
-    saveAnnotations();
+    // The snapshot keeps every id until the server takes the delete, so a
+    // reload before it does still owes the server the same request.
+    persistAnnotations();
+    if (server) remoteDeleteAll();
     clearRenderedAnnotations();
     renderList();
     renumberMarkers();
@@ -4300,24 +4756,25 @@
     URL.revokeObjectURL(url);
   }
 
-  function exportAnnotationsFiltered(filters) {
-    const reviewers = new Set((filters && filters.reviewers) || []);
-    const priorities = new Set((filters && filters.priorities) || []);
-    const filtered = state.annotations.filter((ann) => {
-      const reviewerValue = (ann.author || '').trim() || '__unknown';
-      const priorityValue = ann.priority || 'medium';
-      const reviewerOk = !reviewers.size || reviewers.has(reviewerValue);
-      const priorityOk = !priorities.size || priorities.has(priorityValue);
-      return reviewerOk && priorityOk;
-    });
-    const payload = buildAnnotationsPayload(filtered);
-    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = buildFilename();
-    a.click();
-    URL.revokeObjectURL(url);
+  // The share sheet is how a phone hands a file to another application. Where
+  // there is none -- or where it refuses files, or fails -- this is the same
+  // download anchor the desktop has always used.
+  async function shareAnnotations() {
+    const name = buildFilename();
+    const data = JSON.stringify(buildAnnotationsPayload(), null, 2);
+    if (navigator.share && navigator.canShare && typeof File === 'function') {
+      const file = new File([data], name, { type: 'application/json' });
+      try {
+        if (navigator.canShare({ files: [file] })) {
+          await navigator.share({ files: [file], title: name });
+          return;
+        }
+      } catch (err) {
+        // A dismissed share sheet is an answer, not a failure.
+        if (err && err.name === 'AbortError') return;
+      }
+    }
+    exportAnnotations();
   }
 
   function buildAnnotationsPayload(annotations = state.annotations) {
@@ -4326,19 +4783,6 @@
       createdAt: Date.now(),
       annotations
     };
-  }
-
-  function emailAnnotationsFiltered(filters) {
-    const reviewers = new Set((filters && filters.reviewers) || []);
-    const priorities = new Set((filters && filters.priorities) || []);
-    const filtered = state.annotations.filter((ann) => {
-      const reviewerValue = (ann.author || '').trim() || '__unknown';
-      const priorityValue = ann.priority || 'medium';
-      const reviewerOk = !reviewers.size || reviewers.has(reviewerValue);
-      const priorityOk = !priorities.size || priorities.has(priorityValue);
-      return reviewerOk && priorityOk;
-    });
-    sendAnnotationsByMail(filtered);
   }
 
   async function emailAnnotations() {
@@ -4356,8 +4800,19 @@
     window.location.href = `mailto:${toPart}${sep}subject=${subject}&body=${body}`;
   }
 
+  // A uuid, because two browsers that both write while the server is away
+  // settle their sets against each other when it comes back, and an id drawn
+  // from six characters of Math.random collides often enough over a review to
+  // merge one reviewer's note onto another's. crypto.randomUUID wants a secure
+  // context, which an http review host is not, so the same 122 bits come from
+  // getRandomValues there.
   function generateId() {
-    return 'wn-' + Math.random().toString(36).slice(2, 8) + Date.now().toString(36);
+    if (typeof crypto.randomUUID === 'function') return crypto.randomUUID();
+    const bytes = crypto.getRandomValues(new Uint8Array(16));
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
   }
 
   function generateImportFileId() {
@@ -4365,7 +4820,7 @@
   }
 
   function buildFilename() {
-    // Construit un nom de fichier lisible : titre/host + date + heure (sans secondes)
+    // Builds a readable filename: title or host, then the date and the time without seconds
     const now = new Date();
     const pad = (n) => String(n).padStart(2, '0');
     const date = `${pad(now.getDate())}-${pad(now.getMonth() + 1)}-${now.getFullYear()}`;
@@ -4395,17 +4850,15 @@
   `;
   function iconWordmark() {
     return `
-      <svg class="wn-annot-logo-img" viewBox="0 0 69 20" role="img" aria-label="Uxnote logo">
-        <path d="M15.5141351,15.6336045 C15.0749867,15.7571123 13.3484743,16.0588732 13.7282884,18.0055773 C13.9814979,19.3033801 15.5809176,19.5099042 18.5265475,18.6251498 C24.7057419,17.0554179 32.6579091,16.101702 42.3830492,15.7640022 C56.9707594,15.2574524 60.5270025,16.163136 67.0775991,16.9762338 C68.0521554,17.1558296 69.5219587,16.163136 68.0521554,15.0188646 C63.2928783,12.8874893 28.8776434,11.9999303 15.5141351,15.6336045 Z" fill="#9E81FF"></path>
-        <g transform="translate(-5, -4)">
-          <path d="M11.1386719,19.2441406 C14.8007813,19.2441406 17.203125,17.1640625 17.203125,14 L17.203125,6.55859375 C17.203125,5.3671875 16.5488281,4.69335938 15.40625,4.69335938 C14.2734375,4.69335938 13.6191406,5.3671875 13.6191406,6.55859375 L13.6191406,13.6191406 C13.6191406,15.2597656 12.7304688,16.2363281 11.1386719,16.2363281 C9.53710938,16.2363281 8.6484375,15.2597656 8.6484375,13.6191406 L8.6484375,6.55859375 C8.6484375,5.3671875 7.99414062,4.69335938 6.86132812,4.69335938 C5.72851562,4.69335938 5.06445312,5.3671875 5.06445312,6.55859375 L5.06445312,14 C5.06445312,17.1640625 7.46679688,19.2441406 11.1386719,19.2441406 Z" fill="#000000" fill-rule="nonzero"></path>
-          <path d="M18.8613631,11.140625 C19.2434527,11.140625 19.4404676,11.0348981 19.7628556,10.5961316 L20.8494228,9.12124174 L20.8912139,9.12124174 L22.0195721,10.6384224 C22.2703183,10.9767483 22.455393,11.140625 22.8852437,11.140625 C23.458378,11.140625 23.8941989,10.8287307 23.8941989,10.3106691 C23.8941989,10.0992153 23.816587,9.91947963 23.655393,9.72917126 L22.3061392,8.11683645 L23.6076318,6.61022852 C23.8344974,6.35648403 23.9121094,6.171462 23.9121094,5.93357654 C23.9121094,5.45251927 23.5240497,5.140625 22.9330049,5.140625 C22.5330049,5.140625 22.3061392,5.29392896 22.0136019,5.71155011 L21.016587,7.10185848 L20.9747959,7.10185848 L19.9598706,5.70626377 C19.6613631,5.28335628 19.4344974,5.140625 18.9867362,5.140625 C18.4136019,5.140625 17.9837512,5.48952368 17.9837512,5.9652946 C17.9837512,6.18732104 18.055393,6.37234306 18.2106168,6.55207874 L19.5598706,8.1591272 L18.216587,9.72388491 C17.9956915,9.97762941 17.9121094,10.1520787 17.9121094,10.3846779 C17.9121094,10.8340171 18.3061392,11.140625 18.8613631,11.140625 Z" fill="#9E81FF" fill-rule="nonzero"></path>
-          <path d="M28.203125,19.2148438 C29.2675781,19.2148438 29.9023437,18.5800781 29.9023437,17.4375 L29.9023437,10.7285156 L29.9804688,10.7285156 L35.4101562,18.21875 C35.9277344,18.9316406 36.40625,19.2148438 37.1289063,19.2148438 C38.2128906,19.2148438 38.8183594,18.6191406 38.8183594,17.5351563 L38.8183594,6.47070313 C38.8183594,5.328125 38.1933594,4.69335938 37.1191406,4.69335938 C36.0546875,4.69335938 35.4199219,5.328125 35.4199219,6.47070313 L35.4199219,13.1015625 L35.3417969,13.1015625 L29.9511719,5.68945313 C29.4140625,4.98632812 28.9257812,4.69335938 28.2421875,4.69335938 C27.1289062,4.69335938 26.5039062,5.2890625 26.5039062,6.39257812 L26.5039062,17.4375 C26.5039062,18.5800781 27.1289062,19.2148438 28.203125,19.2148438 Z" fill="#000000" fill-rule="nonzero"></path>
-          <path d="M45.8300781,19.2539062 C49.1796875,19.2539062 51.2695312,17.2324219 51.2695312,13.6777344 C51.2695312,10.1914062 49.1503906,8.11132812 45.8300781,8.11132812 C42.5292969,8.11132812 40.390625,10.2011719 40.390625,13.6777344 C40.390625,17.2226562 42.4804688,19.2539062 45.8300781,19.2539062 Z M45.8300781,16.7148438 C44.6386719,16.7148438 43.90625,15.6308594 43.90625,13.6875 C43.90625,11.7734375 44.6582031,10.6503906 45.8300781,10.6503906 C47.0117188,10.6503906 47.7636719,11.7734375 47.7636719,13.6875 C47.7636719,15.6308594 47.0117188,16.7148438 45.8300781,16.7148438 Z" fill="#000000" fill-rule="nonzero"></path>
-          <path d="M53.4765625,16.1484375 C53.4765625,18.1210938 54.5214844,19.1367188 56.5722656,19.1367188 L56.6601562,19.1367188 C57.9980469,19.1367188 59.0917969,18.6289062 59.0917969,17.6230469 C59.0917969,16.8222656 58.6425781,16.4804688 57.8710938,16.3925781 L57.65625,16.3632813 C57.1679688,16.3144531 56.9433594,16.0507812 56.9433594,15.3867188 L56.9433594,10.9238281 L57.7832031,10.9238281 C58.5546875,10.9238281 59.0625,10.4160156 59.0625,9.64453125 C59.0625,8.87304688 58.5546875,8.36523437 57.7832031,8.36523437 L56.9433594,8.36523437 L56.9433594,7.515625 C56.9433594,6.39257812 56.3085938,5.71875 55.2148438,5.71875 C54.1113281,5.71875 53.4765625,6.39257812 53.4765625,7.515625 L53.4765625,8.36523437 L53.0957031,8.36523437 C52.3242188,8.36523437 51.8164062,8.86328125 51.8164062,9.64453125 C51.8164062,10.4160156 52.3242188,10.9238281 53.0957031,10.9238281 L53.4765625,10.9238281 L53.4765625,16.1484375 Z" fill="#000000" fill-rule="nonzero"></path>
-          <path d="M65.3222656,19.2539062 C67.4414062,19.2539062 69.1601562,18.5019531 69.8632812,17.2519531 C70.0195312,16.9980469 70.0976562,16.734375 70.0976562,16.4707031 C70.0976562,15.7089844 69.5019531,15.2597656 68.7988281,15.2597656 C68.3691406,15.2597656 68.0859375,15.3769531 67.7246094,15.71875 C66.953125,16.5 66.2988281,16.8027344 65.3515625,16.8027344 C64.1015625,16.8027344 63.2519531,15.9238281 63.2519531,14.6347656 L63.2519531,14.4394531 L69.0332031,14.4394531 C69.9316406,14.4394531 70.4296875,13.9511719 70.4296875,13.0722656 C70.4296875,10.2011719 68.3496094,8.11132812 65.1855469,8.11132812 C61.9433594,8.11132812 59.8925781,10.2890625 59.8925781,13.7363281 C59.8925781,17.1933594 61.9140625,19.2539062 65.3222656,19.2539062 Z M63.3007812,12.4667969 C63.3886719,11.3535156 64.1796875,10.5722656 65.2539062,10.5722656 C66.3378906,10.5722656 67.109375,11.3144531 67.1679688,12.4667969 L63.3007812,12.4667969 Z" fill="#000000" fill-rule="nonzero"></path>
+      <svg class="wn-annot-logo-img" viewBox="204 54 1652 250" role="img" aria-label="uxnote-fork logo">
+        <path fill="currentColor" d="M264.64 263.94Q248.05 263.94 237.28 257.82Q226.51 251.7 221.26 239.37Q216 227.05 216 208.4V153.58Q216 142.06 222.01 136.1Q228.02 130.14 239.18 130.14Q250.34 130.14 256.39 136.1Q262.45 142.06 262.45 153.58V209.59Q262.45 218.99 266.35 223.68Q270.24 228.37 278.58 228.37Q287.96 228.37 293.98 221.53Q300 214.7 300 203.66V153.58Q300 142.06 306.01 136.1Q312.02 130.14 323.18 130.14Q334.34 130.14 340.39 136.1Q346.45 142.06 346.45 153.58V239.89Q346.45 263.42 323.87 263.42Q312.97 263.42 307.04 257.37Q301.12 251.31 301.12 239.89V224.72L305.27 237.55Q299.46 250.31 289.2 257.12Q278.94 263.94 264.64 263.94ZM360.11 263.14Q351.53 263.14 346.33 258.38Q341.13 253.61 341 246.31Q340.87 239.01 346.97 231.44L385.58 184.58V205.14L350.08 161.84Q343.89 154.1 344.07 146.88Q344.24 139.66 349.44 134.9Q354.64 130.14 363.22 130.14Q371.72 130.14 377.1 132.89Q382.47 135.65 387.2 141.92L411.52 173.44H395.37L419.78 141.92Q424.6 135.65 430.1 132.89Q435.59 130.14 443.67 130.14Q452.5 130.14 457.57 134.95Q462.64 139.76 462.86 146.97Q463.07 154.19 456.71 161.93L421.13 205.21V184.43L460.08 231.44Q466.44 238.92 466.18 246.22Q465.92 253.52 460.63 258.33Q455.35 263.14 446.52 263.14Q438.44 263.14 433.03 260.38Q427.61 257.63 422.63 251.36L395.37 216.73H411.33L384 251.36Q379.1 257.37 373.86 260.25Q368.61 263.14 360.11 263.14ZM501.18 263.42Q490.02 263.42 484.01 257.37Q478 251.31 478 239.89V153.58Q478 142.15 483.92 136.15Q489.85 130.14 500.75 130.14Q511.65 130.14 517.49 136.15Q523.33 142.15 523.33 153.58V165.66L520.46 154.97Q526.7 142.8 538.34 136.21Q549.97 129.62 564.7 129.62Q580.1 129.62 590.02 135.61Q599.93 141.6 604.89 153.88Q609.85 166.16 609.85 185.07V239.89Q609.85 251.31 603.84 257.37Q597.83 263.42 586.67 263.42Q575.51 263.42 569.45 257.37Q563.4 251.31 563.4 239.89V186.97Q563.4 175.26 559.37 170.22Q555.34 165.19 547.43 165.19Q537.08 165.19 530.77 171.86Q524.45 178.53 524.45 189.74V239.89Q524.45 263.42 501.18 263.42ZM679.9 263.94Q658.57 263.94 642.63 255.85Q626.68 247.76 617.84 232.59Q609 217.42 609 196.73Q609 181.17 613.98 168.78Q618.97 156.4 628.33 147.57Q637.69 138.75 650.78 134.18Q663.86 129.62 679.9 129.62Q701.4 129.62 717.27 137.71Q733.13 145.8 741.97 160.84Q750.81 175.88 750.81 196.73Q750.81 212.3 745.83 224.73Q740.84 237.16 731.48 245.98Q722.12 254.81 709.03 259.38Q695.95 263.94 679.9 263.94ZM679.9 229.65Q687.06 229.65 692.45 226.21Q697.84 222.76 700.97 215.49Q704.1 208.23 704.1 196.73Q704.1 179.36 697.31 171.63Q690.52 163.91 679.9 163.91Q672.92 163.91 667.44 167.31Q661.97 170.71 658.84 177.89Q655.71 185.07 655.71 196.73Q655.71 214.02 662.5 221.83Q669.29 229.65 679.9 229.65ZM825.91 263.94Q806.45 263.94 793.68 257.87Q780.91 251.79 774.68 239.7Q768.45 227.61 768.45 209.34V166.75H759.71Q751.28 166.75 746.64 162.33Q742 157.9 742 149.66Q742 141.32 746.64 136.94Q751.28 132.56 759.71 132.56H768.45V116.31Q768.45 104.89 774.51 98.88Q780.56 92.87 791.72 92.87Q802.88 92.87 808.89 98.88Q814.9 104.89 814.9 116.31V132.56H836.23Q844.83 132.56 849.39 136.94Q853.94 141.32 853.94 149.66Q853.94 157.9 849.39 162.33Q844.83 166.75 836.23 166.75H814.9V207.85Q814.9 217.37 819.46 221.97Q824.03 226.57 833.96 226.57Q837.56 226.57 840.96 225.78Q844.35 225 847.29 224.91Q851.42 224.65 854.09 227.45Q856.76 230.25 856.76 239.87Q856.76 247.58 854.4 252.96Q852.04 258.34 845.94 260.74Q842.21 262.12 835.98 263.03Q829.75 263.94 825.91 263.94ZM912.94 263.94Q889.44 263.94 872.37 255.69Q855.3 247.43 846.15 232.31Q837 217.18 837 196.66Q837 176.83 845.72 161.79Q854.44 146.74 869.76 138.18Q885.07 129.62 904.6 129.62Q919 129.62 930.67 134.3Q942.33 138.99 950.69 147.67Q959.06 156.36 963.44 168.65Q967.81 180.94 967.81 196.14Q967.81 201.34 964.89 203.82Q961.96 206.3 955.79 206.3H875.85V184.34H933.69L929.68 187.59Q929.68 178.09 926.99 172Q924.3 165.91 919.23 162.85Q914.16 159.8 906.74 159.8Q898.61 159.8 892.66 163.55Q886.71 167.31 883.59 174.65Q880.46 182 880.46 192.96V195.12Q880.46 213.68 888.67 221.67Q896.88 229.65 914.12 229.65Q919.91 229.65 927.39 228.29Q934.87 226.93 941.61 224.25Q948.42 221.62 953.43 223.26Q958.44 224.9 961.17 228.93Q963.89 232.95 964.17 238.16Q964.44 243.36 961.73 248.1Q959.02 252.85 952.99 255.55Q944.03 259.8 933.74 261.87Q923.45 263.94 912.94 263.94Z"/>
+        <g fill="none" stroke="var(--wn-accent)" stroke-width="34" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M1008 179.34H1116C1188 179.34 1188 98.34 1260 98.34H1296"/>
+          <path d="M1116 179.34C1188 179.34 1188 260.34 1260 260.34H1296"/>
         </g>
-        <path d="M15.5141351,15.6336045 C15.0749867,15.7571123 13.3484743,16.0588732 13.7282884,18.0055773 C13.9814979,19.3033801 15.5809176,19.5099042 18.5265475,18.6251498 C24.7057419,17.0554179 32.6579091,16.101702 42.3830492,15.7640022 C56.9707594,15.2574524 60.5270025,16.163136 67.0775991,16.9762338 C68.0521554,17.1558296 69.5219587,16.163136 68.0521554,15.0188646 C63.2928783,12.8874893 28.8776434,11.9999303 15.5141351,15.6336045 Z" fill-opacity="0.3" fill="#9E81FF"></path>
+        <circle fill="var(--wn-accent)" cx="1328" cy="98.34" r="32"/>
+        <circle fill="var(--wn-accent)" cx="1328" cy="260.34" r="32"/>
+        <path fill="var(--wn-accent)" transform="translate(340 0)" d="M1101.49 263.42Q1090.33 263.42 1084.27 257.37Q1078.22 251.31 1078.22 239.89V166.75H1071.55Q1063.12 166.75 1058.56 162.33Q1054 157.9 1054 149.66Q1054 141.32 1058.56 136.94Q1063.12 132.56 1071.55 132.56H1091.78L1078.22 144.84V137.46Q1078.22 108.59 1092.7 94.15Q1107.19 79.71 1135.93 76.69L1143.64 75.91Q1151.86 75.05 1156.82 78.02Q1161.78 80.99 1163.58 85.85Q1165.37 90.7 1164.51 95.86Q1163.64 101.01 1160.49 104.66Q1157.35 108.32 1152.27 108.75L1148.61 109.01Q1135.24 110.05 1129.95 114.74Q1124.67 119.44 1124.67 128.75V137.23L1119.16 132.56H1139.69Q1148.28 132.56 1152.76 136.94Q1157.23 141.32 1157.23 149.66Q1157.23 157.9 1152.76 162.33Q1148.28 166.75 1139.69 166.75H1124.67V239.89Q1124.67 263.42 1101.49 263.42ZM1209.9 263.94Q1188.57 263.94 1172.63 255.85Q1156.68 247.76 1147.84 232.59Q1139 217.42 1139 196.73Q1139 181.17 1143.98 168.78Q1148.97 156.4 1158.33 147.57Q1167.69 138.75 1180.78 134.18Q1193.86 129.62 1209.9 129.62Q1231.4 129.62 1247.27 137.71Q1263.13 145.8 1271.97 160.84Q1280.81 175.88 1280.81 196.73Q1280.81 212.3 1275.83 224.73Q1270.84 237.16 1261.48 245.98Q1252.12 254.81 1239.03 259.38Q1225.95 263.94 1209.9 263.94ZM1209.9 229.65Q1217.06 229.65 1222.45 226.21Q1227.84 222.76 1230.97 215.49Q1234.1 208.23 1234.1 196.73Q1234.1 179.36 1227.31 171.63Q1220.52 163.91 1209.9 163.91Q1202.92 163.91 1197.44 167.31Q1191.97 170.71 1188.84 177.89Q1185.71 185.07 1185.71 196.73Q1185.71 214.02 1192.5 221.83Q1199.29 229.65 1209.9 229.65ZM1313.87 263.42Q1302.28 263.42 1296.14 257.37Q1290 251.31 1290 239.89V153.58Q1290 142.15 1295.92 136.15Q1301.85 130.14 1312.75 130.14Q1323.65 130.14 1329.49 136.15Q1335.33 142.15 1335.33 153.58V164.18H1332.72Q1335.21 148.53 1346.08 139.35Q1356.94 130.18 1373.19 129.62Q1380.67 129.43 1384.43 133.52Q1388.19 137.62 1388.38 148.4Q1388.57 157.93 1384.63 163.39Q1380.69 168.85 1369.81 169.96L1363.74 170.49Q1349.99 171.72 1343.65 178.11Q1337.31 184.49 1337.31 197.03V239.89Q1337.31 251.31 1331.3 257.37Q1325.29 263.42 1313.87 263.42ZM1396.18 263.42Q1385.02 263.42 1379.01 257.37Q1373 251.31 1373 239.89V98.04Q1373 86.62 1379.01 80.61Q1385.02 74.6 1396.18 74.6Q1407.34 74.6 1413.39 80.61Q1419.45 86.62 1419.45 98.04V184.17H1419.97L1452.03 145.6Q1458.42 137.71 1464.08 133.92Q1469.75 130.14 1479.36 130.14Q1488.98 130.14 1494.17 134.91Q1499.36 139.68 1499.61 146.72Q1499.86 153.77 1494 160.89L1459.59 201.57V185.34L1498.1 233.93Q1503.8 241.22 1502.82 248.06Q1501.85 254.9 1496.18 259.16Q1490.52 263.42 1481.85 263.42Q1471.38 263.42 1465.16 259.63Q1458.93 255.85 1452.71 247.61L1419.97 207.44H1419.45V239.89Q1419.45 263.42 1396.18 263.42Z"/>
       </svg>
     `;
   }
@@ -4447,6 +4900,12 @@
       <path d="M3 7l9 6l9 -6" />
     `);
   }
+  function iconCamera() {
+    return iconSvg(`
+      <path d="M4 9a2 2 0 0 1 2 -2h1.4l1.6 -2h6l1.6 2h1.4a2 2 0 0 1 2 2v8a2 2 0 0 1 -2 2h-12a2 2 0 0 1 -2 -2v-8" />
+      <circle cx="12" cy="13" r="3.2" />
+    `);
+  }
   function iconEdit() {
     return iconPen();
   }
@@ -4463,6 +4922,12 @@
         />
       </svg>
     `;
+  }
+  function iconClose() {
+    return iconSvg(`
+      <path d="M6 6l12 12" />
+      <path d="M18 6l-12 12" />
+    `);
   }
   function iconPanel() {
     return iconSvg(`
@@ -4564,12 +5029,777 @@
     }
   }
 
+  // ------------------------------------------------------------------
+  // Server sync
+  // ------------------------------------------------------------------
+
+  // The set that the server last agreed to. Each change is diffed against it
+  // and travels as one request per annotation, so a note that another reviewer
+  // changed survives a change made here to a different note. PROTOCOL.md holds
+  // the contract.
+  let syncedSnapshot = new Map();
+  let syncQueue = Promise.resolve();
+  let syncWarned = false;
+  let storageWarned = false;
+
+  // How often the server is asked whether it is there, and how the asking
+  // slows down while it is not. A server that comes back has nothing to say
+  // to a browser that never asks again, and a reviewer who is reading rather
+  // than writing gives it no other reason to.
+  const HEALTH_INTERVAL = 300000;
+  const HEALTH_BACKOFF_MIN = 10000;
+  const HEALTH_BACKOFF_MAX = HEALTH_INTERVAL;
+  let healthTimer = null;
+  let healthBackoff = HEALTH_BACKOFF_MIN;
+  // Emptied when a server answers 404 to /health, which a server written
+  // against version 1 of the protocol does, and the probe falls back to the
+  // read that has always been in it.
+  let healthPath = '/health';
+
+  // One line per state, because a single line covering three of them tells a
+  // reviewer nothing about the one they are looking at.
+  const SYNC_STATUS_TIPS = {
+    pending: 'Checking the server',
+    ok: 'Server connected',
+    refused: 'Server refused it: check the address or the key',
+    unreachable: 'Server unreachable: notes are held here until it answers'
+  };
+
+  function applySyncStatus() {
+    const dot = state.syncDot;
+    if (!dot) return;
+    const status = state.syncStatus || 'pending';
+    const tip = SYNC_STATUS_TIPS[status];
+    dot.setAttribute('data-sync-status', status);
+    dot.setAttribute('data-tip', tip);
+    dot.setAttribute('aria-label', tip);
+  }
+
+  function setSyncStatus(next) {
+    if (state.syncStatus === next) return;
+    state.syncStatus = next;
+    applySyncStatus();
+  }
+
+  // Three answers the dot can carry, and they are three different failures:
+  // the request came back and was usable, it came back and was not -- a
+  // refused key, an address that answers as something else -- or it never
+  // came back at all.
+  async function syncFetch(url, options) {
+    let res;
+    try {
+      res = await fetch(url, options);
+    } catch (err) {
+      setSyncStatus('unreachable');
+      throw err;
+    }
+    if (!res.ok) {
+      setSyncStatus('refused');
+      const err = new Error(`HTTP ${res.status}`);
+      err.status = res.status;
+      throw err;
+    }
+    setSyncStatus('ok');
+    return res;
+  }
+
+  function annotationsUrl() {
+    return `${server.url}/annotations?site=${encodeURIComponent(siteKey)}`;
+  }
+
+  function annotationUrl(id) {
+    return `${server.url}/annotations/${encodeURIComponent(id)}?site=${encodeURIComponent(siteKey)}`;
+  }
+
+  function healthUrl() {
+    return healthPath ? `${server.url}${healthPath}` : annotationsUrl();
+  }
+
+  function screenshotUrl(id) {
+    return `${server.url}/screenshots/${encodeURIComponent(id)}?site=${encodeURIComponent(siteKey)}`;
+  }
+
+  // The key is in the page source, so it keeps a passer-by from writing to a
+  // review server and nothing more. An empty key sends no header.
+  function syncHeaders(headers) {
+    const merged = Object.assign({}, headers);
+    if (server.apiKey) merged['X-Uxnote-Key'] = server.apiKey;
+    return merged;
+  }
+
+  // What the server agreed to, one entry per annotation, kept as a digest and
+  // not as the body it came from. The snapshot is only ever compared, never
+  // sent, and it outlives the tab in localStorage beside the set: holding the
+  // bodies there would put every annotation in storage twice, and an inline
+  // screenshot is large enough that the second copy is what runs the browser
+  // out of room.
+  function snapshotOf(annotations) {
+    return new Map(annotations.map((ann) => [ann.id, digestOf(ann)]));
+  }
+
+  // Length and an FNV-1a hash of the JSON. This settles whether a body changed
+  // under this browser, not whether someone forged one, so 32 bits and the
+  // length behind them are enough.
+  function digestOf(annotation) {
+    const body = typeof annotation === 'string' ? annotation : JSON.stringify(annotation);
+    let hash = 0x811c9dc5;
+    for (let i = 0; i < body.length; i += 1) {
+      hash ^= body.charCodeAt(i);
+      hash = Math.imul(hash, 0x01000193) >>> 0;
+    }
+    return `${body.length}:${hash.toString(36)}`;
+  }
+
+  // Answering a queue of requests moves the snapshot and leaves the set alone,
+  // and the set is the large half. Writing it once per request would put the
+  // whole of a review through JSON.stringify for each note that goes up.
+  function persistSnapshot() {
+    try {
+      localStorage.setItem(syncedStorageKey, JSON.stringify(Array.from(syncedSnapshot)));
+    } catch (err) {
+      console.warn('Annotator storage save error', err);
+      warnStorage();
+    }
+  }
+
+  // False when this browser has no record of ever having synced this site. The
+  // set beside it is then a set written before a server was named, and it is
+  // the reviewer's alone: the pull adopts the server's set rather than pushing
+  // private notes onto a shared one.
+  function loadSyncedSnapshot() {
+    let stored = null;
+    try {
+      stored = localStorage.getItem(syncedStorageKey);
+      const parsed = stored ? JSON.parse(stored) : [];
+      syncedSnapshot = new Map(Array.isArray(parsed) ? parsed : []);
+    } catch (err) {
+      // An unreadable snapshot means every note looks unsent. The set goes up
+      // again, which the server takes, rather than staying here unsent.
+      console.warn('Uxnote sync: the stored server snapshot is unreadable', err);
+      syncedSnapshot = new Map();
+    }
+    return stored !== null;
+  }
+
+  // One toast per run of failures: the second one says nothing the first did
+  // not. The next request that succeeds arms it again.
+  function warnSync(message, err) {
+    console.warn('Uxnote sync:', message, err);
+    if (syncWarned) return;
+    syncWarned = true;
+    showToast(message);
+  }
+
+  // The set no longer fits in this browser. Saying it once is the whole of
+  // what the widget can do: the reviewer decides what to delete or export.
+  function warnStorage() {
+    if (storageWarned) return;
+    storageWarned = true;
+    showToast('Uxnote: this browser has no room left, so notes are not kept for a reload');
+  }
+
+  function enqueueSync(run) {
+    syncQueue = syncQueue.then(run, run);
+    return syncQueue;
+  }
+
+  async function remotePull() {
+    if (!server) return;
+    let payload;
+    try {
+      const res = await syncFetch(annotationsUrl(), { headers: syncHeaders({ Accept: 'application/json' }) });
+      try {
+        payload = await res.json();
+      } catch (err) {
+        // An answer that is not the annotation set means the address is
+        // serving something else, which is the reviewer's to fix.
+        setSyncStatus('refused');
+        throw err;
+      }
+    } catch (err) {
+      // The set that is on the screen came from this browser's copy, and it
+      // stays on the screen. A server that did not answer has said nothing
+      // about it.
+      warnSync('Uxnote: could not read the annotations from the server', err);
+      // The set the hop points into is this browser's copy, and it is already
+      // drawn, so the hop lands on it rather than being spent on nothing.
+      focusPendingAnnotation();
+      return;
+    }
+    const pulled = ((payload && payload.annotations) || []).filter(isStoredAnnotation);
+    pulled.forEach((ann) => {
+      if (!ann.pageKey) {
+        ann.pageKey = normalizePageKey(ann.pageUrl || window.location.href);
+      }
+    });
+    reconcile(pulled);
+    syncWarned = false;
+    persistAnnotations();
+    clearRenderedAnnotations();
+    restoreAnnotations();
+    renumberMarkers();
+    renderList();
+    // Whatever the reconciliation kept as this browser's own is owed to the
+    // server, and this is the first moment it can be sent.
+    syncAnnotations();
+    // The hop that a card on another page starts lands here, because the set
+    // it points into is only settled once the pull has answered.
+    focusPendingAnnotation();
+  }
+
+  // Three sets meet: what this browser holds, the digests of what it last saw
+  // the server agree to, and what the server holds now. The digests are what
+  // tell the two kinds of difference apart. An id the snapshot knows, matching
+  // the body it knows, gone from the server: another reviewer deleted it, and
+  // it goes. An id the snapshot does not know, or knows with a different body:
+  // this browser wrote it while the server was away, and it stays and is sent.
+  //
+  // The snapshot then becomes the server's set outright, so syncAnnotations
+  // derives every request owed -- a note written here, a note edited here, a
+  // note deleted here that the server still holds -- from the same diff it
+  // runs after any other change.
+  function reconcile(pulled) {
+    const remote = new Map(pulled.map((ann) => [ann.id, ann]));
+    const kept = [];
+    const keptIds = new Set();
+    state.annotations.forEach((ann) => {
+      const agreed = syncedSnapshot.get(ann.id);
+      if (agreed === undefined || agreed !== digestOf(ann)) {
+        kept.push(ann);
+        keptIds.add(ann.id);
+        return;
+      }
+      const fromServer = remote.get(ann.id);
+      if (fromServer) {
+        kept.push(fromServer);
+        keptIds.add(ann.id);
+      }
+    });
+    pulled.forEach((ann) => {
+      if (!keptIds.has(ann.id)) kept.push(ann);
+    });
+    state.annotations = kept;
+    syncedSnapshot = snapshotOf(pulled);
+  }
+
+  // The probe exists for the server that comes back while nobody is writing.
+  // Nothing else would ask it: the queue only moves when a note does, so
+  // without this the dot stays red and the unsent notes stay unsent until the
+  // reviewer happens to type.
+  async function probeHealth() {
+    try {
+      const res = await syncFetch(healthUrl(), { headers: syncHeaders({ Accept: 'application/json' }) });
+      try {
+        await res.json();
+      } catch (err) {
+        // A 200 of HTML is a website at that address, not this API, and a
+        // probe that took the status code alone would paint the dot green
+        // over a read that is failing on the same address.
+        setSyncStatus('refused');
+        return false;
+      }
+      return true;
+    } catch (err) {
+      // A server built against version 1 of the protocol has no /health. It
+      // answers 404 once, and every probe after this one is the read.
+      if (healthPath && err.status === 404) {
+        healthPath = '';
+        return probeHealth();
+      }
+      return false;
+    }
+  }
+
+  async function runHealthCheck(first) {
+    healthTimer = null;
+    const wasReachable = state.syncStatus === 'ok';
+    const reachable = await probeHealth();
+    if (!reachable) {
+      scheduleHealthCheck(healthBackoff);
+      healthBackoff = Math.min(healthBackoff * 2, HEALTH_BACKOFF_MAX);
+      return;
+    }
+    healthBackoff = HEALTH_BACKOFF_MIN;
+    scheduleHealthCheck(HEALTH_INTERVAL);
+    // The pull at boot is init's, so the first probe only reports. Past it, a
+    // server that was not answering and now is has a set this browser has not
+    // read and notes it has not been given.
+    if (!first && !wasReachable) enqueueSync(remotePull);
+  }
+
+  function scheduleHealthCheck(delay) {
+    if (healthTimer) clearTimeout(healthTimer);
+    // On the queue with the writes, so a probe never lands the dot on an
+    // answer that a request in flight is about to contradict.
+    healthTimer = setTimeout(() => enqueueSync(() => runHealthCheck(false)), delay);
+  }
+
+  function startHealthLoop() {
+    if (!server) return;
+    enqueueSync(() => runHealthCheck(true));
+  }
+
+  function syncAnnotations() {
+    if (!server) return;
+    const next = new Map(state.annotations.map((ann) => [ann.id, JSON.stringify(ann)]));
+    next.forEach((body, id) => {
+      if (syncedSnapshot.get(id) !== digestOf(body)) enqueueSync(() => remoteUpsert(id, body));
+    });
+    syncedSnapshot.forEach((digest, id) => {
+      if (!next.has(id)) enqueueSync(() => remoteDelete(id));
+    });
+  }
+
+  // A picture written while the server was down is still inline. It goes up
+  // as a PNG before the annotation that points at it, so what reaches the
+  // server is the same shape either way and no annotation carries a base64
+  // document in its body.
+  async function uploadInlineScreenshot(ann) {
+    const shot = ann && ann.screenshot;
+    if (!shot || !shot.dataUrl) return false;
+    const res = await fetch(shot.dataUrl);
+    const blob = await res.blob();
+    const uploaded = await uploadScreenshot(blob, ann.id, { rethrow: true });
+    if (!uploaded) throw new Error('the screenshot upload answered with no address');
+    ann.screenshot = { url: uploaded.url, w: shot.w, h: shot.h, capturedAt: shot.capturedAt };
+    return true;
+  }
+
+  // A failed upsert waits for the next change to be retried. On a desktop
+  // there usually is one; on a phone the tab goes to a lock screen or a task
+  // switcher with the note still unsent, and no next change ever comes. These
+  // are the three moments left to spend it in.
+  function bindSyncFlush() {
+    if (!server) return;
+    window.addEventListener('online', () => syncAnnotations());
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') flushSyncNow();
+    });
+    // `pagehide` and not `beforeunload`, which iOS does not fire reliably.
+    window.addEventListener('pagehide', flushSyncNow);
+  }
+
+  // On the way out the queue is bypassed and the requests are marked
+  // `keepalive`: a plain fetch is killed with the page, and anything waiting
+  // behind one in the queue would never be issued at all.
+  function flushSyncNow() {
+    if (!server) return;
+    // The same diff syncAnnotations runs: the snapshot holds digests, so what
+    // is compared and what is sent are not the same string.
+    const next = new Map(state.annotations.map((ann) => [ann.id, JSON.stringify(ann)]));
+    next.forEach((body, id) => {
+      if (syncedSnapshot.get(id) !== digestOf(body)) remoteUpsert(id, body, { keepalive: true });
+    });
+    syncedSnapshot.forEach((digest, id) => {
+      if (!next.has(id)) remoteDelete(id, { keepalive: true });
+    });
+  }
+
+  // A failed request leaves the snapshot stale, so the next change sends it
+  // again -- and so does the next pull, and the next probe that finds the
+  // server back, and the next load of the page, because the snapshot is in
+  // localStorage beside the set it disagrees with.
+  async function remoteUpsert(id, body, options = {}) {
+    try {
+      const ann = state.annotations.find((one) => one.id === id);
+      // The upload rewrites the picture from a base64 document into an
+      // address, so unlike every other request this one changes the set and
+      // not only the snapshot. Writing the snapshot alone would leave the
+      // browser holding the inline copy it just replaced.
+      const uploaded = ann && ann.screenshot && ann.screenshot.dataUrl;
+      if (uploaded) {
+        await uploadInlineScreenshot(ann);
+        body = JSON.stringify(ann);
+      }
+      await syncFetch(annotationUrl(id), {
+        method: 'PUT',
+        headers: syncHeaders({ 'Content-Type': 'application/json' }),
+        keepalive: !!options.keepalive,
+        body
+      });
+      syncedSnapshot.set(id, digestOf(body));
+      syncWarned = false;
+      if (uploaded) persistAnnotations();
+      else persistSnapshot();
+    } catch (err) {
+      warnSync('Uxnote: could not save this annotation on the server', err);
+    }
+  }
+
+  async function remoteDelete(id, options = {}) {
+    try {
+      await syncFetch(annotationUrl(id), {
+        method: 'DELETE',
+        headers: syncHeaders(),
+        keepalive: !!options.keepalive
+      });
+      syncedSnapshot.delete(id);
+      syncWarned = false;
+      persistSnapshot();
+    } catch (err) {
+      warnSync('Uxnote: could not delete this annotation on the server', err);
+    }
+  }
+
+  // Delete all is one request, never one per annotation.
+  function remoteDeleteAll() {
+    if (!server) return;
+    enqueueSync(async () => {
+      try {
+        await syncFetch(annotationsUrl(), { method: 'DELETE', headers: syncHeaders() });
+        syncedSnapshot = new Map();
+        syncWarned = false;
+        persistSnapshot();
+      } catch (err) {
+        warnSync('Uxnote: could not delete the annotations on the server', err);
+      }
+    });
+  }
+
+  // ------------------------------------------------------------------
+  // Route changes
+  // ------------------------------------------------------------------
+
+  // A page can change without a document load. The annotations of the page
+  // just left come off the screen, and the ones of the new page go on.
+  let routeChangeTimer = null;
+  let routePageKey = normalizePageKey(window.location.href);
+
+  function onRouteChange() {
+    routeChangeTimer = null;
+    const pageKey = normalizePageKey(window.location.href);
+    if (pageKey === routePageKey) return;
+    routePageKey = pageKey;
+    clearRenderedAnnotations();
+    restoreAnnotations();
+    renumberMarkers();
+    renderList();
+    enqueueSync(remotePull);
+  }
+
+  function scheduleRouteChange() {
+    if (routeChangeTimer) clearTimeout(routeChangeTimer);
+    // Long enough for the router to have drawn the page the annotations sit on.
+    routeChangeTimer = setTimeout(onRouteChange, 120);
+  }
+
+  function watchRouteChanges() {
+    ['pushState', 'replaceState'].forEach((name) => {
+      const original = history[name];
+      if (typeof original !== 'function') return;
+      history[name] = function patched(...args) {
+        const result = original.apply(this, args);
+        scheduleRouteChange();
+        return result;
+      };
+    });
+    window.addEventListener('popstate', scheduleRouteChange);
+  }
+
+  // ------------------------------------------------------------------
+  // Region screenshots
+  // ------------------------------------------------------------------
+
+  // snapdom renders the page a screenshot is cropped out of. The widget never
+  // loads it: a second script tag on the page is the whole opt-in, so a strict
+  // script-src has nothing to allow that the page did not already allow.
+  function captureAvailable() {
+    return !!(window.snapdom && typeof window.snapdom.toCanvas === 'function');
+  }
+
+  // Resolves the framed region in page coordinates, or null when the reviewer
+  // stops.
+  function selectRegion() {
+    return new Promise((resolve) => {
+      const overlay = document.createElement('div');
+      overlay.className = 'wn-shot-overlay wn-annotator';
+      const rectEl = document.createElement('div');
+      rectEl.className = 'wn-shot-rect wn-annotator';
+      overlay.appendChild(rectEl);
+
+      const hint = document.createElement('div');
+      hint.className = 'wn-shot-hint wn-annotator';
+      const label = document.createElement('span');
+      label.textContent = 'Drag to frame a region. Escape stops.';
+      const cancelBtn = document.createElement('button');
+      cancelBtn.type = 'button';
+      cancelBtn.textContent = 'Cancel';
+      hint.appendChild(label);
+      hint.appendChild(cancelBtn);
+
+      const setRect = (r) => {
+        const usable = !!r && r.w >= 4 && r.h >= 4;
+        rectEl.style.display = usable ? 'block' : 'none';
+        if (!usable) return;
+        rectEl.style.left = `${r.x}px`;
+        rectEl.style.top = `${r.y}px`;
+        rectEl.style.width = `${r.w}px`;
+        rectEl.style.height = `${r.h}px`;
+      };
+      setRect(null);
+
+      // The pointer crosses the hint bar and leaves the viewport mid-drag, so
+      // the move and the release are read on the document and the point is held
+      // inside the frame the reviewer can see.
+      const pointIn = (evt) => ({
+        x: Math.min(Math.max(evt.clientX, 0), document.documentElement.clientWidth),
+        y: Math.min(Math.max(evt.clientY, 0), document.documentElement.clientHeight)
+      });
+      const rectFrom = (a, b) => ({
+        x: Math.min(a.x, b.x),
+        y: Math.min(a.y, b.y),
+        w: Math.abs(b.x - a.x),
+        h: Math.abs(b.y - a.y)
+      });
+
+      let dragStart = null;
+      const onDown = (evt) => {
+        evt.preventDefault();
+        dragStart = pointIn(evt);
+        setRect(null);
+      };
+      const onMove = (evt) => {
+        if (!dragStart) return;
+        evt.preventDefault();
+        setRect(rectFrom(dragStart, pointIn(evt)));
+      };
+      // A release under the floor is a stray click: it frames nothing and the
+      // overlay stays open for another drag.
+      const onUp = (evt) => {
+        if (!dragStart) return;
+        const r = rectFrom(dragStart, pointIn(evt));
+        dragStart = null;
+        if (r.w < 4 || r.h < 4) {
+          setRect(null);
+          return;
+        }
+        finish({
+          x: r.x + window.scrollX,
+          y: r.y + window.scrollY,
+          w: r.w,
+          h: r.h
+        });
+      };
+      const finish = (result) => {
+        document.removeEventListener('keydown', onKey, true);
+        document.removeEventListener('mousemove', onMove, true);
+        document.removeEventListener('mouseup', onUp, true);
+        overlay.remove();
+        hint.remove();
+        resolve(result);
+      };
+      const onKey = (evt) => {
+        if (evt.key === 'Escape') {
+          evt.preventDefault();
+          finish(null);
+        }
+      };
+      overlay.addEventListener('mousedown', onDown);
+      cancelBtn.addEventListener('click', () => finish(null));
+      document.addEventListener('mousemove', onMove, true);
+      document.addEventListener('mouseup', onUp, true);
+      document.addEventListener('keydown', onKey, true);
+      document.body.appendChild(overlay);
+      document.body.appendChild(hint);
+    });
+  }
+
+  // Render the page with snapdom, the widget's own interface left out, and crop
+  // the region out of it.
+  async function captureRegion(rect) {
+    // The interface is dropped from the copy snapdom renders, and not hidden on
+    // the page: the toolbar, the panel and the dim stay in front of the
+    // reviewer while the picture is taken. The dim overlay is interface too,
+    // and it is the one piece that carries no .wn-annotator class.
+    //
+    // 'remove' and not the default 'hide', which stands a box of the same size
+    // in the flow of the copy and pushes the page down under it. Every piece of
+    // the interface is fixed or absolute, so removing it moves nothing else.
+    const page = await window.snapdom.toCanvas(document.body, {
+      scale: 1,
+      exclude: ['.wn-annotator', '.wn-annot-dimmer'],
+      excludeMode: 'remove'
+    });
+    const bodyRect = document.body.getBoundingClientRect();
+    const factor = bodyRect.width ? page.width / bodyRect.width : 1;
+    const originX = bodyRect.left + window.scrollX;
+    const originY = bodyRect.top + window.scrollY;
+    const sx = Math.max(0, Math.round((rect.x - originX) * factor));
+    const sy = Math.max(0, Math.round((rect.y - originY) * factor));
+    const sw = Math.min(page.width - sx, Math.max(1, Math.round(rect.w * factor)));
+    const sh = Math.min(page.height - sy, Math.max(1, Math.round(rect.h * factor)));
+    if (sw < 1 || sh < 1) return null;
+    const canvas = document.createElement('canvas');
+    canvas.width = sw;
+    canvas.height = sh;
+    canvas.getContext('2d').drawImage(page, sx, sy, sw, sh, 0, 0, sw, sh);
+    return { canvas, w: sw, h: sh };
+  }
+
+  // What the camera frames on a coarse pointer: the part of the page that is
+  // on the screen. Scrolling is the framing gesture, so there is nothing to
+  // drag, no precision to find, and no overlay to be trapped in.
+  function viewportCaptureRect() {
+    const root = document.documentElement;
+    return { x: window.scrollX, y: window.scrollY, w: root.clientWidth, h: root.clientHeight };
+  }
+
+  // snapdom renders the whole document before the crop comes out of it, which
+  // is the most expensive thing the widget does -- a long page on a mid
+  // Android can sit on it. The wait is bounded rather than open, and what
+  // happened is said out loud.
+  const CAPTURE_TIMEOUT_MS = 20000;
+
+  function captureWithGuard(rect) {
+    const render = captureRegion(rect).then(
+      (shot) => ({ shot }),
+      (err) => {
+        console.warn('Uxnote screenshot:', err);
+        return { shot: null };
+      }
+    );
+    const guard = new Promise((resolve) => {
+      setTimeout(() => resolve({ shot: null, timedOut: true }), CAPTURE_TIMEOUT_MS);
+    });
+    return Promise.race([render, guard]);
+  }
+
+  // The camera is a capture mode like the other two: the reviewer frames a
+  // region, comments on it, and the picture is the annotation.
+  async function captureRegionAnnotation() {
+    if (!captureAvailable() || state.mode === 'screenshot') return;
+    // The mode stands until the annotation is written or the reviewer stops,
+    // the way it does for a highlight and for an element.
+    setMode('screenshot');
+    try {
+      // The drag is a mouse gesture and the overlay it lived in read nothing
+      // else: a touch drag framed nothing, opened nothing, and left the
+      // reviewer inside an overlay whose only way out named the Escape key.
+      const rect = isTouchInput() ? viewportCaptureRect() : await selectRegion();
+      if (!rect) return;
+      // The picture is of the page the drag was released on, and it is taken
+      // while the comment is being written, so releasing the drag opens the
+      // prompt as directly as releasing a selection does.
+      const pending = captureWithGuard(rect);
+      const res = await awaitComment('Comment for this region?');
+      if (!res) return;
+      const { shot, timedOut } = await pending;
+      if (!shot) {
+        showToast(
+          timedOut ? 'Uxnote: the page took too long to capture' : 'Uxnote: could not capture that region'
+        );
+        return;
+      }
+      const { comment } = res;
+      const id = generateId();
+      // The picture rides on the annotation until a server takes it off. A
+      // server that is not answering used to throw the whole capture away,
+      // while a text or an element note written in the same minute was kept
+      // and sent again later; there is no reason for the third kind to be the
+      // one that loses the reviewer's work.
+      let stored = { dataUrl: shot.canvas.toDataURL('image/png'), w: shot.w, h: shot.h, capturedAt: Date.now() };
+      if (server) {
+        const blob = await new Promise((done) => shot.canvas.toBlob(done, 'image/png'));
+        const uploaded = blob ? await uploadScreenshot(blob, id) : null;
+        if (uploaded) {
+          stored = { url: uploaded.url, w: shot.w, h: shot.h, capturedAt: Date.now() };
+        } else {
+          showToast('Uxnote: the picture stays on this device until the server answers');
+        }
+      }
+      const annotation = {
+        id,
+        type: 'screenshot',
+        comment: comment.trim(),
+        snippet: '',
+        pageUrl: window.location.href,
+        pageKey: normalizePageKey(window.location.href),
+        rect: { x: rect.x, y: rect.y, w: rect.w, h: rect.h },
+        screenshot: stored,
+        createdAt: Date.now(),
+        status: 'active'
+      };
+      state.annotations.push(annotation);
+      saveAnnotations();
+      addMarkerForAnnotation(annotation, null);
+      renderList();
+    } finally {
+      setMode(null);
+    }
+  }
+
+  // The PNG travels as the body of the request, so a server needs no multipart
+  // parser. The answer names the address the server serves the file at.
+  async function uploadScreenshot(blob, id, opts = {}) {
+    try {
+      const res = await syncFetch(screenshotUrl(id), {
+        method: 'PUT',
+        headers: syncHeaders({ 'Content-Type': 'image/png' }),
+        body: blob
+      });
+      const payload = await res.json();
+      return payload && payload.url ? payload : null;
+    } catch (err) {
+      console.warn('Uxnote screenshot:', err);
+      // The capture path takes a null and keeps the picture inline. The sync
+      // path needs the throw, so the annotation stays unsent and is tried
+      // again rather than being marked delivered without its picture.
+      if (opts.rethrow) throw err;
+      return null;
+    }
+  }
+
+  function screenshotSrc(ann) {
+    const shot = ann && ann.screenshot;
+    if (!shot) return null;
+    if (shot.dataUrl) return shot.dataUrl;
+    if (!shot.url) return null;
+    try {
+      // The address the server answers with is relative to the base URL, and
+      // the server can be a different origin from the page under review.
+      const base = server ? new URL(`${server.url}/`, window.location.href) : window.location.href;
+      return new URL(shot.url, base).href;
+    } catch (err) {
+      return shot.url;
+    }
+  }
+
+  function openScreenshotLightbox(src) {
+    const box = document.createElement('div');
+    box.className = 'wn-shot-lightbox wn-annotator';
+    const img = document.createElement('img');
+    img.src = src;
+    img.alt = 'The screenshot of this annotation';
+    box.appendChild(img);
+    const closeBtn = document.createElement('button');
+    closeBtn.type = 'button';
+    closeBtn.className = 'wn-shot-lightbox-close wn-annotator';
+    closeBtn.setAttribute('aria-label', 'Close the screenshot');
+    closeBtn.innerHTML = iconClose();
+    box.appendChild(closeBtn);
+    const close = () => {
+      document.removeEventListener('keydown', onKey, true);
+      box.remove();
+    };
+    const onKey = (evt) => {
+      if (evt.key === 'Escape') {
+        evt.preventDefault();
+        close();
+      }
+    };
+    closeBtn.addEventListener('click', close);
+    box.addEventListener('click', close);
+    document.addEventListener('keydown', onKey, true);
+    document.body.appendChild(box);
+  }
+
   document.readyState === 'loading' ? document.addEventListener('DOMContentLoaded', init) : init();
 
   window.Uxnote = {
     refresh: refreshMarkers,
     setHidden: (hidden) => setAnnotatorVisibility(!!hidden),
     toggleVisibility: () => setAnnotatorVisibility(!state.hidden),
-    isHidden: () => !!state.hidden
+    isHidden: () => !!state.hidden,
+    sync: { pull: remotePull, push: syncAnnotations, url: () => (server ? server.url : null) }
   };
 })();
