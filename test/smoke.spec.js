@@ -55,6 +55,19 @@ test('the toolbar holds one row on a laptop screen', async ({ page }) => {
   }
 });
 
+test('the bar a mouse drives keeps to one short row', async ({ page }) => {
+  await page.goto('/');
+  const bar = await page.locator('.wn-annot-toolbar').boundingBox();
+  const btn = await page.locator('.wn-annot-toolbar button[data-mode="text"]').boundingBox();
+  // Every pixel of this bar's height is a pixel of the host page a reviewer
+  // cannot see, so the bar a mouse drives carries one row of controls and
+  // little else. The 44px a finger needs instead is held in mobile.spec.js.
+  expect(bar.height).toBeLessThanOrEqual(46);
+  expect(bar.height - btn.height).toBeLessThanOrEqual(12);
+  // Smaller, and still over the 24px a pointer target is asked to keep.
+  expect(btn.height).toBeGreaterThanOrEqual(24);
+});
+
 test('the toolbar offers the mail handoff on its own button', async ({ page }) => {
   await page.goto('/?mailto=team%40example.org');
   const mail = page.locator('.wn-annot-toolbar button[data-action="mail"]');
