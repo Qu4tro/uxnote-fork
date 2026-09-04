@@ -812,44 +812,29 @@
         border-radius: 12px;
         text-align: center;
       }
+      /* Four symbols and a named button in the head of a 360px rail. They
+         drop below the title together rather than one at a time, so a long
+         count never leaves a single icon stranded on its own line. */
+      .wn-annot-panel-top {
+        flex-wrap: wrap;
+      }
+      .wn-annot-panel-top h3 {
+        flex: 1 1 auto;
+      }
       .wn-annot-panel-tools {
         display: inline-flex;
         align-items: center;
-        gap: 8px;
+        flex: 0 0 auto;
+        margin-left: auto;
+        gap: 4px;
       }
-      /* The bar has no room for export on compact, so the panel carries it
-         there, beside the delete-all it already holds. */
-      .wn-annot-panel-export {
-        display: none;
-        align-items: center;
-        gap: 6px;
-        background: rgba(109, 86, 199, 0.12);
-        border: 1px solid var(--wn-border);
-        color: var(--wn-text-muted);
-        padding: 6px 10px;
-        border-radius: 10px;
-        font-weight: 700;
-        font-size: 12px;
-        cursor: pointer;
-        transition: all 0.12s ease;
-      }
-      .wn-annot-panel-export:hover {
-        background: rgba(109, 86, 199, 0.18);
-        color: var(--wn-text);
-      }
-      .wn-annot-panel-export:active {
-        transform: translateY(1px);
-      }
-      .wn-annot-panel-export svg {
-        width: 16px;
-        height: 16px;
-      }
-      .wn-annot-panel-view {
+      .wn-annot-panel-view,
+      .wn-annot-panel-io {
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        width: 30px;
-        height: 30px;
+        width: 28px;
+        height: 28px;
         padding: 0;
         border-radius: 10px;
         border: 1px solid var(--wn-border);
@@ -858,18 +843,57 @@
         cursor: pointer;
         transition: all 0.12s ease;
       }
-      .wn-annot-panel-view:hover {
+      .wn-annot-panel-view:hover,
+      .wn-annot-panel-io:hover {
         background: rgba(109, 86, 199, 0.16);
         color: var(--wn-text);
+      }
+      .wn-annot-panel-io:active {
+        transform: translateY(1px);
       }
       .wn-annot-panel-view.active {
         background: rgba(109, 86, 199, 0.2);
         border-color: rgba(109, 86, 199, 0.4);
         color: var(--wn-text);
       }
-      .wn-annot-panel-view svg {
+      .wn-annot-panel-view svg,
+      .wn-annot-panel-io svg {
         width: 16px;
         height: 16px;
+      }
+      /* The word each symbol stands for. A pointer reads it on hover, so here
+         it is only the label a layout without hover falls back to. */
+      .wn-annot-panel-io span {
+        display: none;
+      }
+      /* A symbol on its own says little, so it is named on hover, the way the
+         bar names its own. The label hangs from the right edge of the head,
+         which is the edge these buttons sit against. */
+      @media (hover: hover) {
+        .wn-annot-panel-tools button[data-tip] {
+          position: relative;
+        }
+        .wn-annot-panel-tools button[data-tip]::after {
+          content: attr(data-tip);
+          position: absolute;
+          top: calc(100% + 8px);
+          right: 0;
+          background: rgba(35, 31, 74, 0.92);
+          color: #fff;
+          padding: 6px 8px;
+          border-radius: 8px;
+          font-size: 11px;
+          font-weight: 600;
+          white-space: nowrap;
+          opacity: 0;
+          pointer-events: none;
+          transform: translateY(-2px);
+          transition: opacity 0.12s ease, transform 0.12s ease;
+        }
+        .wn-annot-panel-tools button[data-tip]:hover::after {
+          opacity: 1;
+          transform: translateY(0);
+        }
       }
       .wn-annot-delete-all {
         display: inline-flex;
@@ -2018,8 +2042,25 @@
           border-color: var(--wn-border);
           box-shadow: 0 6px 16px var(--wn-shadow);
         }
-        .wn-annot-panel-export {
-          display: inline-flex;
+        /* Import wants a file already on the device, which a phone picker
+           cannot usefully give; mail rides the share sheet the export opens
+           here. The export itself stays, and is the whole handoff. */
+        .wn-annot-panel-io[data-action='import'],
+        .wn-annot-panel-io[data-action='mail'] {
+          display: none;
+        }
+        /* Nothing hovers here, so the symbol that is left carries its word
+           rather than waiting to be asked for it. */
+        .wn-annot-panel-io {
+          width: auto;
+          height: auto;
+          gap: 6px;
+          padding: 8px 14px;
+          font-weight: 700;
+          font-size: 13px;
+        }
+        .wn-annot-panel-io span {
+          display: inline;
         }
         /* A compact layout is already a sheet, and the full-size view is the
            room a pointer layout has. The class never reaches here. */
@@ -2101,11 +2142,15 @@
           width: 18px;
           height: 18px;
         }
-        .wn-annot-delete-all,
-        .wn-annot-panel-export {
+        .wn-annot-delete-all {
           min-height: 44px;
           padding: 8px 14px;
           font-size: 13px;
+        }
+        .wn-annot-panel-view,
+        .wn-annot-panel-io {
+          min-width: 44px;
+          min-height: 44px;
         }
         .wn-annot-modal .wn-annot-pill {
           min-height: 44px;
@@ -2335,27 +2380,19 @@
     if (captureAvailable()) {
       editButtons.push({ action: 'mode', mode: 'screenshot', tip: 'Capture a region', icon: iconCamera() });
     }
-    // Compact keeps five controls -- hide, highlight, element, camera, notes --
-    // so each is a thumb-sized target and none of them scrolls out of reach.
-    // Import needs the file on the device and is unusable at this size, the
-    // position toggle has no second answer where the bar belongs in thumb
-    // reach, and export moves to the panel head. The mail button goes with
-    // them: on a phone the export path already opens the system share sheet,
-    // which is where a handoff to mail belongs.
-    const exportButtons = [];
-    if (jsonImport && !compact) exportButtons.push({ action: 'import', tip: 'Import JSON', icon: iconUpload() });
-    if (jsonExport && !compact) exportButtons.push({ action: 'export', tip: 'Export JSON', icon: iconDownload() });
-    if (mailExport && !compact) exportButtons.push({ action: 'mail', tip: 'Send by mail', icon: iconMail() });
+    // The bar is for marking the page: three ways of taking a note, and the
+    // two controls that say where the widget itself sits. Handing the whole
+    // set of notes on -- to a file, from a file, to a mail client -- acts on
+    // what the panel holds, so those three are drawn in the panel's head,
+    // beside the notes they carry. Compact drops the position toggle too:
+    // there is no second answer to where the bar belongs in thumb reach, and
+    // what is left is five thumb-sized targets that never scroll out of it.
     const controlButtons = [];
     if (!compact) controlButtons.push({ action: 'toggle-pos', tip: 'Toolbar top / bottom', icon: iconSwap() });
     controlButtons.push({ action: 'toggle-panel', tip: 'Show / hide annotations', icon: iconPanel() });
 
     frag.appendChild(makeSpacer());
     frag.appendChild(makeGroup(editButtons));
-    if (exportButtons.length) {
-      frag.appendChild(makeSpacer());
-      frag.appendChild(makeGroup(exportButtons));
-    }
     frag.appendChild(makeSpacer());
     frag.appendChild(makeGroup(controlButtons));
 
@@ -2364,6 +2401,18 @@
     updateToolbarActive();
     updateToggleActive();
     mountVisibilityToggle();
+  }
+
+  // One handoff for the whole set of notes, drawn in the head of the panel
+  // that holds them. The head is built once and the compact layout is a media
+  // query away, so what a phone leaves out is left out by the stylesheet
+  // rather than by this.
+  function panelToolButton(enabled, action, label, word, icon) {
+    if (!enabled) return '';
+    return (
+      `<button class="wn-annot-panel-io wn-annotator" type="button" data-action="${action}"` +
+      ` data-tip="${label}" aria-label="${label}">${icon}<span>${word}</span></button>`
+    );
   }
 
   // One entry point for a change of form factor. The bar's button set differs
@@ -2398,11 +2447,9 @@
           <h3>Annotations (0)</h3>
           <div class="wn-annot-panel-tools wn-annotator">
             <button class="wn-annot-panel-view wn-annotator" type="button"></button>
-            ${
-              jsonExport
-                ? `<button class="wn-annot-panel-export wn-annotator" type="button">${iconDownload()}<span>Export</span></button>`
-                : ''
-            }
+            ${panelToolButton(jsonImport, 'import', 'Import JSON', 'Import', iconUpload())}
+            ${panelToolButton(jsonExport, 'export', 'Export JSON', 'Export', iconDownload())}
+            ${panelToolButton(mailExport, 'mail', 'Send by mail', 'Mail', iconMail())}
             <button class="wn-annot-delete-all wn-annotator" type="button">
               ${iconTrash()}<span>All</span>
             </button>
@@ -2463,13 +2510,8 @@
         setPanelView(isFullView() ? 'rail' : 'full');
       });
     }
-    const panelExportBtn = panel.querySelector('.wn-annot-panel-export');
-    if (panelExportBtn) {
-      panelExportBtn.addEventListener('click', (evt) => {
-        evt.stopPropagation();
-        requestExport();
-      });
-    }
+    const panelTools = panel.querySelector('.wn-annot-panel-tools');
+    if (panelTools) panelTools.addEventListener('click', onPanelToolClick);
 
     const markerLayer = document.createElement('div');
     markerLayer.className = 'wn-annot-marker-layer wn-annotator';
@@ -3580,6 +3622,22 @@
       setMode(mode);
       return;
     }
+    if (action === 'toggle-panel') {
+      togglePanel();
+      return;
+    }
+    if (action === 'toggle-pos') {
+      setPosition(position === 'bottom' ? 'top' : 'bottom');
+      updatePositionIcon();
+      return;
+    }
+  }
+
+  async function onPanelToolClick(evt) {
+    const btn = evt.target.closest('button[data-action]');
+    if (!btn) return;
+    evt.stopPropagation();
+    const action = btn.getAttribute('data-action');
     if (action === 'export') {
       requestExport();
       return;
@@ -3590,16 +3648,6 @@
     }
     if (action === 'mail') {
       await emailAnnotations();
-      return;
-    }
-    if (action === 'toggle-panel') {
-      togglePanel();
-      return;
-    }
-    if (action === 'toggle-pos') {
-      setPosition(position === 'bottom' ? 'top' : 'bottom');
-      updatePositionIcon();
-      return;
     }
   }
 

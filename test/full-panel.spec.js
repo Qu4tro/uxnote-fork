@@ -186,3 +186,31 @@ test('a band head owns the width of the grid and counts what is under it', async
   expect(band.width).toBeLessThanOrEqual(view.width);
   await expect(page.locator('.wn-annot-band').first().locator('.wn-annot-band-count')).toHaveText('2');
 });
+
+test('the head carries the three handoffs at either shape', async ({ page }) => {
+  await page.goto('/?mailto=team%40example.org');
+  await openPanel(page);
+  const tools = page.locator('.wn-annot-panel-tools button[data-action]');
+  await expect(tools).toHaveCount(3);
+  // Four symbols and a named button, and the head of a 360px rail still holds
+  // them beside the count rather than wrapping them under it.
+  const title = await page.locator('.wn-annot-panel-top h3').boundingBox();
+  const group = await page.locator('.wn-annot-panel-tools').boundingBox();
+  expect(group.y).toBeLessThan(title.y + title.height);
+  await page.locator('.wn-annot-panel-view').click();
+  await expect(page.locator('.wn-annot-panel')).toHaveClass(/is-full/);
+  for (const one of await tools.all()) {
+    await expect(one).toBeVisible();
+  }
+});
+
+test('a symbol on its own is named where there is a pointer to name it with', async ({ page }) => {
+  await page.goto('/?mailto=team%40example.org');
+  await openPanel(page);
+  // Four symbols share a head 360px wide, so none of them carries a word.
+  // What says which is which is the label that opens under it.
+  const named = await page
+    .locator('.wn-annot-panel-tools button[data-action]')
+    .evaluateAll((els) => els.map((el) => getComputedStyle(el, '::after').content));
+  expect(named).toEqual(['"Import JSON"', '"Export JSON"', '"Send by mail"']);
+});

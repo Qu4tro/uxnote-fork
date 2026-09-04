@@ -275,7 +275,7 @@ test('export is one action and opens no modal', async ({ page }) => {
   await seedAnnotation(page);
   await openPanel(page);
   const download = page.waitForEvent('download');
-  await page.locator('.wn-annot-panel-export').click();
+  await page.locator('.wn-annot-panel button[data-action="export"]').click();
   // Nothing to share with here, so the one action is the download the desktop
   // has always used. Picking between a file, a mail and a cancel is a dialog's
   // worth of a screen this size, and the mail arm puts the whole document in a
@@ -295,7 +295,7 @@ test('export hands the file to the share sheet where there is one', async ({ pag
   await page.goto('/');
   await seedAnnotation(page);
   await openPanel(page);
-  await page.locator('.wn-annot-panel-export').click();
+  await page.locator('.wn-annot-panel button[data-action="export"]').click();
   await expect.poll(() => page.evaluate(() => window.__shared)).not.toBeNull();
   const shared = await page.evaluate(() => window.__shared);
   expect(shared).toHaveLength(1);
@@ -316,7 +316,10 @@ test('the import modal is absent, and the landscape failure cannot recur', async
   // viewport, and there was no way out of it. It is not built here at all, and
   // no surface that is built asks for more room than the screen has.
   await expect(page.locator('.wn-annot-import-modal')).toHaveCount(0);
+  // Nowhere on this layout: the bar never carried it and the head of the
+  // panel leaves it out at this size.
   await expect(page.locator('.wn-annot-toolbar button[data-action="import"]')).toHaveCount(0);
+  await expect(page.locator('.wn-annot-panel button[data-action="import"]')).toBeHidden();
   const view = await viewport(page);
   const widths = await page.locator('.wn-annot-modal').evaluateAll((els) =>
     els.map((el) => ({
