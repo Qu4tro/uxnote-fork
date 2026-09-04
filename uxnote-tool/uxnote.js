@@ -2187,7 +2187,10 @@
       };
       const onCancel = () => close(null);
       const onKey = (evt) => {
-        if (evt.key === 'Escape') close(null);
+        if (evt.key === 'Escape') {
+          evt.preventDefault();
+          close(null);
+        }
         if (evt.key === 'Enter' && !(evt.shiftKey || evt.altKey)) {
           evt.preventDefault();
           onOk();
@@ -2295,7 +2298,10 @@
       document.removeEventListener('keydown', onKey);
     };
     const onKey = (evt) => {
-      if (evt.key === 'Escape') close();
+      if (evt.key === 'Escape') {
+        evt.preventDefault();
+        close();
+      }
     };
     const onBackdrop = (evt) => {
       if (evt.target === backdrop) close();
@@ -2604,7 +2610,10 @@
         }
       };
       const onKey = (evt) => {
-        if (evt.key === 'Escape') close(false);
+        if (evt.key === 'Escape') {
+          evt.preventDefault();
+          close(false);
+        }
         if ((evt.metaKey || evt.ctrlKey) && evt.key === 'Enter') onOk();
       };
 
@@ -2634,6 +2643,7 @@
     document.addEventListener('selectionchange', handleSelectionChange);
     document.addEventListener('mousemove', handleElementHover);
     document.addEventListener('click', handleElementClick, true);
+    window.addEventListener('keydown', handleModeEscape);
     window.addEventListener('resize', refreshMarkers);
     window.addEventListener('resize', applyPageOffset);
     window.addEventListener('resize', positionPanel);
@@ -2688,6 +2698,18 @@
     }
   }
 
+  // Escape leaves whatever mode is up, whichever one it is. It is bound on the
+  // window and not on the document, so every overlay that reads the key -- the
+  // comment card, the dialogs, the import modal, the region drag, the
+  // lightbox -- gets it first and marks it handled; this is what is left. With
+  // no mode on, the key is the host page's and the widget does not touch it.
+  function handleModeEscape(evt) {
+    if (evt.key !== 'Escape' || evt.defaultPrevented) return;
+    if (!state.mode) return;
+    evt.preventDefault();
+    setMode(null);
+  }
+
   // Leaving a mode takes its bar with it. Both are built only on a coarse
   // pointer, so on a mouse this is two null checks.
   function closeTouchCapture() {
@@ -2715,9 +2737,9 @@
     const touch = isTouchInput();
     let text = '';
     if (mode === 'text') {
-      text = touch ? 'Select text, then tap Add note.' : 'Select text then release to add a note.';
+      text = touch ? 'Select text, then tap Add note.' : 'Select text then release to add a note. Escape stops.';
     } else if (mode === 'element') {
-      text = touch ? 'Tap an element to preview it, then pin it.' : 'Hover an element, click to annotate.';
+      text = touch ? 'Tap an element to preview it, then pin it.' : 'Hover an element, click to annotate. Escape stops.';
     }
     if (!text) return hideTip();
     state.tip.textContent = text;

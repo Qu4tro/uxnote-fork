@@ -40,6 +40,7 @@ All notable changes to this project will be documented in this file.
 - The block of every attribute at once is labelled as a reference of names rather than a snippet to start from. Copied whole it pointed the widget at a server on `http://localhost:8123` with the key `review-key` and mailed to `team@example.com`.
 - The Options table says where each control lives once the layout is compact, and that the page dimmer starts off where the pointer is coarse.
 ### Fixed
+- Escape leaves whatever capture mode is up. It stopped a region drag and closed a dialog, and did nothing at all to the text mode or the element mode: the only way out of `Annotate an element` was to find the toolbar button that had put you in it. Every overlay that reads the key now marks it handled, so one press dismisses one thing -- the comment card first, the mode after it -- and with no mode on the key is the host page's and untouched.
 - The visibility button was built with a French label and tooltip before the first sync replaced them.
 - Region capture did nothing at all on a touch screen. `selectRegion()` bound mouse events only, so a touch drag framed nothing, opened no prompt, and left the reviewer inside an overlay whose hint named the Escape key.
 - A highlight was committed on the first `touchend`. A press and hold selects one word and every drag of a handle after it is another release, so the widget wrote down the first word and cleared the selection out from under the reviewer mid-gesture.

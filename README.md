@@ -45,7 +45,8 @@ Then open <http://localhost:4173/>.
 ## Features
 
 - **Text highlights and element pins.** Select text or click an element, write
-  a comment, and the page carries a numbered marker.
+  a comment, and the page carries a numbered marker. Escape leaves the mode,
+  whichever of the three it is.
 - **Region screenshots.** Drag a frame around part of the page and the note
   carries a picture of it. On a touch screen one press of the camera takes the
   view. Load snapdom for this.
