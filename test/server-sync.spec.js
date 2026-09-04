@@ -69,6 +69,16 @@ function cards(page) {
   return page.locator('.wn-annot-item');
 }
 
+// The panel starts closed, and writing a note opens it. A load does not, so a
+// test that reaches for a card's own buttons after one opens it itself.
+async function openPanel(page) {
+  const panel = page.locator('.wn-annot-panel');
+  if (!(await panel.isVisible())) {
+    await page.locator('.wn-annot-toolbar button[data-action="toggle-panel"]').click();
+  }
+  await expect(panel).toBeVisible();
+}
+
 // The server taking a note and this browser recording that it did are two
 // moments, and a reload between them re-sends the note. Tests that go on to
 // reload wait for the second one.
@@ -156,6 +166,7 @@ test('a note edited here while the server was away beats the server copy', async
 
   srv.up = false;
   await page.reload();
+  await openPanel(page);
   await cards(page).first().locator('.wn-annot-edit').click();
   const modal = page.locator('.wn-annot-modal-backdrop.show');
   await expect(modal).toBeVisible();
@@ -199,4 +210,24 @@ test('a set written before a server was named is not pushed onto the shared one'
   await expect(page.locator('.wn-annot-sync-dot')).toHaveAttribute('data-sync-status', 'ok');
   await expect(cards(page)).toHaveCount(0);
   expect(srv.puts).toEqual([]);
+});
+
+test('a route change once the server is back does not drop the notes it has not seen', async ({ page }) => {
+  const srv = fakeServer();
+  srv.up = false;
+  await serve(page, srv);
+
+  await page.goto(FIXTURE);
+  await annotate(page, '#first', 'written between two routes');
+  await expect(cards(page)).toHaveCount(1);
+
+  // The pull a route change starts is the one that used to take the set from
+  // the server whole, with nothing on the screen to say a note had gone.
+  srv.up = true;
+  await page.evaluate(() => window.history.pushState({}, '', '/test/fixtures/somewhere-else'));
+  await expect.poll(() => srv.annotations.map((ann) => ann.comment)).toEqual(['written between two routes']);
+
+  await page.evaluate((to) => window.history.pushState({}, '', to), FIXTURE);
+  await expect(cards(page)).toHaveCount(1);
+  await expect(cards(page)).toContainText('written between two routes');
 });
