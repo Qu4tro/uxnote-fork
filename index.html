@@ -214,9 +214,10 @@
       meant for a demo you run locally and may be blocked here.</p>
     <div class="settings-grid">
       <label for="set-theme"><span class="settings-name">data-theme</span>
-        <span class="settings-desc">Theme of the toolbar, panel, and dialogs. auto follows the system and changes with it.</span>
+        <span class="settings-desc">Theme of the toolbar, panel, and dialogs. auto follows the system and changes with it; reverse-auto follows it the other way, so the widget contrasts with a page that follows it too.</span>
         <select id="set-theme">
           <option value="auto">auto</option>
+          <option value="reverse-auto">reverse-auto</option>
           <option value="light">light</option>
           <option value="dark">dark</option>
         </select>
@@ -337,7 +338,7 @@
       // it appends, so a reload is what applies a change.
       var BOOLS = ['true', 'false'];
       var OPTIONS = [
-        { key: 'theme',           attr: 'data-theme',                 kind: 'choice', values: ['auto', 'light', 'dark'], fallback: 'auto' },
+        { key: 'theme',           attr: 'data-theme',                 kind: 'choice', values: ['auto', 'reverse-auto', 'light', 'dark'], fallback: 'auto' },
         { key: 'json-export',     attr: 'data-json-export',           kind: 'choice', values: BOOLS, fallback: 'true' },
         { key: 'json-import',     attr: 'data-json-import',           kind: 'choice', values: BOOLS, fallback: 'true' },
         { key: 'mail-export',     attr: 'data-mail-export',           kind: 'choice', values: BOOLS, fallback: 'true' },

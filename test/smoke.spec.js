@@ -136,6 +136,15 @@ test('the mail handoff has an option of its own here too', async ({ page }) => {
   await expect(page.locator('#settings-snippet')).toContainText('data-mail-export="false"');
 });
 
+test('the demo page carries the reversed theme through to the widget', async ({ page }) => {
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await page.goto('/?theme=reverse-auto');
+  // The widget takes the side the system did not, and the form shows the value
+  // the widget was handed rather than the default it fell back from.
+  await expect(page.locator('html')).toHaveAttribute('data-wn-theme', 'light');
+  await expect(page.locator('#set-theme')).toHaveValue('reverse-auto');
+});
+
 test('every option in the settings grid says what it does', async ({ page }) => {
   await page.goto('/');
   const cards = page.locator('.settings-grid label');
