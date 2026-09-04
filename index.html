@@ -94,6 +94,7 @@
     .card p { color: var(--page-text-muted); font-size: 0.95rem; }
     .pricing { max-width: 64rem; margin: 2rem auto 0; padding: 2rem; }
     .pricing h2 { font-size: 1.6rem; margin-bottom: 1.25rem; }
+    .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
     table { width: 100%; border-collapse: collapse; background: var(--page-surface); border: 1px solid var(--page-border); border-radius: 12px; overflow: hidden; }
     th, td { text-align: left; padding: 0.85rem 1rem; border-bottom: 1px solid var(--page-border-soft); font-size: 0.95rem; }
     th { background: var(--page-surface-alt); font-weight: 600; }
@@ -125,7 +126,7 @@
     .page-theme-switch button { border: 0; background: transparent; color: inherit; font: inherit; font-size: 0.85rem; padding: 0.25rem 0.8rem; cursor: pointer; }
     .page-theme-switch button[aria-pressed="true"] { background: var(--page-note-accent); color: var(--page-note-accent-ink); }
     .page-theme-switch button:focus-visible { outline: 2px solid var(--page-note-accent); outline-offset: -2px; }
-    @media (max-width: 800px) { .hero, .features, .settings-grid { grid-template-columns: 1fr; } header, footer { padding: 1rem 1.25rem; } .fork-note { padding: 0.6rem 1.25rem; } }
+    @media (max-width: 800px) { .hero, .features, .settings-grid { grid-template-columns: 1fr; } header, footer { padding: 1rem 1.25rem; } .fork-note { padding: 0.6rem 1.25rem; } form { flex-wrap: wrap; } form input { flex: 1 1 12rem; min-width: 0; } }
   </style>
 </head>
 <body>
@@ -182,14 +183,16 @@
 
   <section class="pricing" id="pricing">
     <h2>Pricing</h2>
-    <table>
-      <thead><tr><th>Plan</th><th>Observers</th><th>Storage</th><th>Price</th></tr></thead>
-      <tbody>
-        <tr><td>Solo</td><td>1</td><td>5 GB</td><td>Free</td></tr>
-        <tr><td>Team</td><td>Up to 10</td><td>100 GB</td><td>€12 / observer / month</td></tr>
-        <tr><td>Institution</td><td>Unlimited</td><td>1 TB</td><td>Contact us</td></tr>
-      </tbody>
-    </table>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>Plan</th><th>Observers</th><th>Storage</th><th>Price</th></tr></thead>
+        <tbody>
+          <tr><td>Solo</td><td>1</td><td>5 GB</td><td>Free</td></tr>
+          <tr><td>Team</td><td>Up to 10</td><td>100 GB</td><td>€12 / observer / month</td></tr>
+          <tr><td>Institution</td><td>Unlimited</td><td>1 TB</td><td>Contact us</td></tr>
+        </tbody>
+      </table>
+    </div>
   </section>
 
   <form onsubmit="return false">

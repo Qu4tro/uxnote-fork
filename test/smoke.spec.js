@@ -1,4 +1,22 @@
+const crypto = require('crypto');
+const fs = require('fs');
+const path = require('path');
 const { test, expect } = require('@playwright/test');
+
+function sha256(buffer) {
+  return crypto.createHash('sha256').update(buffer).digest('hex');
+}
+
+test('the server under test is serving this working copy', async ({ request }) => {
+  const response = await request.get('/uxnote-tool/uxnote.js');
+  expect(response.ok()).toBe(true);
+  const onDisk = sha256(fs.readFileSync(path.join(__dirname, '..', 'uxnote-tool', 'uxnote.js')));
+  // Outside CI a server already listening on this port is reused rather than
+  // started, so a second checkout is measured in place of this one and nothing
+  // in the output says so. Every number below is worthless if this fails.
+  expect(sha256(await response.body()), 'another checkout answers on this port').toBe(onDisk);
+});
+
 
 test('the widget mounts on the demo page without errors', async ({ page }) => {
   const errors = [];
@@ -76,6 +94,21 @@ test('the export button writes the file without asking first', async ({ page }) 
   // The file holds every annotation of the site whatever is answered, so
   // nothing stands between the press and it.
   await expect(page.locator('.wn-annot-modal-backdrop.show')).toHaveCount(0);
+});
+
+test('the toolbar keeps its full set on a laptop screen', async ({ page }) => {
+  await page.goto('/');
+  const names = await page.locator('.wn-annot-toolbar button').evaluateAll((els) =>
+    els.map((el) => el.getAttribute('data-mode') || el.getAttribute('data-action'))
+  );
+  // The compact bar trims this set; a mouse and a wide window keep all of it.
+  expect(names).toEqual(['text', 'element', 'screenshot', 'import', 'export', 'mail', 'toggle-pos', 'toggle-panel']);
+  await expect(page.locator('.wn-annot-logo')).toBeVisible();
+  await expect(page.locator('.wn-annot-visibility-btn')).toBeVisible();
+  const floating = await page
+    .locator('.wn-annot-visibility-btn')
+    .evaluate((el) => !el.closest('.wn-annot-toolbar'));
+  expect(floating).toBe(true);
 });
 
 test('the widget writes the resolved theme on the html element', async ({ page }) => {

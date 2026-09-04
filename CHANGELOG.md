@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+### Added
+- A form factor the widget reads on two axes instead of one. `(pointer: coarse) and (hover: none)` decides behaviour and target size; `(max-width: 640px), (max-height: 480px)` decides layout density. Both are subscribed, so a rotation rebuilds the toolbar rather than only moving it. A phone in landscape is wider than 640px and now gets the compact layout it needs, and a narrow desktop window keeps its hover previews.
+- Mobile checks in the test suite, on four phone viewports with touch emulation: the toolbar neither scrolls nor wraps, no control is clipped or off screen, every target is at least 44px, the demo page does not widen the document, and the landscape case gets the compact layout.
+- A check that the server under test is serving the working copy, because a run outside CI reuses a server already listening on the port.
+### Changed
+- The toolbar carries five controls on a compact layout -- hide, highlight text, annotate an element, capture, notes -- each 48px, in one row, with no scrolling strip. Import and the top/bottom toggle are left out there, and export moves to the panel head beside delete-all.
+- Fixed chrome is placed with `left` and `right` insets and sized in percent rather than `vw`. A host page that overflows horizontally makes the containing block wider than `100vw`, which used to size the toolbar by one box and position it against another. The rules meant to anchor the bar to the edges on a small screen now carry enough specificity to apply at all.
+- `env(safe-area-inset-*)` on the toolbar, the floating visibility button and the full-screen panel, and `100dvh` with a `100vh` fallback wherever a viewport height is measured.
+- Targets and fields sized for a finger wherever the pointer is coarse: 44px markers, card buttons, delete-all, modal buttons, and 16px fields at every width, under which iOS Safari zooms the page on focus and does not zoom back.
+- The tooltips are drawn only where hover exists. Without it they never opened.
+- The page dimmer is off by default on a coarse pointer. `isBackdropVisible` still turns it on by name.
+- A marker is held inside its host. A touch-sized marker on a block that runs the full width of the screen used to hang past the edge, which widened the document and moved every fixed element on the page with it.
+- The demo page's pricing table scrolls on its own instead of widening the page, and its subscribe row wraps on a narrow screen.
+### Fixed
+- The visibility button was built with a French label and tooltip before the first sync replaced them.
+
 ## [2.1.0] - 2026-09-03
 ### Added
 - Settings on the demo page. The page reads the widget's options from its query string, and a section below the pricing table writes it, says what each option does, and shows the matching script tag. `data-server-url` is taken only on a loopback address and `data-server-api-key` only beside one, so a link cannot point a visitor's notes at somebody else's server.
