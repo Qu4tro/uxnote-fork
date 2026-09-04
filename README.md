@@ -36,7 +36,9 @@ Then open <http://localhost:4173/>.
 - **Region screenshots.** Drag a frame around part of the page and the note
   carries a picture of it. Load snapdom for this.
 - **Server sync.** Name a server and the annotations live on it, one set per
-  site, shared by every reviewer who opens the page.
+  site, shared by every reviewer who opens the page. The browser keeps a copy,
+  so a note written while the server is down survives a reload and goes up when
+  the server comes back.
 - **JSON export and import.** Both are on by default, and each one switches
   off per site.
 - **A dark theme.** `auto` by default, following the system.
@@ -114,11 +116,22 @@ everything it contains.
 With no server named, the annotations sit in `localStorage`: one set per
 origin, drawn on the page that carries them.
 
-Name a server and that server is the only store. The widget reads the set from
-it at load and on each route change, and sends one request per annotation
-written, edited, or deleted. Last write wins, per annotation. A note written
-while the server is down is lost at the next reload, and the widget says so
-with a toast at the moment the request fails.
+Name a server and that server is the shared store, and the browser keeps a copy
+beside it. The widget draws the copy at once, reads the set from the server at
+load and on each route change, settles the two, and sends one request per
+annotation written, edited, or deleted. Last write wins, per annotation. **A
+note written while the server is down survives a reload**, and the widget says
+the request failed with a toast at the moment it does.
+
+The widget asks the server whether it is there at load and every five minutes
+after, backing off from ten seconds while it is not. A server that comes back
+therefore finds the notes it missed without anybody reloading the page or
+writing another one.
+
+Two reviewers on one page settle per note. A note you did not touch takes the
+server's copy; a note you wrote or edited while the server was away is yours
+and goes up; a note another reviewer deleted goes. `PROTOCOL.md` has the
+table.
 
 **A dot beside the wordmark carries the answer to the last request**, so the
 state of the server is on the screen rather than in a toast that has gone. It
@@ -129,7 +142,7 @@ with its own line on hover:
 |---|---|
 | Green | The last request was answered and the notes are on the server. |
 | Yellow | The address answered, but not as this API: a refused key, or something else serving that path. |
-| Red | Nothing answered. The server is down, the address is wrong, or the browser refused to reach it. |
+| Red | Nothing answered. The server is down, the address is wrong, or the browser refused to reach it. Notes are kept in this browser meanwhile. |
 
 **The api key is public.** It sits in the source of every page that carries the
 script tag, so anybody who can read the page can read the key. It stops a
@@ -142,9 +155,10 @@ the server, for every reviewer. The list of imported files lives in the
 importing browser alone. An annotation imported earlier stays in the store
 while the import is off; only the dialog that lists the files is gone.
 
-`PROTOCOL.md` holds the contract: six routes and one JSON shape. Any stack can
-implement it. `server/server.py` does, in the Python 3.9 standard library, and
-it serves the repository too, so the page under review runs on the same origin:
+`PROTOCOL.md` holds the contract: six routes, an optional health probe, and one
+JSON shape. Any stack can implement it. `server/server.py` does, in the Python
+3.9 standard library, and it serves the repository too, so the page under review
+runs on the same origin:
 
 ```sh
 python3 server/server.py --port 8123 --root . --api-key review-key
