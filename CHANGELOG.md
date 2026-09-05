@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.0.1] - 2026-09-05
+### Fixed
+- The floating eye and toolbar share a 50px height and aligned vertical centers in both top and bottom positions.
+
 ## [3.0.0] - 2026-09-04
 ### Added
 - A bubble on a mark. Resting the pointer on a highlight, or on the numbered badge beside any annotation, opens the note it stands for on the page: the kind, the number, the comment, and a button that edits it. It stands off the mark far enough to walk into, flips below the mark where there is no room above it, follows the mark as the page scrolls, and stands down while a capture mode is on so the outline that previews an element keeps the pointer to itself. It is a hover surface and nothing else -- a finger has no hover to give and a keyboard has no pointer, and the card in the panel carries the same comment and the same edit button for both. The badge is the target for an element pin and for a region capture: a pin draws its outline on the page's own element, and one the size of the window would otherwise answer to the pointer anywhere on it.
