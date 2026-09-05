@@ -386,7 +386,8 @@
         position: fixed;
         left: max(12px, env(safe-area-inset-left));
         bottom: max(18px, env(safe-area-inset-bottom));
-        --wn-btn-size: 55px;
+        --wn-btn-size: 50px;
+        box-sizing: border-box;
         width: var(--wn-btn-size);
         height: var(--wn-btn-size);
         display: inline-flex;
