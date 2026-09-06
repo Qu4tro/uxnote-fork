@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 ### Added
 - A sample dialog on the demo page, opened from the hero as a native modal and marked `data-uxnote-allow`.
+- Annotating inside a host page's modal `<dialog>`. A dialog carrying `data-uxnote-allow` and opened with `showModal()` makes the toolbar inert with the rest of the page, so the mode is picked before the dialog opens and stays on for every note taken inside it; the comment card is a dialog of its own, opened over the page's, and the element outline, the mode tip and the toast are drawn above the page's dialog.
+- Modal checks in the test suite: a highlight and an element pin taken inside the dialog are kept inside it, a second note asks for no trip to the toolbar, the card is the topmost dialog and takes the pointer, Escape dismisses the card and leaves the page's dialog open, and a dialog the page says nothing about is still refused.
 
 ## [3.0.1] - 2026-09-05
 ### Fixed

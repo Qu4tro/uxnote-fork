@@ -159,6 +159,14 @@ element with `popover`, or an element with `role="dialog"`, `role="menu"`,
 `data-uxnote-ignore` on any element keeps the widget out of it and of
 everything it contains.
 
+A `<dialog>` carrying `data-uxnote-allow` and opened with `showModal()` is
+annotated from inside. The browser makes everything outside an open modal
+dialog inert, the toolbar with it, so the reviewer picks the mode before
+opening the dialog; the mode then stays on for every note taken inside it, and
+Escape is what leaves it. The comment card is a dialog of its own, opened over
+the page's, and the outline that previews an element, the tip and the toast are
+drawn above the page's dialog too.
+
 ## Storage and the server
 
 With no server named, the annotations sit in `localStorage`: one set per
