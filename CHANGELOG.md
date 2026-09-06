@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [3.1.0] - 2026-09-06
 ### Added
 - A sample dialog on the demo page, opened from the hero as a native modal and marked `data-uxnote-allow`.
 - The widget follows the reviewer into a modal `<dialog>` carrying `data-uxnote-allow`. Its interface moves into the dialog for as long as the dialog is open, so a highlight, an element pin and the comment that goes with either can be written inside a dialog that leaves the rest of the document inert, and it returns to the page when the dialog closes.
