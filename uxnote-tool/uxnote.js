@@ -173,6 +173,7 @@
     markers: {},
     highlightSpans: {},
     elementTargets: {},
+    root: null,
     outlineBox: null,
     selectionBar: null,
     selectionTimer: null,
@@ -276,6 +277,9 @@
     style.setAttribute('data-wn-style', 'annotator');
     style.textContent = `
       .wn-annotator * { box-sizing: border-box; }
+      /* The root generates no box, so a container that lays its children out
+      in a row or a grid gains neither a cell nor a gap by holding it. */
+      #uxnote-root { display: contents; }
       :root {
         --wn-text-highlight: #4e9cf6;
         --wn-text-highlight-overlay: rgba(78, 156, 246, 0.2);
@@ -475,7 +479,9 @@
         box-shadow: 0 10px 24px rgba(109, 86, 199, 0.35);
         transform: translateY(0);
       }
-      body.wn-annot-hidden .wn-annotator:not(.wn-annot-visibility-btn) {
+      /* The root is the frame every surface hangs off, and the eye that
+      brings them back is one of them, so the frame itself stays standing. */
+      body.wn-annot-hidden .wn-annotator:not(.wn-annot-visibility-btn):not(#uxnote-root) {
         display: none !important;
       }
       body.wn-annot-hidden .uxnote-textmark {
@@ -2437,11 +2443,23 @@
     refreshMarkers();
   }
 
+  // Where every surface of the widget's own interface goes. One node holds the
+  // lot, so the interface moves in one step.
+  function chromeRoot() {
+    return state.root || document.body;
+  }
+
   function createShell() {
     // Build toolbar, panel, and annotation layers
+    const root = document.createElement('div');
+    root.id = 'uxnote-root';
+    root.className = 'wn-annotator';
+    document.body.appendChild(root);
+    state.root = root;
+
     const toolbar = document.createElement('div');
     toolbar.className = `wn-annot-toolbar wn-annotator wn-pos-${position}`;
-    document.body.appendChild(toolbar);
+    chromeRoot().appendChild(toolbar);
     state.toolbar = toolbar;
     buildToolbar();
 
@@ -2490,7 +2508,7 @@
       panel.style.left = '18px';
       panel.style.right = 'auto';
     }
-    document.body.appendChild(panel);
+    chromeRoot().appendChild(panel);
     state.panel = panel;
     panel.style.display = 'none';
     const deleteAllBtn = panel.querySelector('.wn-annot-delete-all');
@@ -2521,19 +2539,19 @@
 
     const markerLayer = document.createElement('div');
     markerLayer.className = 'wn-annot-marker-layer wn-annotator';
-    document.body.appendChild(markerLayer);
+    chromeRoot().appendChild(markerLayer);
     state.markerLayer = markerLayer;
 
     const outline = document.createElement('div');
     outline.className = 'wn-annot-outline wn-annotator';
     outline.style.display = 'none';
-    document.body.appendChild(outline);
+    chromeRoot().appendChild(outline);
     state.outlineBox = outline;
 
     const tip = document.createElement('div');
     tip.className = 'wn-annot-tip wn-annotator';
     tip.textContent = 'Active mode';
-    document.body.appendChild(tip);
+    chromeRoot().appendChild(tip);
     state.tip = tip;
 
     toolbar.addEventListener('click', onToolbarClick);
@@ -2559,11 +2577,12 @@
     dimmer.className = 'wn-annot-dimmer';
     dimmer.setAttribute('aria-hidden', 'true');
     dimmer.style.setProperty('--wn-dim-opacity', String(state.dimOpacity));
-    const first = document.body.firstChild;
+    const host = chromeRoot();
+    const first = host.firstChild;
     if (first) {
-      document.body.insertBefore(dimmer, first);
+      host.insertBefore(dimmer, first);
     } else {
-      document.body.appendChild(dimmer);
+      host.appendChild(dimmer);
     }
     state.dimOverlay = dimmer;
     updateDimmer();
@@ -2573,7 +2592,7 @@
     if (!state.visibilityToggle) return;
     const btn = state.visibilityToggle;
     const inlineTarget = isCompactLayout() && state.toolbar && !state.hidden;
-    const target = inlineTarget ? state.toolbar : document.body;
+    const target = inlineTarget ? state.toolbar : chromeRoot();
     if (btn.parentNode !== target) {
       if (btn.parentNode) {
         btn.parentNode.removeChild(btn);
@@ -2581,7 +2600,7 @@
       if (target === state.toolbar) {
         state.toolbar.insertBefore(btn, state.toolbar.firstChild);
       } else {
-        document.body.appendChild(btn);
+        target.appendChild(btn);
       }
     }
   }
@@ -2634,7 +2653,7 @@
     modal.appendChild(textarea);
     modal.appendChild(actions);
     backdrop.appendChild(modal);
-    document.body.appendChild(backdrop);
+    chromeRoot().appendChild(backdrop);
 
     state.commentModal = {
       backdrop,
@@ -2806,7 +2825,7 @@
     modal.appendChild(body);
     modal.appendChild(actions);
     backdrop.appendChild(modal);
-    document.body.appendChild(backdrop);
+    chromeRoot().appendChild(backdrop);
 
     const close = () => {
       backdrop.classList.remove('show');
@@ -3092,7 +3111,7 @@
     modal.appendChild(message);
     modal.appendChild(actions);
     backdrop.appendChild(modal);
-    document.body.appendChild(backdrop);
+    chromeRoot().appendChild(backdrop);
 
     state.dialogModal = { backdrop, modal, title, message, okBtn, cancelBtn };
     return state.dialogModal;
@@ -3292,7 +3311,7 @@
     const toast = document.createElement('div');
     toast.className = 'wn-annot-toast wn-annotator';
     toast.setAttribute('aria-live', 'polite');
-    document.body.appendChild(toast);
+    chromeRoot().appendChild(toast);
     state.toast = toast;
     return toast;
   }
@@ -4109,7 +4128,7 @@
       addNoteForSelection();
     });
     bar.appendChild(add);
-    document.body.appendChild(bar);
+    chromeRoot().appendChild(bar);
     state.selectionBar = bar;
     return bar;
   }
@@ -4186,7 +4205,7 @@
     bar.appendChild(narrower);
     bar.appendChild(wider);
     bar.appendChild(pin);
-    document.body.appendChild(bar);
+    chromeRoot().appendChild(bar);
     state.elementPicker = { bar, name, wider, narrower, pin };
     return state.elementPicker;
   }
@@ -5257,7 +5276,7 @@
     const note = document.createElement('div');
     note.className = 'wn-annot-note wn-annotator';
     note.addEventListener('mouseleave', queueNoteClose);
-    document.body.appendChild(note);
+    chromeRoot().appendChild(note);
     state.note = note;
     return note;
   }
@@ -6838,8 +6857,8 @@
       document.addEventListener('mousemove', onMove, true);
       document.addEventListener('mouseup', onUp, true);
       document.addEventListener('keydown', onKey, true);
-      document.body.appendChild(overlay);
-      document.body.appendChild(hint);
+      chromeRoot().appendChild(overlay);
+      chromeRoot().appendChild(hint);
     });
   }
 
@@ -7029,7 +7048,7 @@
     closeBtn.addEventListener('click', close);
     box.addEventListener('click', close);
     document.addEventListener('keydown', onKey, true);
-    document.body.appendChild(box);
+    chromeRoot().appendChild(box);
   }
 
   document.readyState === 'loading' ? document.addEventListener('DOMContentLoaded', init) : init();
