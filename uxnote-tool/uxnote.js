@@ -1394,6 +1394,9 @@
       .wn-annot-marker:hover { background: var(--wn-marker-bg, var(--wn-element-highlight)); filter: brightness(1.05); }
       .wn-annot-outline {
         position: absolute;
+        margin: 0;
+        inset: auto;
+        padding: 0;
         border: 2px dashed var(--wn-element-highlight, #8b5cf6);
         background: var(--wn-element-highlight-soft, rgba(139,92,246,0.1));
         pointer-events: none;
@@ -1493,6 +1496,8 @@
       }
       .wn-annot-toast {
         position: fixed;
+        margin: 0;
+        inset: auto;
         left: 50%;
         bottom: 26px;
         transform: translateX(-50%);
@@ -1514,6 +1519,8 @@
       }
       .wn-annot-tip {
         position: fixed;
+        margin: 0;
+        inset: auto;
         left: 50%;
         transform: translateX(-50%);
         background: var(--wn-surface);
@@ -2552,12 +2559,14 @@
     const outline = document.createElement('div');
     outline.className = 'wn-annot-outline wn-annotator';
     outline.style.display = 'none';
+    markOverlay(outline);
     document.body.appendChild(outline);
     state.outlineBox = outline;
 
     const tip = document.createElement('div');
     tip.className = 'wn-annot-tip wn-annotator';
     tip.textContent = 'Active mode';
+    markOverlay(tip);
     document.body.appendChild(tip);
     state.tip = tip;
 
@@ -3195,6 +3204,7 @@
     document.addEventListener('mousemove', handleElementHover);
     document.addEventListener('mouseover', handleNoteHover);
     document.addEventListener('click', handleElementClick, true);
+    document.addEventListener('click', raiseTipOverModal);
     window.addEventListener('keydown', handleModeEscape);
     window.addEventListener('resize', refreshMarkers);
     window.addEventListener('resize', applyPageOffset);
@@ -3303,6 +3313,29 @@
     });
   }
 
+  // The three surfaces the reviewer only ever reads: the element outline, the
+  // mode tip and the toast. A host page's modal dialog paints over every fixed
+  // node on the page, so these go in the top layer as manual popovers, which
+  // take no pointer and so never stand between the reviewer and the dialog.
+  // The layer is ordered by the moment a node entered it, so raising one puts
+  // it back on top of a dialog that opened after it.
+  const canRaiseOverlay =
+    typeof HTMLElement !== 'undefined' && typeof HTMLElement.prototype.showPopover === 'function';
+
+  function markOverlay(el) {
+    if (canRaiseOverlay) el.setAttribute('popover', 'manual');
+  }
+
+  function raiseOverlay(el) {
+    if (!el || !canRaiseOverlay) return;
+    try {
+      if (el.matches(':popover-open')) el.hidePopover();
+      el.showPopover();
+    } catch (err) {
+      // Where the top layer is out of reach the node keeps its z-index.
+    }
+  }
+
   function showTipForMode(mode) {
     const touch = isTouchInput();
     let text = '';
@@ -3314,6 +3347,7 @@
     if (!text) return hideTip();
     state.tip.textContent = text;
     state.tip.classList.add('show');
+    raiseOverlay(state.tip);
     positionTip();
     requestAnimationFrame(positionTip);
     requestAnimationFrame(positionTip);
@@ -3323,11 +3357,20 @@
     state.tip.classList.remove('show');
   }
 
+  // A dialog joins the top layer above whatever is in it already, so a tip
+  // that was up before the reviewer opened one has to go back on top of it.
+  // This runs after the page's own handler for the same click.
+  function raiseTipOverModal() {
+    if (!state.tip || !state.tip.classList.contains('show')) return;
+    raiseOverlay(state.tip);
+  }
+
   function ensureToast() {
     if (state.toast) return state.toast;
     const toast = document.createElement('div');
     toast.className = 'wn-annot-toast wn-annotator';
     toast.setAttribute('aria-live', 'polite');
+    markOverlay(toast);
     document.body.appendChild(toast);
     state.toast = toast;
     return toast;
@@ -3338,6 +3381,7 @@
     const toast = ensureToast();
     toast.textContent = message;
     toast.classList.add('show');
+    raiseOverlay(toast);
     if (state.toastTimer) clearTimeout(state.toastTimer);
     state.toastTimer = setTimeout(() => {
       toast.classList.remove('show');
@@ -4391,6 +4435,7 @@
   function showOutline(rect) {
     const o = state.outlineBox;
     o.style.display = 'block';
+    raiseOverlay(o);
     o.style.left = `${rect.x + window.scrollX}px`;
     o.style.top = `${rect.y + window.scrollY}px`;
     o.style.width = `${rect.width}px`;
