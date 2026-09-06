@@ -174,6 +174,8 @@
     highlightSpans: {},
     elementTargets: {},
     root: null,
+    blockedModal: null,
+    hostObserver: null,
     outlineBox: null,
     selectionBar: null,
     selectionTimer: null,
@@ -248,6 +250,8 @@
     retryResolveMissingAnnotations();
     startMissingObserver();
     startLayoutObserver();
+    startHostObserver();
+    syncChromeHost();
     if (!server) focusPendingAnnotation();
     // The copy in this browser is on the page before the server has said
     // anything, so a reviewer with a dead server still opens their notes. The
@@ -3178,6 +3182,9 @@
     document.addEventListener('mousemove', handleElementHover);
     document.addEventListener('mouseover', handleNoteHover);
     document.addEventListener('click', handleElementClick, true);
+    // A dialog's close event does not bubble, so the document reads it on the
+    // way down.
+    document.addEventListener('close', syncChromeHost, true);
     window.addEventListener('keydown', handleModeEscape);
     window.addEventListener('resize', refreshMarkers);
     window.addEventListener('resize', applyPageOffset);
@@ -4396,13 +4403,104 @@
     if (isWithinAnnotator(el)) return false;
     if (el.closest) {
       if (el.closest('[data-uxnote-ignore]')) return false;
-      if (el.closest('[data-uxnote-allow]')) return true;
+      if (el.closest('[data-uxnote-allow]')) return isReachableTarget(el);
       const blocked = el.closest(
         '#uxnote-root, .wn-annotator, dialog, [popover], [role="dialog"], [role="menu"], [role="tooltip"], [aria-modal="true"]'
       );
       if (blocked) return false;
     }
     return true;
+  }
+
+  // A dialog opened with showModal() leaves everything outside it inert, so a
+  // toolbar or a comment card sitting on the body takes neither a click nor a
+  // keystroke while that dialog is up. The interface follows the reviewer into
+  // a dialog the page allows, and returns to the body when it closes.
+  function isAllowedContainer(el) {
+    if (!el || !el.closest) return false;
+    if (el.closest('[data-uxnote-ignore]')) return false;
+    return !!el.closest('[data-uxnote-allow]');
+  }
+
+  function isOpenModal(el) {
+    if (!el || el.tagName !== 'DIALOG' || !el.isConnected || !el.open) return false;
+    try {
+      return el.matches(':modal');
+    } catch (err) {
+      return false;
+    }
+  }
+
+  function openModalAncestor(el) {
+    let node = el && el.closest ? el : null;
+    while (node) {
+      const dialog = node.closest('dialog[open]');
+      if (!dialog) return null;
+      if (isOpenModal(dialog)) return dialog;
+      node = dialog.parentElement;
+    }
+    return null;
+  }
+
+  // Any of these on the dialog makes it the containing block of every fixed
+  // box inside it, and the interface would be laid out against the dialog
+  // instead of against the screen. Such a dialog is one to stay out of.
+  function holdsFixedChildren(el) {
+    const style = window.getComputedStyle(el);
+    return (
+      style.transform !== 'none' ||
+      style.perspective !== 'none' ||
+      style.filter !== 'none' ||
+      (style.backdropFilter || 'none') !== 'none' ||
+      /\b(paint|layout|strict|content)\b/.test(style.contain || '') ||
+      /\b(transform|perspective|filter|contain)\b/.test(style.willChange || '')
+    );
+  }
+
+  // The open modal dialog the interface belongs in: one the page allows, and
+  // the last of them in the document where there are several.
+  function modalChromeHost() {
+    let host = null;
+    document.querySelectorAll('dialog[open]').forEach((dialog) => {
+      if (!isOpenModal(dialog) || !isAllowedContainer(dialog)) return;
+      host = dialog;
+    });
+    return host;
+  }
+
+  // Run on every open, close and removal of a dialog. A dialog a framework
+  // unmounts takes the root out of the document with it, and this puts it
+  // back on the body.
+  function syncChromeHost() {
+    if (!state.root) return;
+    const modal = modalChromeHost();
+    const blocked = !!modal && holdsFixedChildren(modal);
+    if (blocked && state.blockedModal !== modal) {
+      showToast('This area is a popup or overlay. It cannot be annotated.');
+    }
+    state.blockedModal = blocked ? modal : null;
+    const host = blocked || !modal ? document.body : modal;
+    if (state.root.parentNode === host) return;
+    host.appendChild(state.root);
+  }
+
+  function startHostObserver() {
+    if (state.hostObserver || !window.MutationObserver) return;
+    state.hostObserver = new MutationObserver(syncChromeHost);
+    state.hostObserver.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['open', 'data-uxnote-allow', 'data-uxnote-ignore']
+    });
+  }
+
+  // Nothing inside a modal container can be annotated unless the interface
+  // went in with it: the card that takes the comment is inert everywhere else.
+  function isReachableTarget(el) {
+    const modal = openModalAncestor(el);
+    if (!modal) return true;
+    return !!state.root && modal.contains(state.root);
   }
 
   function serializeRange(range, quote) {
