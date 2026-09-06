@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+### Added
+- A sample dialog on the demo page, opened from the hero as a native modal and marked `data-uxnote-allow`.
+
 ## [3.0.1] - 2026-09-05
 ### Fixed
 - The floating eye and toolbar share a 50px height and aligned vertical centers in both top and bottom positions.

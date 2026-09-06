@@ -34,6 +34,18 @@ test('the widget mounts on the demo page without errors', async ({ page }) => {
   expect(errors).toEqual([]);
 });
 
+test('the sample dialog opens from the hero and closes on escape', async ({ page }) => {
+  await page.goto('/');
+  const dialog = page.locator('#sample-dialog');
+  await expect(dialog).toBeHidden();
+  await page.locator('#cta-secondary').click();
+  await expect(dialog).toBeVisible();
+  // Escape belongs to the page while no mode is on, so the browser closes the
+  // modal it opened.
+  await page.keyboard.press('Escape');
+  await expect(dialog).toBeHidden();
+});
+
 test('the toolbar offers a capture button', async ({ page }) => {
   await page.goto('/');
   await expect(page.locator('.wn-annot-toolbar button[data-mode="screenshot"]')).toBeVisible();

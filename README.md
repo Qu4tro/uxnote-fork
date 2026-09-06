@@ -20,6 +20,9 @@ The page carries its own **Page theme** switch, light or dark, in the note at
 the top of it. It is the page's colours alone and it never follows the system,
 so the widget's own `data-theme` can be read against either background.
 
+The hero's **See a sample** button opens a native `<dialog>` as a modal, marked
+`data-uxnote-allow`.
+
 The page carries the widget's options in its query string, and the **Widget
 settings** section below the pricing table writes it: pick a set, press Apply
 and reload, and the page comes back with the widget holding it. Every option
