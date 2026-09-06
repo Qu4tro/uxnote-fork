@@ -3949,6 +3949,7 @@
   }
 
   async function commitTextAnnotation(range, snippet) {
+    const keepMode = isInsideOpenModal(range.commonAncestorContainer);
     const res = await awaitComment('Comment for this highlight?');
     if (!res) return;
     const { comment } = res;
@@ -3972,7 +3973,7 @@
     saveAnnotations();
     addMarkerForAnnotation(annotation, span);
     renderList();
-    setMode(null, { keepOutline: true });
+    if (!keepMode) setMode(null, { keepOutline: true });
   }
 
   function handleElementHover(evt) {
@@ -4033,6 +4034,7 @@
   }
 
   async function commitElementAnnotation(el) {
+    const keepMode = isInsideOpenModal(el);
     const res = await awaitComment('Comment for this element?');
     if (!res) return;
     const { comment } = res;
@@ -4057,7 +4059,7 @@
     addMarkerForAnnotation(annotation, el);
     applyElementHighlight(el, id);
     renderList();
-    setMode(null, { keepOutline: true });
+    if (!keepMode) setMode(null, { keepOutline: true });
   }
 
   // ------------------------------------------------------------------
@@ -4405,6 +4407,22 @@
       (node.classList && node.classList.contains('wn-annotator')) ||
       (node.parentElement && isWithinAnnotator(node.parentElement))
     );
+  }
+
+  // A host page's modal dialog makes everything under it inert, and the
+  // toolbar is under it. A note committed inside one keeps the mode on, so the
+  // next selection asks for nothing the reviewer cannot reach. Escape is still
+  // the way out of the mode.
+  function isInsideOpenModal(node) {
+    const el = node && node.nodeType === Node.ELEMENT_NODE ? node : node && node.parentElement;
+    if (!el || !el.closest) return false;
+    const host = el.closest('dialog');
+    if (!host) return false;
+    try {
+      return host.matches(':modal');
+    } catch (err) {
+      return false;
+    }
   }
 
   function isAnnotatableTarget(node) {
