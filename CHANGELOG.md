@@ -7,6 +7,8 @@ All notable changes to this project will be documented in this file.
 - A sample dialog on the demo page, opened from the hero as a native modal and marked `data-uxnote-allow`.
 - The widget follows the reviewer into a modal `<dialog>` carrying `data-uxnote-allow`. Its interface moves into the dialog for as long as the dialog is open, so a highlight, an element pin and the comment that goes with either can be written inside a dialog that leaves the rest of the document inert, and it returns to the page when the dialog closes.
 - A refusal for a dialog whose own `transform`, `filter`, `perspective`, `contain` or `will-change` would place the interface against the dialog box instead of the screen: the widget stays on the page and says so with the toast the other overlays get.
+### Fixed
+- A pin on an element inside a positioned container that scrolls -- a modal dialog is one by the browser's own stylesheet -- sat off its element by the container's border and by however far the container had scrolled.
 
 ## [3.0.1] - 2026-09-05
 ### Fixed

@@ -52,6 +52,51 @@ test('the toolbar answers inside the modal and pins a control in the dialog', as
   await expect(page.locator('#thread .wn-annot-marker')).toHaveCount(1);
 });
 
+// The outline is an absolute box, and inside the dialog its containing block
+// is the dialog. A document coordinate there lands the outline a dialog's
+// width and height away from the element, and over the dialog's edge.
+test('the outline inside the modal is drawn on the element under the pointer', async ({ page }) => {
+  await page.goto('/test/fixtures/modal-allow.html');
+  await openThread(page);
+  await modeButton(page, 'element').click();
+  await page.locator('#inside').hover();
+  const target = await page.locator('#inside').boundingBox();
+  const outline = await page.locator('#thread .wn-annot-outline').boundingBox();
+  expect(Math.abs(outline.x - target.x)).toBeLessThan(1);
+  expect(Math.abs(outline.y - target.y)).toBeLessThan(1);
+  expect(Math.abs(outline.width - target.width)).toBeLessThan(1);
+  expect(Math.abs(outline.height - target.height)).toBeLessThan(1);
+  const overflow = await page.locator('#thread').evaluate((dialog) => ({
+    x: dialog.scrollWidth - dialog.clientWidth,
+    y: dialog.scrollHeight - dialog.clientHeight
+  }));
+  expect(overflow).toEqual({ x: 0, y: 0 });
+});
+
+// A modal dialog scrolls its own content, and a pin placed in it is laid out
+// from the dialog's scrolled padding box, not from where the dialog's border
+// stands on the screen.
+test('a pin inside a scrolled dialog sits on its element', async ({ page }) => {
+  await page.goto('/test/fixtures/modal-allow.html');
+  await openThread(page);
+  await page.locator('#thread').evaluate((dialog) => {
+    dialog.style.height = '160px';
+    const filler = document.createElement('div');
+    filler.style.height = '400px';
+    dialog.insertBefore(filler, document.getElementById('reply'));
+    dialog.scrollTop = dialog.scrollHeight;
+  });
+  expect(await page.locator('#thread').evaluate((dialog) => dialog.scrollTop)).toBeGreaterThan(100);
+  await modeButton(page, 'element').click();
+  await page.locator('#reply').click();
+  await writeComment(page, 'A pin on a control the dialog scrolled to');
+  const target = await page.locator('#reply').boundingBox();
+  const pin = await page.locator('#thread .wn-annot-marker').boundingBox();
+  // The pin is centred four pixels past the element's top-right corner.
+  expect(Math.abs(pin.x + pin.width / 2 - (target.x + target.width + 4))).toBeLessThan(1);
+  expect(Math.abs(pin.y + pin.height / 2 - (target.y - 4))).toBeLessThan(1);
+});
+
 test('closing the dialog brings the interface back to the page', async ({ page }) => {
   await page.goto('/test/fixtures/modal-allow.html');
   await openThread(page);

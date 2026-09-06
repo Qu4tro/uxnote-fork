@@ -4373,8 +4373,16 @@
   function showOutline(rect) {
     const o = state.outlineBox;
     o.style.display = 'block';
-    o.style.left = `${rect.x + window.scrollX}px`;
-    o.style.top = `${rect.y + window.scrollY}px`;
+    // On the page the outline is a box in the document. Inside a dialog the
+    // interface has moved into, it is a box in the dialog, and a document
+    // coordinate there lands a dialog's width and height away from the
+    // element -- and past the dialog's edge, which gives the dialog a
+    // scrollbar for the room it takes.
+    const host = o.offsetParent;
+    const origin =
+      host && !isGlobalMarkerHost(host) ? hostOrigin(host) : { x: -window.scrollX, y: -window.scrollY };
+    o.style.left = `${rect.x - origin.x}px`;
+    o.style.top = `${rect.y - origin.y}px`;
     o.style.width = `${rect.width}px`;
     o.style.height = `${rect.height}px`;
   }
@@ -4690,6 +4698,19 @@
 
   function isGlobalMarkerHost(host) {
     return host === document.body || host === state.markerLayer || host === document.documentElement;
+  }
+
+  // Where an absolute box inside a positioned host is measured from: the
+  // host's padding box, at the host's own scroll position. A modal dialog is
+  // a scroll container by the browser's stylesheet, so a box measured from
+  // the dialog's border box instead sat off its element by the border and by
+  // however far the dialog had scrolled.
+  function hostOrigin(host) {
+    const rect = host.getBoundingClientRect();
+    return {
+      x: rect.x + host.clientLeft - host.scrollLeft,
+      y: rect.y + host.clientTop - host.scrollTop
+    };
   }
 
   function openContainersForTarget(targetEl) {
@@ -5171,11 +5192,10 @@
     const offset = getMarkerOffset(annotation);
     const offsetParent = marker.offsetParent || document.body;
     const parentRect = offsetParent.getBoundingClientRect();
-    const parentDocX = parentRect.x + window.scrollX;
-    const parentDocY = parentRect.y + window.scrollY;
-    const targetDocX = rect.x + window.scrollX;
-    const targetDocY = rect.y + window.scrollY;
-    const left = targetDocX - parentDocX + rect.w + offset.x + 4;
+    const origin = isGlobalMarkerHost(offsetParent)
+      ? { x: parentRect.x, y: parentRect.y }
+      : hostOrigin(offsetParent);
+    const left = rect.x - origin.x + rect.w + offset.x + 4;
     // The marker is centred on `left`, so it parks half its width past the
     // right edge of its target. On a block that runs the full width of the
     // screen that half hangs outside the document, which widens the document
@@ -5186,7 +5206,7 @@
       : offsetParent.clientWidth;
     const half = (marker.offsetWidth || 25) / 2;
     marker.style.left = `${bound ? Math.min(left, bound - half - 2) : left}px`;
-    marker.style.top = `${targetDocY - parentDocY + offset.y - 4}px`;
+    marker.style.top = `${rect.y - origin.y + offset.y - 4}px`;
   }
 
   function getMarkerOffset(annotation) {
