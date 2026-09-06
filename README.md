@@ -159,6 +159,22 @@ element with `popover`, or an element with `role="dialog"`, `role="menu"`,
 `data-uxnote-ignore` on any element keeps the widget out of it and of
 everything it contains.
 
+A `<dialog>` opened with `showModal()` leaves every element outside it inert,
+so an allowed one is a container the widget moves into: while it is open, the
+toolbar, the panel, the comment card and the markers live inside the dialog,
+where they answer to a click and to a key. A highlight and a pin are drawn in
+the dialog, closing it brings the interface back to the page, and reopening it
+brings the notes back with it. One thing stops the move: a `transform`, a
+`filter`, a `perspective`, a `contain` that paints or lays out, or a
+`will-change` naming one of those, set on the dialog itself, makes the dialog
+the containing block of every fixed box inside it -- the toolbar would be
+placed against the dialog rather than against the screen. The widget reads the
+dialog's style, stays where it is, and refuses the dialog with the same toast.
+
+Only a `<dialog>` is followed. A modal built out of a `role="dialog"` element
+and `inert` siblings takes `data-uxnote-allow` like anything else, and the
+interface stays on the page, where that page has put it out of reach.
+
 ## Storage and the server
 
 With no server named, the annotations sit in `localStorage`: one set per

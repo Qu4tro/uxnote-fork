@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>A thread in a modal dialog</title>
+  <style>
+    dialog { width: 460px; }
+  </style>
+</head>
+<body>
+  <h1>A thread in a modal dialog</h1>
+  <p id="outside">This paragraph belongs to the page under the dialog, and reads the same either way.</p>
+  <button id="open-thread" type="button">Open the thread</button>
+  <button id="open-plain" type="button">Open the plain dialog</button>
+
+  <dialog id="thread" data-uxnote-allow>
+    <p id="inside">The thread carries a sentence of its own, long enough to drag a selection across.</p>
+    <button id="reply" type="button">Reply</button>
+    <button id="close-thread" type="button">Close the thread</button>
+  </dialog>
+
+  <dialog id="plain">
+    <p id="inside-plain">This dialog says nothing about the widget, so the widget stays out of it.</p>
+    <button id="close-plain" type="button">Close</button>
+  </dialog>
+
+  <script>
+    const thread = document.getElementById('thread');
+    const plain = document.getElementById('plain');
+    document.getElementById('open-thread').addEventListener('click', () => thread.showModal());
+    document.getElementById('open-plain').addEventListener('click', () => plain.showModal());
+    document.getElementById('close-thread').addEventListener('click', () => thread.close());
+    document.getElementById('close-plain').addEventListener('click', () => plain.close());
+  </script>
+  <script src="../../uxnote-tool/uxnote.js"></script>
+</body>
+</html>
