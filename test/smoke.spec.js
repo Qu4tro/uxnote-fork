@@ -62,7 +62,7 @@ test('the capture leaves the interface on the page', async ({ page }) => {
   // The picture comes off a copy of the page, so releasing the drag takes
   // nothing away from the reviewer and the comment prompt opens on the spot.
   expect(await page.locator('.wn-annot-toolbar').isVisible()).toBe(true);
-  await expect(page.locator('.wn-annot-modal-backdrop.show')).toBeVisible();
+  await expect(page.locator('.wn-annot-comment-dialog[open]')).toBeVisible();
 });
 
 test('the toolbar holds one row on a laptop screen', async ({ page }) => {
@@ -123,7 +123,7 @@ test('the mail handoff survives a page with the JSON export off', async ({ page 
   await expect(page.locator('.wn-annot-panel button[data-action="mail"]')).toBeVisible();
   await page.locator('.wn-annot-panel button[data-action="mail"]').click();
   // The handoff goes straight to the mail client; it opens nothing on the page.
-  await expect(page.locator('.wn-annot-modal-backdrop.show')).toHaveCount(0);
+  await expect(page.locator('.wn-annot-modal-backdrop.show, .wn-annot-comment-dialog[open]')).toHaveCount(0);
   expect(errors).toEqual([]);
 });
 
@@ -144,7 +144,7 @@ test('the export button writes the file without asking first', async ({ page }) 
   expect((await download).suggestedFilename()).toMatch(/\.json$/);
   // The file holds every annotation of the site whatever is answered, so
   // nothing stands between the press and it.
-  await expect(page.locator('.wn-annot-modal-backdrop.show')).toHaveCount(0);
+  await expect(page.locator('.wn-annot-modal-backdrop.show, .wn-annot-comment-dialog[open]')).toHaveCount(0);
 });
 
 test('the toolbar keeps its full set on a laptop screen', async ({ page }) => {
@@ -448,7 +448,7 @@ test('a mouse still commits a highlight on the release', async ({ page }) => {
   await page.mouse.up();
   // The selection action bar is a coarse-pointer answer. A mouse has a
   // release that means what it says, and never builds one.
-  await expect(page.locator('.wn-annot-modal-backdrop.show')).toBeVisible();
+  await expect(page.locator('.wn-annot-comment-dialog[open]')).toBeVisible();
   await expect(page.locator('.wn-annot-selection-bar')).toHaveCount(0);
 });
 
@@ -459,7 +459,7 @@ test('a mouse still previews an element on hover and commits on the click', asyn
   await card.hover();
   await expect(page.locator('.wn-annot-outline')).toHaveCSS('display', 'block');
   await card.click();
-  await expect(page.locator('.wn-annot-modal-backdrop.show')).toBeVisible();
+  await expect(page.locator('.wn-annot-comment-dialog[open]')).toBeVisible();
   // Tap-to-preview is what replaces a hover the pointer does not have.
   await expect(page.locator('.wn-annot-pick-bar')).toHaveCount(0);
 });
@@ -474,7 +474,7 @@ test('a mouse still frames the region it captures', async ({ page }) => {
   await page.mouse.down();
   await page.mouse.move(420, 440, { steps: 5 });
   await page.mouse.up();
-  await expect(page.locator('.wn-annot-modal-backdrop.show')).toBeVisible();
+  await expect(page.locator('.wn-annot-comment-dialog[open]')).toBeVisible();
   await page.locator('.wn-annot-modal textarea').fill('a framed corner');
   await page.locator('.wn-annot-modal .wn-annot-pill.primary').click();
   await expect
@@ -621,11 +621,11 @@ async function captureRegion(page) {
   await page.mouse.down();
   await page.mouse.move(360, 300);
   await page.mouse.up();
-  const prompt = page.locator('.wn-annot-modal-backdrop.show');
+  const prompt = page.locator('.wn-annot-comment-dialog[open]');
   await expect(prompt).toBeVisible();
   await prompt.locator('textarea').fill('a region written while the server was away');
   await prompt.locator('.wn-annot-pill.primary').click();
-  await expect(page.locator('.wn-annot-modal-backdrop.show')).toHaveCount(0);
+  await expect(page.locator('.wn-annot-comment-dialog[open]')).toHaveCount(0);
 }
 
 test('a capture survives a server that is not answering', async ({ page }) => {

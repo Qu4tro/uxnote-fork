@@ -1570,6 +1570,26 @@
         font-weight: 700;
         color: var(--wn-text);
       }
+      /* The prompt is a dialog the widget opens modally, so it stays live over
+         a host page's own modal: the top layer holds the newest one and makes
+         everything under it inert. The look is the card's own -- what is
+         reset here is what the UA gives a modal dialog and the card already
+         carries: the centring margin and inset, and the room a scroller
+         needs. */
+      .wn-annot-comment-dialog {
+        margin: 0;
+        inset: auto;
+        max-height: none;
+        overflow: visible;
+      }
+      .wn-annot-comment-dialog:not([open]) { display: none; }
+      /* The backdrop is the dialog's own box for a hit test, and a card that
+         reads as hovered wherever the pointer is left never goes translucent
+         again. Nothing under a modal dialog answers a pointer anyway. */
+      .wn-annot-comment-dialog::backdrop {
+        background: var(--wn-backdrop);
+        pointer-events: none;
+      }
       .wn-annot-comment-card {
         position: fixed;
         left: 50%;
@@ -2269,10 +2289,15 @@
     // cannot be scrolled at all.
     if (state.hidden || !isCompactLayout()) return false;
     if (state.panel && state.panel.style.display !== 'none') return true;
-    return sheetModals.some((key) => {
-      const modalState = state[key];
-      return modalState && modalState.backdrop.classList.contains('show');
-    });
+    return sheetModals.some((key) => isModalStateOpen(state[key]));
+  }
+
+  // The comment card is a dialog in the top layer and says so itself. The rest
+  // are a backdrop with a class on it.
+  function isModalStateOpen(modalState) {
+    if (!modalState) return false;
+    if (modalState.dialog) return modalState.dialog.open;
+    return modalState.backdrop.classList.contains('show');
   }
 
   // Hold the page still under a sheet. Nothing did this before, so a flick
@@ -2604,10 +2629,8 @@
 
   function ensureCommentModal() {
     if (state.commentModal) return state.commentModal;
-    const backdrop = document.createElement('div');
-    backdrop.className = 'wn-annot-modal-backdrop wn-annotator';
-    const modal = document.createElement('div');
-    modal.className = 'wn-annot-modal wn-annot-comment-card wn-annot-sheet wn-annotator';
+    const dialog = document.createElement('dialog');
+    dialog.className = 'wn-annot-comment-dialog wn-annot-modal wn-annot-comment-card wn-annot-sheet wn-annotator';
 
     const title = document.createElement('h4');
     title.textContent = 'Add a comment';
@@ -2629,16 +2652,14 @@
 
     actions.appendChild(cancelBtn);
     actions.appendChild(okBtn);
-    modal.appendChild(buildSheetGrip('Discard this comment', () => cancelBtn.click()));
-    modal.appendChild(title);
-    modal.appendChild(textarea);
-    modal.appendChild(actions);
-    backdrop.appendChild(modal);
-    document.body.appendChild(backdrop);
+    dialog.appendChild(buildSheetGrip('Discard this comment', () => cancelBtn.click()));
+    dialog.appendChild(title);
+    dialog.appendChild(textarea);
+    dialog.appendChild(actions);
+    document.body.appendChild(dialog);
 
     state.commentModal = {
-      backdrop,
-      modal,
+      dialog,
       textarea,
       title,
       okBtn,
@@ -2652,8 +2673,8 @@
   function positionCommentCard() {
     const modalState = state.commentModal;
     if (!modalState || !state.toolbar) return;
-    if (!modalState.backdrop.classList.contains('show')) return;
-    const card = modalState.modal;
+    if (!modalState.dialog.open) return;
+    const card = modalState.dialog;
     if (isCompactLayout()) {
       // The sheet is placed against the viewport edges by the stylesheet, and
       // an inline left and bottom from the parked-card path would beat it.
@@ -2677,22 +2698,28 @@
   function askForComment(label, defaultValue = '') {
     return new Promise((resolve) => {
       const modalState = ensureCommentModal();
-      const { backdrop, textarea, title, okBtn, cancelBtn } = modalState;
+      const { dialog, textarea, title, okBtn, cancelBtn } = modalState;
       title.textContent = label || 'Add a comment';
       textarea.value = defaultValue || '';
       textarea.placeholder = 'Your comment...';
 
-      backdrop.classList.add('show');
+      // Modally, so the card is the newest thing in the top layer: over the
+      // host page's own modal dialog, and live while that one is inert.
+      if (!dialog.open) dialog.showModal();
       positionCommentCard();
       syncPageScrollLock();
       textarea.focus();
       textarea.select();
 
+      let settled = false;
       const close = (val) => {
-        backdrop.classList.remove('show');
+        if (settled) return;
+        settled = true;
+        if (dialog.open) dialog.close();
         syncPageScrollLock();
         okBtn.removeEventListener('click', onOk);
         cancelBtn.removeEventListener('click', onCancel);
+        dialog.removeEventListener('cancel', onDialogCancel);
         document.removeEventListener('keydown', onKey);
         window.removeEventListener('resize', positionCommentCard);
         resolve(val);
@@ -2712,10 +2739,19 @@
         }
       };
 
+      // The other way out of a modal dialog. A close request the keydown above
+      // did not take -- the browser's own dismiss gesture, say -- reaches the
+      // topmost dialog and only that one, so the host page's modal stays open.
+      const onDialogCancel = (evt) => {
+        evt.preventDefault();
+        close(null);
+      };
+
       okBtn.textContent = 'Save';
       cancelBtn.textContent = 'Cancel';
       okBtn.addEventListener('click', onOk);
       cancelBtn.addEventListener('click', onCancel);
+      dialog.addEventListener('cancel', onDialogCancel);
       document.addEventListener('keydown', onKey);
       window.addEventListener('resize', positionCommentCard);
     });
@@ -3941,6 +3977,12 @@
 
   function handleElementHover(evt) {
     if (state.mode !== 'element') return;
+    // The card is a dialog over the whole page while it is up, and the page
+    // under it is nothing the pointer is picking.
+    if (isCommentOpen()) {
+      hideOutline();
+      return;
+    }
     const el = evt.target;
     if (!el || !isAnnotatableTarget(el)) {
       hideOutline();
@@ -3968,6 +4010,7 @@
   // Click on a DOM element to mark it and add a comment (element mode)
   async function handleElementClick(evt) {
     if (state.mode !== 'element') return;
+    if (isCommentOpen()) return;
     const el = evt.target;
     // The widget's own controls are not a target and never were. Saying so
     // out loud on every tap of the toolbar -- which the picker bar now sits
@@ -4053,8 +4096,7 @@
   }
 
   function isCommentOpen() {
-    const modalState = state.commentModal;
-    return !!(modalState && modalState.backdrop.classList.contains('show'));
+    return isModalStateOpen(state.commentModal);
   }
 
   // The selection the reviewer has settled on, or nothing. A range that runs

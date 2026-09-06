@@ -57,7 +57,7 @@ async function serve(page, srv) {
 async function annotate(page, selector, comment) {
   await page.click('.wn-annot-toolbar [data-action="mode"][data-mode="element"]');
   await page.click(selector);
-  const modal = page.locator('.wn-annot-modal-backdrop.show');
+  const modal = page.locator('.wn-annot-comment-dialog[open]');
   await expect(modal).toBeVisible();
   // A comment is the whole of a note from this branch on, so the reviewer name
   // is only there on the branches before it.
@@ -171,7 +171,7 @@ test('a note edited here while the server was away beats the server copy', async
   await page.reload();
   await openPanel(page);
   await cards(page).first().locator('.wn-annot-edit').click();
-  const modal = page.locator('.wn-annot-modal-backdrop.show');
+  const modal = page.locator('.wn-annot-comment-dialog[open]');
   await expect(modal).toBeVisible();
   await modal.locator('textarea').fill('the wording written while it was away');
   await modal.locator('.wn-annot-pill.primary').click();

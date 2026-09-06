@@ -84,7 +84,7 @@ async function enterMode(page, mode) {
 }
 
 async function saveComment(page, text) {
-  await expect(page.locator('.wn-annot-modal-backdrop.show')).toBeVisible();
+  await expect(page.locator('.wn-annot-comment-dialog[open]')).toBeVisible();
   await page.locator('.wn-annot-modal textarea').fill(text);
   await page.locator('.wn-annot-modal .wn-annot-pill.primary').click();
 }
@@ -98,7 +98,7 @@ test('a release mid-selection no longer commits the highlight', async ({ page })
   await page.waitForTimeout(150);
   // Measured on this tree before the branch: promptOpenedOnFirstTouchend was
   // true, and it cleared the selection the reviewer was still extending.
-  await expect(page.locator('.wn-annot-modal-backdrop.show')).toBeHidden();
+  await expect(page.locator('.wn-annot-comment-dialog[open]')).toBeHidden();
   expect(await page.evaluate(() => window.getSelection().toString())).toBe(first);
   expect(await store(page)).toEqual([]);
 });
@@ -168,7 +168,7 @@ test('the element preview precedes the commit', async ({ page }) => {
   await expect(outline).toHaveCSS('display', 'none');
   await tapInside(page, '#hero-copy');
   await expect(outline).toHaveCSS('display', 'block');
-  await expect(page.locator('.wn-annot-modal-backdrop.show')).toBeHidden();
+  await expect(page.locator('.wn-annot-comment-dialog[open]')).toBeHidden();
   await expect(page.locator('.wn-annot-pick-name')).toHaveText('p#hero-copy');
   expect(await store(page)).toEqual([]);
   const outlined = await outline.boundingBox();

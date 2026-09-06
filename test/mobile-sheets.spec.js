@@ -281,7 +281,7 @@ test('export is one action and opens no modal', async ({ page }) => {
   // worth of a screen this size, and the mail arm puts the whole document in a
   // URL.
   expect((await download).suggestedFilename()).toMatch(/\.json$/);
-  await expect(page.locator('.wn-annot-modal-backdrop.show')).toHaveCount(0);
+  await expect(page.locator('.wn-annot-modal-backdrop.show, .wn-annot-comment-dialog[open]')).toHaveCount(0);
 });
 
 test('export hands the file to the share sheet where there is one', async ({ page }) => {
@@ -302,7 +302,7 @@ test('export hands the file to the share sheet where there is one', async ({ pag
   expect(shared[0].type).toBe('application/json');
   expect(shared[0].name).toMatch(/\.json$/);
   expect(shared[0].size).toBeGreaterThan(0);
-  await expect(page.locator('.wn-annot-modal-backdrop.show')).toHaveCount(0);
+  await expect(page.locator('.wn-annot-modal-backdrop.show, .wn-annot-comment-dialog[open]')).toHaveCount(0);
 });
 
 test('the import modal is absent, and the landscape failure cannot recur', async ({ page }) => {
