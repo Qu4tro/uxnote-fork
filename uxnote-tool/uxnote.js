@@ -173,6 +173,9 @@
     markers: {},
     highlightSpans: {},
     elementTargets: {},
+    root: null,
+    blockedModal: null,
+    hostObserver: null,
     outlineBox: null,
     selectionBar: null,
     selectionTimer: null,
@@ -247,6 +250,8 @@
     retryResolveMissingAnnotations();
     startMissingObserver();
     startLayoutObserver();
+    startHostObserver();
+    syncChromeHost();
     if (!server) focusPendingAnnotation();
     // The copy in this browser is on the page before the server has said
     // anything, so a reviewer with a dead server still opens their notes. The
@@ -276,6 +281,9 @@
     style.setAttribute('data-wn-style', 'annotator');
     style.textContent = `
       .wn-annotator * { box-sizing: border-box; }
+      /* The root generates no box, so a container that lays its children out
+      in a row or a grid gains neither a cell nor a gap by holding it. */
+      #uxnote-root { display: contents; }
       :root {
         --wn-text-highlight: #4e9cf6;
         --wn-text-highlight-overlay: rgba(78, 156, 246, 0.2);
@@ -475,7 +483,9 @@
         box-shadow: 0 10px 24px rgba(109, 86, 199, 0.35);
         transform: translateY(0);
       }
-      body.wn-annot-hidden .wn-annotator:not(.wn-annot-visibility-btn) {
+      /* The root is the frame every surface hangs off, and the eye that
+      brings them back is one of them, so the frame itself stays standing. */
+      body.wn-annot-hidden .wn-annotator:not(.wn-annot-visibility-btn):not(#uxnote-root) {
         display: none !important;
       }
       body.wn-annot-hidden .uxnote-textmark {
@@ -2437,11 +2447,23 @@
     refreshMarkers();
   }
 
+  // Where every surface of the widget's own interface goes. One node holds the
+  // lot, so the interface moves in one step.
+  function chromeRoot() {
+    return state.root || document.body;
+  }
+
   function createShell() {
     // Build toolbar, panel, and annotation layers
+    const root = document.createElement('div');
+    root.id = 'uxnote-root';
+    root.className = 'wn-annotator';
+    document.body.appendChild(root);
+    state.root = root;
+
     const toolbar = document.createElement('div');
     toolbar.className = `wn-annot-toolbar wn-annotator wn-pos-${position}`;
-    document.body.appendChild(toolbar);
+    chromeRoot().appendChild(toolbar);
     state.toolbar = toolbar;
     buildToolbar();
 
@@ -2490,7 +2512,7 @@
       panel.style.left = '18px';
       panel.style.right = 'auto';
     }
-    document.body.appendChild(panel);
+    chromeRoot().appendChild(panel);
     state.panel = panel;
     panel.style.display = 'none';
     const deleteAllBtn = panel.querySelector('.wn-annot-delete-all');
@@ -2521,19 +2543,19 @@
 
     const markerLayer = document.createElement('div');
     markerLayer.className = 'wn-annot-marker-layer wn-annotator';
-    document.body.appendChild(markerLayer);
+    chromeRoot().appendChild(markerLayer);
     state.markerLayer = markerLayer;
 
     const outline = document.createElement('div');
     outline.className = 'wn-annot-outline wn-annotator';
     outline.style.display = 'none';
-    document.body.appendChild(outline);
+    chromeRoot().appendChild(outline);
     state.outlineBox = outline;
 
     const tip = document.createElement('div');
     tip.className = 'wn-annot-tip wn-annotator';
     tip.textContent = 'Active mode';
-    document.body.appendChild(tip);
+    chromeRoot().appendChild(tip);
     state.tip = tip;
 
     toolbar.addEventListener('click', onToolbarClick);
@@ -2559,11 +2581,12 @@
     dimmer.className = 'wn-annot-dimmer';
     dimmer.setAttribute('aria-hidden', 'true');
     dimmer.style.setProperty('--wn-dim-opacity', String(state.dimOpacity));
-    const first = document.body.firstChild;
+    const host = chromeRoot();
+    const first = host.firstChild;
     if (first) {
-      document.body.insertBefore(dimmer, first);
+      host.insertBefore(dimmer, first);
     } else {
-      document.body.appendChild(dimmer);
+      host.appendChild(dimmer);
     }
     state.dimOverlay = dimmer;
     updateDimmer();
@@ -2573,7 +2596,7 @@
     if (!state.visibilityToggle) return;
     const btn = state.visibilityToggle;
     const inlineTarget = isCompactLayout() && state.toolbar && !state.hidden;
-    const target = inlineTarget ? state.toolbar : document.body;
+    const target = inlineTarget ? state.toolbar : chromeRoot();
     if (btn.parentNode !== target) {
       if (btn.parentNode) {
         btn.parentNode.removeChild(btn);
@@ -2581,7 +2604,7 @@
       if (target === state.toolbar) {
         state.toolbar.insertBefore(btn, state.toolbar.firstChild);
       } else {
-        document.body.appendChild(btn);
+        target.appendChild(btn);
       }
     }
   }
@@ -2634,7 +2657,7 @@
     modal.appendChild(textarea);
     modal.appendChild(actions);
     backdrop.appendChild(modal);
-    document.body.appendChild(backdrop);
+    chromeRoot().appendChild(backdrop);
 
     state.commentModal = {
       backdrop,
@@ -2806,7 +2829,7 @@
     modal.appendChild(body);
     modal.appendChild(actions);
     backdrop.appendChild(modal);
-    document.body.appendChild(backdrop);
+    chromeRoot().appendChild(backdrop);
 
     const close = () => {
       backdrop.classList.remove('show');
@@ -3092,7 +3115,7 @@
     modal.appendChild(message);
     modal.appendChild(actions);
     backdrop.appendChild(modal);
-    document.body.appendChild(backdrop);
+    chromeRoot().appendChild(backdrop);
 
     state.dialogModal = { backdrop, modal, title, message, okBtn, cancelBtn };
     return state.dialogModal;
@@ -3159,6 +3182,9 @@
     document.addEventListener('mousemove', handleElementHover);
     document.addEventListener('mouseover', handleNoteHover);
     document.addEventListener('click', handleElementClick, true);
+    // A dialog's close event does not bubble, so the document reads it on the
+    // way down.
+    document.addEventListener('close', syncChromeHost, true);
     window.addEventListener('keydown', handleModeEscape);
     window.addEventListener('resize', refreshMarkers);
     window.addEventListener('resize', applyPageOffset);
@@ -3292,7 +3318,7 @@
     const toast = document.createElement('div');
     toast.className = 'wn-annot-toast wn-annotator';
     toast.setAttribute('aria-live', 'polite');
-    document.body.appendChild(toast);
+    chromeRoot().appendChild(toast);
     state.toast = toast;
     return toast;
   }
@@ -4109,7 +4135,7 @@
       addNoteForSelection();
     });
     bar.appendChild(add);
-    document.body.appendChild(bar);
+    chromeRoot().appendChild(bar);
     state.selectionBar = bar;
     return bar;
   }
@@ -4186,7 +4212,7 @@
     bar.appendChild(narrower);
     bar.appendChild(wider);
     bar.appendChild(pin);
-    document.body.appendChild(bar);
+    chromeRoot().appendChild(bar);
     state.elementPicker = { bar, name, wider, narrower, pin };
     return state.elementPicker;
   }
@@ -4347,8 +4373,16 @@
   function showOutline(rect) {
     const o = state.outlineBox;
     o.style.display = 'block';
-    o.style.left = `${rect.x + window.scrollX}px`;
-    o.style.top = `${rect.y + window.scrollY}px`;
+    // On the page the outline is a box in the document. Inside a dialog the
+    // interface has moved into, it is a box in the dialog, and a document
+    // coordinate there lands a dialog's width and height away from the
+    // element -- and past the dialog's edge, which gives the dialog a
+    // scrollbar for the room it takes.
+    const host = o.offsetParent;
+    const origin =
+      host && !isGlobalMarkerHost(host) ? hostOrigin(host) : { x: -window.scrollX, y: -window.scrollY };
+    o.style.left = `${rect.x - origin.x}px`;
+    o.style.top = `${rect.y - origin.y}px`;
     o.style.width = `${rect.width}px`;
     o.style.height = `${rect.height}px`;
   }
@@ -4377,13 +4411,104 @@
     if (isWithinAnnotator(el)) return false;
     if (el.closest) {
       if (el.closest('[data-uxnote-ignore]')) return false;
-      if (el.closest('[data-uxnote-allow]')) return true;
+      if (el.closest('[data-uxnote-allow]')) return isReachableTarget(el);
       const blocked = el.closest(
         '#uxnote-root, .wn-annotator, dialog, [popover], [role="dialog"], [role="menu"], [role="tooltip"], [aria-modal="true"]'
       );
       if (blocked) return false;
     }
     return true;
+  }
+
+  // A dialog opened with showModal() leaves everything outside it inert, so a
+  // toolbar or a comment card sitting on the body takes neither a click nor a
+  // keystroke while that dialog is up. The interface follows the reviewer into
+  // a dialog the page allows, and returns to the body when it closes.
+  function isAllowedContainer(el) {
+    if (!el || !el.closest) return false;
+    if (el.closest('[data-uxnote-ignore]')) return false;
+    return !!el.closest('[data-uxnote-allow]');
+  }
+
+  function isOpenModal(el) {
+    if (!el || el.tagName !== 'DIALOG' || !el.isConnected || !el.open) return false;
+    try {
+      return el.matches(':modal');
+    } catch (err) {
+      return false;
+    }
+  }
+
+  function openModalAncestor(el) {
+    let node = el && el.closest ? el : null;
+    while (node) {
+      const dialog = node.closest('dialog[open]');
+      if (!dialog) return null;
+      if (isOpenModal(dialog)) return dialog;
+      node = dialog.parentElement;
+    }
+    return null;
+  }
+
+  // Any of these on the dialog makes it the containing block of every fixed
+  // box inside it, and the interface would be laid out against the dialog
+  // instead of against the screen. Such a dialog is one to stay out of.
+  function holdsFixedChildren(el) {
+    const style = window.getComputedStyle(el);
+    return (
+      style.transform !== 'none' ||
+      style.perspective !== 'none' ||
+      style.filter !== 'none' ||
+      (style.backdropFilter || 'none') !== 'none' ||
+      /\b(paint|layout|strict|content)\b/.test(style.contain || '') ||
+      /\b(transform|perspective|filter|contain)\b/.test(style.willChange || '')
+    );
+  }
+
+  // The open modal dialog the interface belongs in: one the page allows, and
+  // the last of them in the document where there are several.
+  function modalChromeHost() {
+    let host = null;
+    document.querySelectorAll('dialog[open]').forEach((dialog) => {
+      if (!isOpenModal(dialog) || !isAllowedContainer(dialog)) return;
+      host = dialog;
+    });
+    return host;
+  }
+
+  // Run on every open, close and removal of a dialog. A dialog a framework
+  // unmounts takes the root out of the document with it, and this puts it
+  // back on the body.
+  function syncChromeHost() {
+    if (!state.root) return;
+    const modal = modalChromeHost();
+    const blocked = !!modal && holdsFixedChildren(modal);
+    if (blocked && state.blockedModal !== modal) {
+      showToast('This area is a popup or overlay. It cannot be annotated.');
+    }
+    state.blockedModal = blocked ? modal : null;
+    const host = blocked || !modal ? document.body : modal;
+    if (state.root.parentNode === host) return;
+    host.appendChild(state.root);
+  }
+
+  function startHostObserver() {
+    if (state.hostObserver || !window.MutationObserver) return;
+    state.hostObserver = new MutationObserver(syncChromeHost);
+    state.hostObserver.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['open', 'data-uxnote-allow', 'data-uxnote-ignore']
+    });
+  }
+
+  // Nothing inside a modal container can be annotated unless the interface
+  // went in with it: the card that takes the comment is inert everywhere else.
+  function isReachableTarget(el) {
+    const modal = openModalAncestor(el);
+    if (!modal) return true;
+    return !!state.root && modal.contains(state.root);
   }
 
   function serializeRange(range, quote) {
@@ -4573,6 +4698,19 @@
 
   function isGlobalMarkerHost(host) {
     return host === document.body || host === state.markerLayer || host === document.documentElement;
+  }
+
+  // Where an absolute box inside a positioned host is measured from: the
+  // host's padding box, at the host's own scroll position. A modal dialog is
+  // a scroll container by the browser's stylesheet, so a box measured from
+  // the dialog's border box instead sat off its element by the border and by
+  // however far the dialog had scrolled.
+  function hostOrigin(host) {
+    const rect = host.getBoundingClientRect();
+    return {
+      x: rect.x + host.clientLeft - host.scrollLeft,
+      y: rect.y + host.clientTop - host.scrollTop
+    };
   }
 
   function openContainersForTarget(targetEl) {
@@ -5054,11 +5192,10 @@
     const offset = getMarkerOffset(annotation);
     const offsetParent = marker.offsetParent || document.body;
     const parentRect = offsetParent.getBoundingClientRect();
-    const parentDocX = parentRect.x + window.scrollX;
-    const parentDocY = parentRect.y + window.scrollY;
-    const targetDocX = rect.x + window.scrollX;
-    const targetDocY = rect.y + window.scrollY;
-    const left = targetDocX - parentDocX + rect.w + offset.x + 4;
+    const origin = isGlobalMarkerHost(offsetParent)
+      ? { x: parentRect.x, y: parentRect.y }
+      : hostOrigin(offsetParent);
+    const left = rect.x - origin.x + rect.w + offset.x + 4;
     // The marker is centred on `left`, so it parks half its width past the
     // right edge of its target. On a block that runs the full width of the
     // screen that half hangs outside the document, which widens the document
@@ -5069,7 +5206,7 @@
       : offsetParent.clientWidth;
     const half = (marker.offsetWidth || 25) / 2;
     marker.style.left = `${bound ? Math.min(left, bound - half - 2) : left}px`;
-    marker.style.top = `${targetDocY - parentDocY + offset.y - 4}px`;
+    marker.style.top = `${rect.y - origin.y + offset.y - 4}px`;
   }
 
   function getMarkerOffset(annotation) {
@@ -5257,7 +5394,7 @@
     const note = document.createElement('div');
     note.className = 'wn-annot-note wn-annotator';
     note.addEventListener('mouseleave', queueNoteClose);
-    document.body.appendChild(note);
+    chromeRoot().appendChild(note);
     state.note = note;
     return note;
   }
@@ -6838,8 +6975,8 @@
       document.addEventListener('mousemove', onMove, true);
       document.addEventListener('mouseup', onUp, true);
       document.addEventListener('keydown', onKey, true);
-      document.body.appendChild(overlay);
-      document.body.appendChild(hint);
+      chromeRoot().appendChild(overlay);
+      chromeRoot().appendChild(hint);
     });
   }
 
@@ -7029,7 +7166,7 @@
     closeBtn.addEventListener('click', close);
     box.addEventListener('click', close);
     document.addEventListener('keydown', onKey, true);
-    document.body.appendChild(box);
+    chromeRoot().appendChild(box);
   }
 
   document.readyState === 'loading' ? document.addEventListener('DOMContentLoaded', init) : init();
