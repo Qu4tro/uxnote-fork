@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>A page whose thread is a modal dialog</title>
+</head>
+<body>
+  <h1>A page whose thread is a modal dialog</h1>
+  <p id="outside">The paragraph on the page itself, which a reviewer annotates without opening anything.</p>
+  <button id="open-thread" type="button">Open the thread</button>
+  <button id="open-menu" type="button">Open the menu</button>
+
+  <dialog id="thread" data-uxnote-allow>
+    <p id="inside">The paragraph inside the thread, which the page owner invites a reviewer to annotate.</p>
+    <p id="inside-again">A second paragraph inside the thread, for the note a reviewer writes after the first one.</p>
+    <button id="inside-button" type="button">Reply</button>
+    <button id="close-thread" type="button">Close</button>
+  </dialog>
+
+  <dialog id="menu">
+    <p id="inside-menu">The paragraph inside a dialog the page says nothing about.</p>
+    <button id="close-menu" type="button">Close</button>
+  </dialog>
+
+  <script>
+    const thread = document.getElementById('thread');
+    const menu = document.getElementById('menu');
+    document.getElementById('open-thread').addEventListener('click', () => thread.showModal());
+    document.getElementById('close-thread').addEventListener('click', () => thread.close());
+    document.getElementById('open-menu').addEventListener('click', () => menu.showModal());
+    document.getElementById('close-menu').addEventListener('click', () => menu.close());
+  </script>
+  <script src="../../uxnote-tool/uxnote.js"></script>
+</body>
+</html>
